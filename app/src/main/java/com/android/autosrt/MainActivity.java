@@ -869,9 +869,6 @@ public class MainActivity extends AppCompatActivity {
                         py = Python.getInstance();
                     }
 
-                    //if (mediaContent == null) throw new RuntimeException();
-                    //if (py == null)  throw new RuntimeException();
-
                     if (!canceled && mediaURI != null)
                         addText(textview_debug, "Creating a copy of " + uriDisplayName + "...");
                     if (!canceled && mediaURI != null && mediaContent != null && uriDisplayName != null) {
