@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root"
+    android:layout_width="fill_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginLeft="5dp"
+    android:layout_marginRight="5dp"
+    android:layout_gravity="center"
+    android:orientation="vertical"
+    android:padding="1dp"
+    >
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        >
+
+        <TextView
+            android:id="@+id/textview_text1"
+            android:text="Voice Language"
+            android:padding="0dp"
+            android:gravity="center"
+            android:textAlignment="gravity"
+            android:textSize="16sp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="0dp"
+            android:layout_centerHorizontal="true"
+            />
+
+        <Spinner
+            android:id="@+id/spinner_src_languages"
+            android:contentDescription="Original video language"
+            android:hint="Voice Language"
+            android:spinnerMode="dropdown"
+            android:minHeight="48dp"
+            android:padding="0dp"
+            android:gravity="center"
+            android:textAlignment="gravity"
+            android:textSize="14sp"
+            android:backgroundTint="@color/colorPrimary"
+            android:layout_below="@+id/textview_text1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="20dp"
+            android:layout_centerHorizontal="true"
+            />
+
+        <TextView
+            android:id="@+id/textview_text2"
+            android:text="Translation Language"
+            android:padding="0dp"
+            android:gravity="center"
+            android:textAlignment="gravity"
+            android:textSize="16sp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/spinner_src_languages"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="0dp"
+            android:layout_centerHorizontal="true"
+            />
+
+        <Spinner
+            android:id="@+id/spinner_dst_languages"
+            android:contentDescription="Desired translation Language"
+            android:hint="Voice Language"
+            android:spinnerMode="dropdown"
+            android:minHeight="48dp"
+            android:padding="0dp"
+            android:gravity="center"
+            android:textAlignment="gravity"
+            android:textSize="14sp"
+            android:backgroundTint="@color/colorPrimary"
+            android:layout_below="@+id/textview_text2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="20dp"
+            android:layout_centerHorizontal="true"
+            />
+
+        <com.android.autosrt.AutoScrollTextView
+            android:id="@+id/textview_filename"
+            android:hint="mediaURI"
+            android:padding="20dp"
+            android:gravity="left"
+            android:textAlignment="gravity"
+            android:textSize="16sp"
+            android:background="@android:drawable/editbox_background"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/spinner_dst_languages"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="0dp"
+            android:layout_centerHorizontal="true"
+            />
+
+        <Button
+            android:id="@+id/button_browse"
+            android:text="Browse"
+            android:padding="0dp"
+            android:gravity="center"
+            android:textAlignment="gravity"
+            android:textSize="14sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/textview_filename"
+            android:layout_centerHorizontal="true"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="20dp"
+            />
+
+        <Button
+            android:id="@+id/button_start"
+            android:text="Start"
+            android:padding="0dp"
+            android:gravity="center"
+            android:textAlignment="gravity"
+            android:textSize="14sp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/button_browse"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="20dp"
+            android:layout_centerHorizontal="true"
+            />
+
+        <com.android.autosrt.AutoScrollTextView
+            android:id="@+id/textview_debug"
+            android:hint="Output Messages"
+            android:padding="20dp"
+            android:gravity="left"
+            android:textAlignment="gravity"
+            android:textSize="14sp"
+            android:scrollbars="vertical"
+            android:background="@android:drawable/editbox_background"
+            android:layout_width="match_parent"
+            android:layout_height="180dp"
+            android:layout_below="@+id/button_start"
+            android:layout_centerHorizontal="true"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="20dp"
+            />
+
+    </RelativeLayout>
+</ScrollView>
