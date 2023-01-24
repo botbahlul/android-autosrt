@@ -912,7 +912,7 @@ public class MainActivity extends AppCompatActivity {
                         addText(textview_debug, "SRT subtitle file created at :\n" + srtFile + "\n");
 
                     if (!canceled && mediaURI != null && srtFile != null)
-                        addText(textview_debug, "Translating SRT file...");
+                        addText(textview_debug, "Translating SRT subtitle file...");
                     if (!canceled && mediaURI != null && srtFile != null) {
                         PyObject pyObjSrtFileTranslated = py.getModule("autosrt").callAttr("perform_translation", srtFile, src, dst);
                         if (pyObjSrtFileTranslated != null) srtFileTranslated = pyObjSrtFileTranslated.toString();
