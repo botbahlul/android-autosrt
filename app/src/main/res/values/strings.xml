@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">autosrt</string>
+    <string name="textview_voice_language_hints">Voice Language</string>
+    <string name="voice_language_hints">Voice Language</string>
+    <string name="textview_translation_language_hints">Translation Language</string>
+    <string name="translation_language_hints">Translation Language</string>
+    <string name="mediauri">mediaURI</string>
+    <string name="browse">Browse</string>
+    <string name="start">Start</string>
+    <string name="output_messages">Output Messages</string>
+    <string name="voice_language">Voice Language</string>
 </resources>

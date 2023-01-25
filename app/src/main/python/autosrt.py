@@ -22,7 +22,10 @@ from com.arthenica.mobileffmpeg import FFmpeg
 from com.arthenica.mobileffmpeg import FFprobe
 from os.path import dirname, join
 from com.chaquo.python import Python
-import sys
+
+from java import dynamic_proxy
+from java.lang import Runnable
+
 
 #for stream in [sys.stdout, sys.stderr]:
     #def write_override(s, write_original=stream.write):
@@ -644,7 +647,6 @@ def transcribe(src, dest, filename):
                         pool.close()
                         pool.join()
                         pool = None
-                
 
                     extracted_regions.append(extracted_region)
                     pbar.update(i)
@@ -862,7 +864,7 @@ def main(src, dest, content, uriDisplayName):
 
 # SPLITTED transcribe() FUNCTION
 
-def create_copy(content, uriDisplayName):
+def create_copy(content, uriDisplayName, activity, textView):
     print("Create copy")
     files_dir = str(context.getExternalFilesDir(None))
     cancelfile = join(files_dir, 'cancel.txt')
@@ -875,9 +877,15 @@ def create_copy(content, uriDisplayName):
         binary_file.write(content)
     else:
         os.remove(cancelfile)
+
+    #class R(dynamic_proxy(Runnable)):
+        #def run(self):
+            #textView.setText("Copy created at :\n " + filename + "\n")
+    #activity.runOnUiThread(R())
     return filename
 
-def convert_audio(filename, channels=1, rate=16000):
+
+def convert_audio(filename, channels, rate, activity, textView):
     print("Convert audio")
     print("filename = {}".format(filename))
     files_dir = str(context.getExternalFilesDir(None))
@@ -891,10 +899,15 @@ def convert_audio(filename, channels=1, rate=16000):
     else:
         os.remove(cancelfile)
         if os.path.isfile(audio_filename): os.remove(audio_filename)
+
+    #class R(dynamic_proxy(Runnable)):
+        #def run(self):
+            #textView.setText("Converted WAV file is :\n" + temp.name + "\n")
+    #activity.runOnUiThread(R())
     return temp.name
 
 
-def find_audio_regions(filename, frame_width=4096, min_region_size=0.3, max_region_size=8):
+def find_audio_regions(filename, frame_width, min_region_size, max_region_size, activity, textView):
     files_dir = str(context.getExternalFilesDir(None))
     cache_dir =  str(context.getExternalCacheDir())
 
@@ -953,10 +966,14 @@ def find_audio_regions(filename, frame_width=4096, min_region_size=0.3, max_regi
         if os.path.isfile(audio_filename): os.remove(audio_filename)
         regions = None
 
+    #class R(dynamic_proxy(Runnable)):
+        #def run(self):
+            #textView.setText("Regions of WAV file are :" + "\n" + str(regions) + "\n");
+    #activity.runOnUiThread(R())
     return regions
 
 
-def perform_speech_recognition(filename, audio_filename, src):
+def perform_speech_recognition(filename, audio_filename, src, activity, textView):
     cache_dir =  str(context.getExternalCacheDir())
     frsname = join(cache_dir, 'region_starts.txt')
     fetname = join(cache_dir, 'elapsed_time.txt')
@@ -1021,9 +1038,11 @@ def perform_speech_recognition(filename, audio_filename, src):
     if regions:
         try:
             if not os.path.isfile(cancelfile):
+                extracted_regions = []
+
+                '''
                 widgets = ["Converting speech regions to FLAC files : ", Percentage(), ' ', Bar(), ' ', ETA()]
                 pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
-                extracted_regions = []
                 for i, extracted_region in enumerate(pool.imap(converter, regions)):
 
                     if os.path.isfile(cancelfile):
@@ -1040,11 +1059,30 @@ def perform_speech_recognition(filename, audio_filename, src):
                         pool.close()
                         pool.join()
                         pool = None
-                
 
                     extracted_regions.append(extracted_region)
                     pbar.update(i)
                 pbar.finish()
+                '''
+
+                for i, extracted_region in enumerate(pool.imap(converter, regions)):
+                    if os.path.isfile(cancelfile):
+                        os.remove(cancelfile)
+                        if os.path.isfile(audio_filename): os.remove(audio_filename)
+                        converter = None
+                        recognizer = None
+                        transcripts = None
+                        if extracted_regions:
+                            for extracted_region in extracted_regions:
+                                if os.path.isfile(extracted_region): os.remove(extracted_region)
+                            extracted_regions = None
+                        pool.terminate()
+                        pool.close()
+                        pool.join()
+                        pool = None
+                    extracted_regions.append(extracted_region)
+                    #progressbar(i, len(regions), "Converting speech regions to FLAC files : ")
+                    pBar(i, len(regions), "Converting speech regions to FLAC: ", activity, textView)
 
             if os.path.isfile(cancelfile):
                 os.remove(cancelfile)
@@ -1061,8 +1099,9 @@ def perform_speech_recognition(filename, audio_filename, src):
                 pool.join()
                 pool = None
         
+
             if not os.path.isfile(cancelfile):
-                print("Converting speech regions to FLAC files")
+                '''
                 widgets = ["Performing speech recognition           : ", Percentage(), ' ', Bar(), ' ', ETA()]
                 pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
 
@@ -1090,6 +1129,31 @@ def perform_speech_recognition(filename, audio_filename, src):
                     transcripts.append(transcript)
                     pbar.update(i)
                 pbar.finish()
+                '''
+
+                for i, transcript in enumerate(pool.imap(recognizer, extracted_regions)):
+                    if os.path.isfile(cancelfile):
+                        os.remove(cancelfile)
+                        if os.path.isfile(audio_filename): os.remove(audio_filename)
+                        converter = None
+                        recognizer = None
+                        transcripts = None
+                        if extracted_regions:
+                            for extracted_region in extracted_regions:
+                                if os.path.isfile(extracted_region): os.remove(extracted_region)
+                            extracted_regions = None
+                    
+                        if transcripts:
+                            for transcript in transcripts:
+                                transcript = None
+                            transcripts = None
+                        pool.terminate()
+                        pool.close()
+                        pool.join()
+                        pool = None
+                    transcripts.append(transcript)
+                    progressbar(i, len(regions), "Performing speech recognition           : ")
+                    pBar(i, len(regions), "Performing speech recognition: ", activity, textView)
 
             if os.path.isfile(cancelfile):
                 os.remove(cancelfile)
@@ -1172,10 +1236,15 @@ def perform_speech_recognition(filename, audio_filename, src):
             pool.join()
             pool = None
     
-
+    #class R(dynamic_proxy(Runnable)):
+        #def run(self):
+            #textView.setText("Convert to FLAC progress : " + str(p1));
+            #textView.setText("Speech recognition progress : " + str(p2));
+            #textView.setText("SRT subtitle file created at :\n" + output + "\n");
+    #activity.runOnUiThread(R())
     return output
 
-def perform_translation(output, src, dest):
+def perform_translation(output, src, dest, activity, textView):
     files_dir = str(context.getExternalFilesDir(None))
     cancelfile = join(files_dir, 'cancel.txt')
     try:
@@ -1204,9 +1273,10 @@ def perform_translation(output, src, dest):
             total_entries = CountEntries(srt_file)
             print('Total Entries = {}'.format(total_entries))
             e=0
-            prompt = "Translating from %5s to %5s         : " %(src, dest)
-            widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
-            pbar = ProgressBar(widgets=widgets, maxval=total_entries).start()
+
+            #prompt = "Translating from %5s to %5s         : " %(src, dest)
+            #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
+            #pbar = ProgressBar(widgets=widgets, maxval=total_entries).start()
 
             with open(translated_file, 'w', encoding='utf-8') as f:
                 for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
@@ -1236,8 +1306,11 @@ def perform_translation(output, src, dest):
                         f.write(subtitle)
                         f.write('\n')
                         e += 1
-                        pbar.update(e)
-                pbar.finish()
+                        #progressbar(e, total_entries, "Translating from %5s to %5s         : " %(src, dest))
+                        progressbar(e, total_entries, "Translating from %s to %s : " %(src, dest))
+                        pBar(e, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView)
+                        #pbar.update(e)
+                #pbar.finish()
 
             print('Done.')
             print("Original subtitles file created at      : {}".format(srt_file))
@@ -1299,6 +1372,23 @@ def printEnvironmentDir():
     # /storage/emulated/0/Android/media
  
     return "OK"
+
+
+def pBar(count_value, total, prefix, activity, textView):
+    bar_length = 10
+    filled_up_Length = int(round(bar_length*count_value/(total)))
+    percentage = round(100.0 * count_value/(total),1)
+    bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
+    textView.setText('%s [%s] %s%s\r' %(prefix, bar, percentage, '%'))
+
+
+def progressbar(count_value, total, prefix='', suffix=''):
+    bar_length = 50
+    filled_up_Length = int(round(bar_length* count_value / float(total)))
+    percentage = round(100.0 * count_value/float(total),1)
+    bar = '#' * filled_up_Length + '-' * (bar_length - filled_up_Length)
+    sys.stdout.write('%s [%s] %s%s %s\r' %(prefix, bar, percentage, '%', suffix))
+    sys.stdout.flush()
 
 
 if __name__ == '__main__':

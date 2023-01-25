@@ -869,10 +869,20 @@ public class MainActivity extends AppCompatActivity {
                         py = Python.getInstance();
                     }
 
-                    if (!canceled && mediaURI != null)
+                    /*addText(textview_debug, "This is a test\n");
+                    for (int i=0; i<100; i++) {
+                        py.getModule("autosrt").callAttr("pBar", i, 100, "Testing : ", MainActivity.this, textview_debug);
+                    }
+                    addText(textview_debug, "\n");
+                    addText(textview_debug, "This is a test\n");*/
+
+                    //textview_debug.setText("");
+                    if (!canceled && mediaURI != null) {
+                        //textview_debug.setText("");
                         addText(textview_debug, "Creating a copy of " + uriDisplayName + "...");
+                    }
                     if (!canceled && mediaURI != null && mediaContent != null && uriDisplayName != null) {
-                        PyObject pyObjSourceCopy = py.getModule("autosrt").callAttr("create_copy", mediaContent, uriDisplayName);
+                        PyObject pyObjSourceCopy = py.getModule("autosrt").callAttr("create_copy", mediaContent, uriDisplayName, MainActivity.this, textview_debug);
                         if (pyObjSourceCopy != null) {
                             sourceCopy = pyObjSourceCopy.toString();
                         } else {
@@ -883,43 +893,58 @@ public class MainActivity extends AppCompatActivity {
                     }
                     if (!canceled && mediaURI != null && sourceCopy != null)
                         addText(textview_debug, "Copy created at :\n" + sourceCopy + "\n");
+                        //addText(textview_debug, sourceCopy);
 
-                    if (!canceled && mediaURI != null && sourceCopy != null)
-                        addText(textview_debug, "Converting to a temporary WAV file...");
+                    //textview_debug.setText("");
                     if (!canceled && mediaURI != null && sourceCopy != null) {
-                        PyObject pyObjTempName = py.getModule("autosrt").callAttr("convert_audio", sourceCopy, 1, 16000);
+                        //textview_debug.setText("");
+                        addText(textview_debug, "Converting to a temporary WAV file...");
+                    }
+                    if (!canceled && mediaURI != null && sourceCopy != null) {
+                        PyObject pyObjTempName = py.getModule("autosrt").callAttr("convert_audio", sourceCopy, 1, 16000, MainActivity.this, textview_debug);
                         if (pyObjTempName != null) tempName = pyObjTempName.toString();
                     }
                     if (!canceled && mediaURI != null && tempName != null)
                         addText(textview_debug, "Converted WAV file is :\n" + tempName + "\n");
+                        //addText(textview_debug, tempName.toString());
 
-                    if (!canceled && mediaURI != null && tempName != null)
-                        addText(textview_debug, "Find speech regions of WAV file...");
                     if (!canceled && mediaURI != null && tempName != null) {
-                        PyObject pyObjRegions = py.getModule("autosrt").callAttr("find_audio_regions", tempName, 4096, 0.3, 8);
+                        //textview_debug.setText("");
+                        addText(textview_debug, "Find speech regions of WAV file...");
+                    }
+                    if (!canceled && mediaURI != null && tempName != null) {
+                        PyObject pyObjRegions = py.getModule("autosrt").callAttr("find_audio_regions", tempName, 4096, 0.3, 8, MainActivity.this, textview_debug);
                         if (pyObjRegions != null) regions = pyObjRegions.toString();
                     }
                     if (!canceled && mediaURI != null && regions != null)
                         addText(textview_debug, "Regions of WAV file are :" + "\n" + regions + "\n");
+                        //addText(textview_debug, regions);
 
-                    if (!canceled && mediaURI != null && regions != null)
+                    if (!canceled && mediaURI != null && regions != null) {
+                        //textview_debug.setText("");
                         addText(textview_debug, "Creating SRT subtitle file...");
+                    }
                     if (!canceled && mediaURI != null && sourceCopy != null && tempName != null) {
-                        PyObject pyObjSrtFile = py.getModule("autosrt").callAttr("perform_speech_recognition", sourceCopy, tempName, src);
+                        PyObject pyObjSrtFile = py.getModule("autosrt").callAttr("perform_speech_recognition", sourceCopy, tempName, src, MainActivity.this, textview_debug);
                         if (pyObjSrtFile != null) srtFile = pyObjSrtFile.toString();
                     }
-                    if (!canceled && mediaURI != null && srtFile != null)
-                        addText(textview_debug, "SRT subtitle file created at :\n" + srtFile + "\n");
-
-                    if (!canceled && mediaURI != null && srtFile != null)
-                        addText(textview_debug, "Translating SRT subtitle file...");
                     if (!canceled && mediaURI != null && srtFile != null) {
-                        PyObject pyObjSrtFileTranslated = py.getModule("autosrt").callAttr("perform_translation", srtFile, src, dst);
+                        addText(textview_debug, "\n");
+                        addText(textview_debug, "SRT subtitle file created at :\n" + srtFile + "\n");
+                        //addText(textview_debug, srtFile);
+                    }
+                    if (!canceled && mediaURI != null && srtFile != null) {
+                        //textview_debug.setText("");
+                        addText(textview_debug, "Translating SRT subtitle file...");
+                    }
+                    if (!canceled && mediaURI != null && srtFile != null) {
+                        PyObject pyObjSrtFileTranslated = py.getModule("autosrt").callAttr("perform_translation", srtFile, src, dst, MainActivity.this, textview_debug);
                         if (pyObjSrtFileTranslated != null) srtFileTranslated = pyObjSrtFileTranslated.toString();
                     }
-                    if (!canceled && mediaURI != null && srtFile != null && srtFileTranslated != null)
+                    if (!canceled && mediaURI != null && srtFile != null && srtFileTranslated != null) {
+                        addText(textview_debug, "\n");
                         addText(textview_debug, "Translated SRT subtitle file created at :\n" + srtFileTranslated + "\n");
-
+                    }
                     if (!canceled && mediaURI != null && srtFile != null && srtFileTranslated != null) {
                         if (runpy != null) {
                             runpy.interrupt();
@@ -932,8 +957,10 @@ public class MainActivity extends AppCompatActivity {
                             String t1 = "Start";
                             button_start.setText(t1);
                             transcribeIsRunning = false;
+                            //String resultsDir = getExternalFilesDir(Environment.DIRECTORY_DCIM).getAbsolutePath();
                         }
                     });
+
 
                 } catch (Exception e) {
                     Log.e("Error: ", Objects.requireNonNull(e.getMessage()));
