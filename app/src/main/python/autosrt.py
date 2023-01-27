@@ -1394,7 +1394,6 @@ def perform_translation(output, src, dest, textView_debug):
             timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcripts) if t]
             formatter = FORMATTERS.get("srt")
             formatted_translated_subtitles = formatter(timed_translated_subtitles)
-            formatted_translated_subtitles = formatter(timed_translated_subtitles)
             translated_srt_file = srt_file[ :-4] + '_translated.srt'
 
             with open(translated_srt_file, 'wb') as ft:
