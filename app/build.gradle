@@ -66,4 +66,5 @@ dependencies {
     //implementation 'org.jbundle.util.osgi.wrapped:org.jbundle.util.osgi.wrapped.org.apache.http.client:4.1.2'
     //implementation 'commons-io:commons-io:2.6'
     implementation 'com.arthenica:mobile-ffmpeg-full:4.3.1.LTS'
+    implementation 'org.apache.commons:commons-lang3:3.0'
 }

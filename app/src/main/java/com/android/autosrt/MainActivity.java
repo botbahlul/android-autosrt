@@ -1,5 +1,8 @@
 package com.android.autosrt;
 
+import static android.text.TextUtils.substring;
+import static java.lang.Math.round;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -25,6 +28,7 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
+import android.widget.TextView;
 
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultCallback;
@@ -40,9 +44,10 @@ import com.chaquo.python.PyObject;
 import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
 
-import java.io.ByteArrayOutputStream;
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -65,10 +70,10 @@ public class MainActivity extends AppCompatActivity {
     Spinner spinner_src_languages;
     Spinner spinner_dst_languages;
     @SuppressLint("StaticFieldLeak")
-    public static AutoScrollTextView textview_filename;
+    public static TextView textview_filename;
     Button button_browse, button_start;
     @SuppressLint("StaticFieldLeak")
-    public static AutoScrollTextView textview_debug;
+    public static TextView textview_debug;
 
     public static Python py;
     public static boolean transcribeIsRunning = false;
@@ -80,7 +85,6 @@ public class MainActivity extends AppCompatActivity {
     public static String regions = null;
     public static String srtFile = null;
     public static String srtFileTranslated = null;
-    public static byte[] mediaContent;
     int STORAGE_PERMISSION_CODE = 101;
     public static Uri mediaURI;
     public static String uriDisplayName;
@@ -641,12 +645,21 @@ public class MainActivity extends AppCompatActivity {
         spinner_src_languages.setFocusable(true);
         spinner_src_languages.requestFocus();
 
+        textview_filename.setMovementMethod(new ScrollingMovementMethod());
+        textview_debug.setMovementMethod(new ScrollingMovementMethod());
+
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM);
             getSupportActionBar().setCustomView(R.layout.actionbar_layout);
         }
 
         cancelFile = getApplicationContext().getExternalFilesDir(null) + File.separator + "cancel.txt";
+        File f = new File(cancelFile);
+        if (f.exists()) {
+            f.delete();
+        }
+
+
 
         spinner_src_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
@@ -695,6 +708,12 @@ public class MainActivity extends AppCompatActivity {
 
         button_start.setOnClickListener(view -> {
             textview_debug.setText("");
+            srtFile = null;
+            srtFileTranslated = null;
+            if (runpy != null) {
+                runpy.interrupt();
+                runpy = null;
+            }
             transcribeIsRunning = !transcribeIsRunning;
             if (mediaURI != null) canceled = !canceled;
 
@@ -800,15 +819,14 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
 
-    public static void addText(final AutoScrollTextView tv, final String text) {
+    public static void addText(final TextView tv, final String text) {
         Handler handler = new Handler(Looper.getMainLooper()) {
             @Override
             public void handleMessage(@NonNull Message msg) {
-                // Any UI task, example
-                tv.setMovementMethod(new ScrollingMovementMethod());
+                tv.setTextIsSelectable(true);
                 tv.append(text + "\n");
-                Editable editable = tv.getEditableText();
-                Selection.setSelection(editable, editable.length());
+                Editable editable = (Editable) tv.getText();
+                Selection.setSelection(editable, Objects.requireNonNull(editable).length());
             }
         };
         handler.sendEmptyMessage(1);
@@ -825,7 +843,7 @@ public class MainActivity extends AppCompatActivity {
         return name;
     }
 
-    public byte[] getBytes(InputStream inputStream) throws IOException {
+    /*public byte[] getBytes(InputStream inputStream) throws IOException {
         ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
         int bufferSize = 1024;
         byte[] buffer = new byte[bufferSize];
@@ -835,7 +853,7 @@ public class MainActivity extends AppCompatActivity {
             byteBuffer.write(buffer, 0, len);
         }
         return byteBuffer.toByteArray();
-    }
+    }*/
 
     private void transcribe() {
         String t = "Cancel";
@@ -844,24 +862,31 @@ public class MainActivity extends AppCompatActivity {
             if (Looper.myLooper() == null) {
                 Looper.prepare();
             }
-
             if (mediaURI != null && !canceled) {
                 Log.d("Current Thread", "Running");
                 try {
-                    String msg = "Running python script...\n";
-                    addText(textview_debug, msg);
-
-                    InputStream iStream;
-                    try {
-                        iStream = getContentResolver().openInputStream(mediaURI);
-                    } catch (FileNotFoundException e) {
-                        throw new RuntimeException(e);
+                    if (!canceled && mediaURI != null && uriDisplayName != null) {
+                        String folderName = substring(uriDisplayName,0,uriDisplayName.length()-4);
+                        String prefix = "Creating a copy of " + uriDisplayName + " : ";
+                        String copyPath = copyFileToExternalFilesDir(mediaURI, folderName, prefix);
+                        if (copyPath != null) {
+                            sourceCopy = copyPath;
+                        } else {
+                            runpy.interrupt();
+                            runpy = null;
+                            transcribe();
+                        }
                     }
-
-                    try {
-                        mediaContent = getBytes(iStream);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
+                    if (!canceled && mediaURI != null && sourceCopy != null) {
+                        Handler handler = new Handler(Looper.getMainLooper()) {
+                            @Override
+                            public void handleMessage(@NonNull Message msg) {
+                                textview_debug.append(" \n");
+                                textview_debug.append("Copy created at :\n");
+                                textview_debug.append(sourceCopy + "\n\n");
+                            }
+                        };
+                        handler.sendEmptyMessage(1);
                     }
 
                     if (!Python.isStarted()) {
@@ -869,82 +894,32 @@ public class MainActivity extends AppCompatActivity {
                         py = Python.getInstance();
                     }
 
-                    /*addText(textview_debug, "This is a test\n");
-                    for (int i=0; i<100; i++) {
-                        py.getModule("autosrt").callAttr("pBar", i, 100, "Testing : ", MainActivity.this, textview_debug);
-                    }
-                    addText(textview_debug, "\n");
-                    addText(textview_debug, "This is a test\n");*/
-
-                    //textview_debug.setText("");
-                    if (!canceled && mediaURI != null) {
-                        //textview_debug.setText("");
-                        addText(textview_debug, "Creating a copy of " + uriDisplayName + "...");
-                    }
-                    if (!canceled && mediaURI != null && mediaContent != null && uriDisplayName != null) {
-                        PyObject pyObjSourceCopy = py.getModule("autosrt").callAttr("create_copy", mediaContent, uriDisplayName, MainActivity.this, textview_debug);
-                        if (pyObjSourceCopy != null) {
-                            sourceCopy = pyObjSourceCopy.toString();
-                        } else {
-                            runpy.interrupt();
-                            runpy = null;
-                            transcribe();
+                    // ALTERNATIVE 1 : run a single function transcribe() of autosrt.py
+                    /*if (!canceled && mediaURI != null && sourceCopy != null) {
+                        PyObject pyObjsrtFileTranslated = py.getModule("autosrt").callAttr("transcribe", src, dst, sourceCopy, textview_debug);
+                        if (pyObjsrtFileTranslated != null) {
+                            srtFileTranslated = pyObjsrtFileTranslated.toString();
                         }
-                    }
-                    if (!canceled && mediaURI != null && sourceCopy != null)
-                        addText(textview_debug, "Copy created at :\n" + sourceCopy + "\n");
-                        //addText(textview_debug, sourceCopy);
+                    }*/
 
-                    //textview_debug.setText("");
+                    // ALTERNATIVE 2 : run split functions of transcibe() in autosrt.py
                     if (!canceled && mediaURI != null && sourceCopy != null) {
-                        //textview_debug.setText("");
-                        addText(textview_debug, "Converting to a temporary WAV file...");
-                    }
-                    if (!canceled && mediaURI != null && sourceCopy != null) {
-                        PyObject pyObjTempName = py.getModule("autosrt").callAttr("convert_audio", sourceCopy, 1, 16000, MainActivity.this, textview_debug);
+                        PyObject pyObjTempName = py.getModule("autosrt").callAttr("convert_to_wav", sourceCopy, 1, 16000, textview_debug);
                         if (pyObjTempName != null) tempName = pyObjTempName.toString();
                     }
-                    if (!canceled && mediaURI != null && tempName != null)
-                        addText(textview_debug, "Converted WAV file is :\n" + tempName + "\n");
-                        //addText(textview_debug, tempName.toString());
-
                     if (!canceled && mediaURI != null && tempName != null) {
-                        //textview_debug.setText("");
-                        addText(textview_debug, "Find speech regions of WAV file...");
-                    }
-                    if (!canceled && mediaURI != null && tempName != null) {
-                        PyObject pyObjRegions = py.getModule("autosrt").callAttr("find_audio_regions", tempName, 4096, 0.3, 8, MainActivity.this, textview_debug);
+                        PyObject pyObjRegions = py.getModule("autosrt").callAttr("find_audio_regions", tempName, 4096, 0.3, 8, textview_debug);
                         if (pyObjRegions != null) regions = pyObjRegions.toString();
                     }
-                    if (!canceled && mediaURI != null && regions != null)
-                        addText(textview_debug, "Regions of WAV file are :" + "\n" + regions + "\n");
-                        //addText(textview_debug, regions);
-
-                    if (!canceled && mediaURI != null && regions != null) {
-                        //textview_debug.setText("");
-                        addText(textview_debug, "Creating SRT subtitle file...");
-                    }
                     if (!canceled && mediaURI != null && sourceCopy != null && tempName != null) {
-                        PyObject pyObjSrtFile = py.getModule("autosrt").callAttr("perform_speech_recognition", sourceCopy, tempName, src, MainActivity.this, textview_debug);
+                        PyObject pyObjSrtFile = py.getModule("autosrt").callAttr("perform_speech_recognition", sourceCopy, tempName, src, textview_debug);
                         if (pyObjSrtFile != null) srtFile = pyObjSrtFile.toString();
                     }
                     if (!canceled && mediaURI != null && srtFile != null) {
-                        addText(textview_debug, "\n");
-                        addText(textview_debug, "SRT subtitle file created at :\n" + srtFile + "\n");
-                        //addText(textview_debug, srtFile);
-                    }
-                    if (!canceled && mediaURI != null && srtFile != null) {
-                        //textview_debug.setText("");
-                        addText(textview_debug, "Translating SRT subtitle file...");
-                    }
-                    if (!canceled && mediaURI != null && srtFile != null) {
-                        PyObject pyObjSrtFileTranslated = py.getModule("autosrt").callAttr("perform_translation", srtFile, src, dst, MainActivity.this, textview_debug);
+                        PyObject pyObjSrtFileTranslated = py.getModule("autosrt").callAttr("perform_translation", srtFile, src, dst, textview_debug);
                         if (pyObjSrtFileTranslated != null) srtFileTranslated = pyObjSrtFileTranslated.toString();
                     }
-                    if (!canceled && mediaURI != null && srtFile != null && srtFileTranslated != null) {
-                        addText(textview_debug, "\n");
-                        addText(textview_debug, "Translated SRT subtitle file created at :\n" + srtFileTranslated + "\n");
-                    }
+
                     if (!canceled && mediaURI != null && srtFile != null && srtFileTranslated != null) {
                         if (runpy != null) {
                             runpy.interrupt();
@@ -953,11 +928,13 @@ public class MainActivity extends AppCompatActivity {
 
                     runOnUiThread(() -> {
                         if (!canceled && mediaURI != null && srtFileTranslated != null) {
-                            addText(textview_debug, "Done!\n");
                             String t1 = "Start";
                             button_start.setText(t1);
+                            if (runpy != null) {
+                                runpy.interrupt();
+                            }
                             transcribeIsRunning = false;
-                            //String resultsDir = getExternalFilesDir(Environment.DIRECTORY_DCIM).getAbsolutePath();
+                            canceled = true;
                         }
                     });
 
@@ -993,6 +970,74 @@ public class MainActivity extends AppCompatActivity {
         });
         runpy.start();
     }
+
+    @SuppressLint("SetTextI18n")
+    private String copyFileToExternalFilesDir(Uri uri, String newDirName, String prefix) {
+        @SuppressLint("Recycle") Cursor returnCursor = getApplicationContext().getContentResolver().query(uri, new String[]{
+                OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE
+        }, null, null, null);
+
+        /*
+         * Get the column indexes of the data in the Cursor,
+         *     * move to the first row in the Cursor, get the data,
+         *     * and display it.
+         * */
+        int nameIndex = returnCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+        int sizeIndex = returnCursor.getColumnIndex(OpenableColumns.SIZE);
+        returnCursor.moveToFirst();
+        String name = (returnCursor.getString(nameIndex));
+        String size = (Long.toString(returnCursor.getLong(sizeIndex)));
+
+        File output;
+        if (!newDirName.equals("")) {
+            File dir = new File(getApplicationContext().getExternalFilesDir(null) + "/" + newDirName);
+            if (!dir.exists()) {
+                dir.mkdir();
+            }
+            output = new File(getApplicationContext().getExternalFilesDir(null) + "/" + newDirName + "/" + name);
+        } else {
+            output = new File(getApplicationContext().getExternalFilesDir(null) + "/" + name);
+        }
+        try {
+            InputStream inputStream = getApplicationContext().getContentResolver().openInputStream(uri);
+            FileOutputStream outputStream = new FileOutputStream(output);
+            long length  = Long.parseLong(size);
+            long counter = 0;
+            int read;
+            int bufferSize = 1024;
+            final byte[] buffers = new byte[bufferSize];
+            while ((read = inputStream.read(buffers)) != -1) {
+                counter += read;
+                outputStream.write(buffers, 0, read);
+                //pBar(counter, length, prefix);
+                int bar_length = 10;
+                float percentage = round(100.0 * counter /(float)(length));
+                String pounds = StringUtils.repeat('#', round(bar_length * counter/(float)(length)));
+                String equals = StringUtils.repeat('=', (bar_length - round(bar_length * counter/(float)(length))));
+                String bar = pounds + equals;
+                textview_debug.setText(prefix + " [" + bar + "] " + percentage + '%');
+            }
+            inputStream.close();
+            outputStream.close();
+
+        } catch (Exception e) {
+
+            Log.e("Exception", Objects.requireNonNull(e.getMessage()));
+        }
+        return output.getPath();
+    }
+
+    /*@SuppressLint("SetTextI18n")
+    public void pBar(long counter, long total, String prefix) {
+        int bar_length = 10;
+        int rounded = round(bar_length * counter/(float)(total));
+        int filled_up_Length = (int)(rounded);
+        float percentage = round(100.0 * counter /(float)(total));
+        String pounds = StringUtils.repeat('#', filled_up_Length);
+        String equals = StringUtils.repeat('=', (bar_length - filled_up_Length));
+        String bar = pounds + equals;
+        textview_debug.setText(prefix + " [" + bar + "] " + percentage + '%');
+    }*/
 
 }
 
