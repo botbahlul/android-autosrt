@@ -815,11 +815,6 @@ def transcribe(src, dest, filename, textView_debug):
                 #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
                 #pbar = ProgressBar(widgets=widgets, maxval=total_entries).start()
 
-                #subtitle_translator = SubtitleTranslator(entries=entries, src=src, dest=dest)
-
-                #sequences = []
-                #timecodes = []
-
                 '''
                 translated_entries = []
                 e=0
