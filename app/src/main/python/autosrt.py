@@ -558,30 +558,6 @@ def translate(entries, src, dest, patience, verbose):
 
         yield number_in_sequence, timecode, translated_subtitles, count_failure, count_entries
 
-class SubtitleTranslator(object):
-    def __init__(self, entries, src, dest):
-        self.entries = entries
-        self.src = src
-        self.dest = dest
-
-    def __call__(self, entries):
-        try:
-            translator = Translator()
-            for number_in_sequence, timecode, subtitles in self.entries:
-                for i, subtitle in enumerate(subtitles, 1):
-                    # handle the special case: empty string.
-                    if not subtitle:
-                        continue
-                    translated_subtitle = translator.translate(subtitle, src=self.src, dest=self.dest).text
-
-                print(number_in_sequence, timecode, translated_subtitle)
-                return number_in_sequence, timecode, translated_subtitle
-            translated_subtitles.append(translated_subtitle)
-
-        except KeyboardInterrupt:
-            return
-
-
 def transcribe(src, dest, filename, textView_debug):
     textView_debug.setText("Running python script...")
 
