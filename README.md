@@ -6,3 +6,7 @@ https://user-images.githubusercontent.com/88623122/215234356-5f85a823-1447-45da-
 This app is a GUI VERSION of AUTOSRT PYHTON SCRIPT https://github.com/botbahlul/autosrt
 
 It's developed to running on ANDROID with the help of CHAQUOPY https://chaquo.com/chaquopy/
+
+Tested on Android API 29 real device and emulator : no crashes
+
+Tested on Android API 25 emulator : crashed
