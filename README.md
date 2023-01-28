@@ -9,4 +9,6 @@ It's developed to running on ANDROID with the help of CHAQUOPY https://chaquo.co
 
 Tested on Android API 29 real device and emulator : no crashes
 
+Tested on Android API 29 real device : crashed sometimes
+
 Tested on Android API 25 emulator : crashed
