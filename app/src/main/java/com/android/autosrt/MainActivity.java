@@ -895,6 +895,7 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     // ALTERNATIVE 1 : run a single function transcribe() of autosrt.py
+                    // RUNNING FINE ON EMULATOR BUT CRASHED ON REAL DEVICE!!!
                     /*if (!canceled && mediaURI != null && sourceCopy != null) {
                         PyObject pyObjsrtFileTranslated = py.getModule("autosrt").callAttr("transcribe", src, dst, sourceCopy, textview_debug);
                         if (pyObjsrtFileTranslated != null) {
