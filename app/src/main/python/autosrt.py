@@ -834,8 +834,6 @@ def transcribe(src, dest, filename, activity, textView_debug):
                         activity.runOnUiThread(R())
                 
                     transcripts.append(transcript)
-                    translated_transcript = Translator().translate(transcript, src=src, dest=dest).text
-                    translated_transcripts.append(translated_transcript)
                     #pbar.update(i)
                     if i%(len(regions)/5) == 0:
                         pBar(i, len(regions), "Creating transcripts: ", activity, textView_debug)
