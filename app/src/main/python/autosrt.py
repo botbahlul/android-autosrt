@@ -1397,7 +1397,6 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                         activity.runOnUiThread(R())
 
                     extracted_regions.append(extracted_region)
-                    #progressbar(i, len(regions), "Converting speech regions to FLAC files : ")
                     percentage = round(100.0 * i/float(len(regions)),1)
                     if (i%(len(regions)/10) == 0) or (percentage == 100):
                         pBar(i, len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
@@ -1725,15 +1724,15 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
                 ft.write("\n")
                 ft.close()
 
-            #entries = entries_generator(srt_file)
-            #total_entries = CountEntries(srt_file)
-            #print('Total Entries = {}'.format(total_entries))
-
-            #prompt = "Translating from %5s to %5s         : " %(src, dest)
-            #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
-            #pbar = ProgressBar(widgets=widgets, maxval=total_entries).start()
-
             '''
+            entries = entries_generator(srt_file)
+            total_entries = CountEntries(srt_file)
+            print('Total Entries = {}'.format(total_entries))
+
+            prompt = "Translating from %5s to %5s         : " %(src, dest)
+            widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
+            pbar = ProgressBar(widgets=widgets, maxval=total_entries).start()
+
             e=0
             with open(translated_srt_file, 'w', encoding='utf-8') as f:
                 for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
