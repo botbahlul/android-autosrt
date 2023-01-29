@@ -4,6 +4,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 import audioop
 import math
 import multiprocessing
+import threading
 import io, sys, os, time, signal
 import tempfile
 import wave
@@ -23,7 +24,7 @@ from com.arthenica.mobileffmpeg import FFprobe
 from os.path import dirname, join
 from com.chaquo.python import Python
 
-from java import dynamic_proxy
+from java import dynamic_proxy, static_proxy
 from java.lang import Runnable
 
 GOOGLE_SPEECH_API_KEY = "AIzaSyBOti4mM-6x9WDnZIjIeyEU21OpBXqWBgw"
@@ -558,8 +559,37 @@ def translate(entries, src, dest, patience, verbose):
 
         yield number_in_sequence, timecode, translated_subtitles, count_failure, count_entries
 
-def transcribe(src, dest, filename, textView_debug):
-    textView_debug.setText("Running python script...")
+
+class SubtitleTranslator(object):
+    def __init__(self, entries, src, dest):
+        self.entries = entries
+        self.src = src
+        self.dest = dest
+
+    def __call__(self, entries):
+        try:
+            translator = Translator()
+            for number_in_sequence, timecode, subtitles in self.entries:
+                for i, subtitle in enumerate(subtitles, 1):
+                    # handle the special case: empty string.
+                    if not subtitle:
+                        continue
+                    translated_subtitle = translator.translate(subtitle, src=self.src, dest=self.dest).text
+
+                print(number_in_sequence, timecode, translated_subtitle)
+                return number_in_sequence, timecode, translated_subtitle
+            translated_subtitles.append(translated_subtitle)
+
+        except KeyboardInterrupt:
+            return
+
+
+def transcribe(src, dest, filename, activity, textView_debug):
+    class R(dynamic_proxy(Runnable)):
+        def run(self):
+            textView_debug.setText("Running python script...\n\n");
+            time.sleep(1)
+    activity.runOnUiThread(R())
 
     '''
     context = Python.getPlatform().getApplication()
@@ -582,55 +612,112 @@ def transcribe(src, dest, filename, textView_debug):
     wav_filename = None
 
     if not os.path.isfile(cancelfile):
-        textView_debug.setText("Converting to a temporary WAV file...")
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.append("Converting to a temporary WAV file...\n");
+                time.sleep(1)
+        activity.runOnUiThread(R())
         wav_filename, audio_rate = extract_audio(filename)
-        #textView_debug.setText("Converted WAV file is : " + wav_filename")
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.append("Converted WAV file is :\n" + wav_filename + "\n\n")
+                time.sleep(1)
+        activity.runOnUiThread(R())
+
     else:
         os.remove(cancelfile)
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
+
 
     if not os.path.isfile(cancelfile):
-        textView_debug.setText("Find speech regions of WAV file...")
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.append("Finding speech regions of WAV file...\n")
+                time.sleep(1)
+        activity.runOnUiThread(R())
+
         regions = find_speech_regions(wav_filename)
         num = len(regions)
-        #textView_debug.setText("Number of speech regions = " + str(num))
-        #textView_debug.setText(str(regions) + "\n")
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.append("Speech regions found = " + str(num) + "\n\n")
+                time.sleep(1)
+        activity.runOnUiThread(R())
+
+        #textView_debug.append(str(regions) + "\n")
         #i=0
         #for r in regions:
-            #textView_debug.setText("region[" + str(i) + "] = " + str(r) + "\n");
+            #textView_debug.append("region[" + str(i) + "] = " + str(r) + "\n");
             #i=i+1
-        #textView_debug.setText(str(regions));
-        #textView_debug.setText("\n\n");
+        #textView_debug.append(str(regions));
+
     else:
         os.remove(cancelfile)
-        if os.path.isfile(wav_filename): os.remove(wav_filename)
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
         regions = None
-
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
 
     if os.path.isfile(cancelfile):
         os.remove(cancelfile)
-        if os.path.isfile(wav_filename): os.remove(wav_filename)
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
         regions = None
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
 
     pool = multiprocessing.pool.ThreadPool(10)
     
     if os.path.isfile(cancelfile):
         os.remove(cancelfile)
-        if os.path.isfile(wav_filename): os.remove(wav_filename)
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
+
         pool.terminate()
         pool.close()
         pool.join()
         pool = None
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
 
     converter = FLACConverter(source_path=wav_filename)
 
     if os.path.isfile(cancelfile):
         os.remove(cancelfile)
-        if os.path.isfile(wav_filename): os.remove(wav_filename)
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
+
         pool.terminate()
         pool.close()
         pool.join()
         pool = None
         converter = None
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
 
     recognizer = SpeechRecognizer(language=src, rate=audio_rate, api_key=GOOGLE_SPEECH_API_KEY)
     transcripts = []
@@ -638,7 +725,9 @@ def transcribe(src, dest, filename, textView_debug):
 
     if os.path.isfile(cancelfile):
         os.remove(cancelfile)
-        if os.path.isfile(wav_filename): os.remove(wav_filename)
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
         pool.terminate()
         pool.close()
         pool.join()
@@ -646,6 +735,11 @@ def transcribe(src, dest, filename, textView_debug):
         converter = None
         recognizer = None
         transcripts = None
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
 
     if regions:
         try:
@@ -658,7 +752,9 @@ def transcribe(src, dest, filename, textView_debug):
 
                     if os.path.isfile(cancelfile):
                         os.remove(cancelfile)
-                        if os.path.isfile(wav_filename): os.remove(wav_filename)
+                        if wav_filename:
+                            if os.path.isfile(wav_filename):
+                                os.remove(wav_filename)
                         converter = None
                         recognizer = None
                         transcripts = None
@@ -670,15 +766,24 @@ def transcribe(src, dest, filename, textView_debug):
                         pool.close()
                         pool.join()
                         pool = None
+                        class R(dynamic_proxy(Runnable)):
+                            def run(self):
+                                textView_debug.setText("Process has been canceled")
+                                time.sleep(1)
+                        activity.runOnUiThread(R())
 
                     extracted_regions.append(extracted_region)
                     #pbar.update(i)
-                    pBar(i, len(regions), "Converting speech regions to FLAC: ", textView_debug)
+                    if i%(len(regions)/5) == 0:
+                        pBar(i, len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
                 #pbar.finish()
+                pBar(len(regions), len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
 
             if os.path.isfile(cancelfile):
                 os.remove(cancelfile)
-                if os.path.isfile(wav_filename): os.remove(wav_filename)
+                if wav_filename:
+                    if os.path.isfile(wav_filename):
+                        os.remove(wav_filename)
                 converter = None
                 recognizer = None
                 transcripts = None
@@ -690,17 +795,23 @@ def transcribe(src, dest, filename, textView_debug):
                 pool.close()
                 pool.join()
                 pool = None
+                class R(dynamic_proxy(Runnable)):
+                    def run(self):
+                        textView_debug.setText("Process has been canceled")
+                        time.sleep(1)
+                activity.runOnUiThread(R())
         
             if not os.path.isfile(cancelfile):
-                print("Performing speech recognition")
+                print("Creating transcripts")
                 #widgets = ["Performing speech recognition           : ", Percentage(), ' ', Bar(), ' ', ETA()]
                 #pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
-
                 for i, transcript in enumerate(pool.imap(recognizer, extracted_regions)):
 
                     if os.path.isfile(cancelfile):
                         os.remove(cancelfile)
-                        if os.path.isfile(wav_filename): os.remove(wav_filename)
+                        if wav_filename:
+                            if os.path.isfile(wav_filename):
+                                os.remove(wav_filename)
                         converter = None
                         recognizer = None
                         transcripts = None
@@ -708,7 +819,6 @@ def transcribe(src, dest, filename, textView_debug):
                             for extracted_region in extracted_regions:
                                 if os.path.isfile(extracted_region): os.remove(extracted_region)
                             extracted_regions = None
-                    
                         if transcripts:
                             for transcript in transcripts:
                                 transcript = None
@@ -717,23 +827,30 @@ def transcribe(src, dest, filename, textView_debug):
                         pool.close()
                         pool.join()
                         pool = None
+                        class R(dynamic_proxy(Runnable)):
+                            def run(self):
+                                textView_debug.setText("Process has been canceled")
+                                time.sleep(1)
+                        activity.runOnUiThread(R())
                 
-                    #translator = Translator()
                     transcripts.append(transcript)
                     translated_transcript = Translator().translate(transcript, src=src, dest=dest).text
                     translated_transcripts.append(translated_transcript)
                     #pbar.update(i)
-                    pBar(i, len(regions), "Performing speech recognition: ", textView_debug)
+                    if i%(len(regions)/5) == 0:
+                        pBar(i, len(regions), "Creating transcripts: ", activity, textView_debug)
                 #pbar.finish()
+                pBar(len(regions), len(regions), "Creating transcripts: ", activity, textView_debug)
 
             if os.path.isfile(cancelfile):
                 os.remove(cancelfile)
-                if os.path.isfile(wav_filename): os.remove(wav_filename)
+                if wav_filename:
+                    if os.path.isfile(wav_filename):
+                        os.remove(wav_filename)
                 if extracted_regions:
                     for extracted_region in extracted_regions:
                         if os.path.isfile(extracted_region): os.remove(extracted_region)
                     extracted_regions = None
-                    
                 if transcripts:
                     for transcript in transcripts:
                         transcript = None
@@ -745,40 +862,34 @@ def transcribe(src, dest, filename, textView_debug):
                 pool.close()
                 pool.join()
                 pool = None
+                class R(dynamic_proxy(Runnable)):
+                    def run(self):
+                        textView_debug.setText("Process has been canceled")
+                        time.sleep(1)
+                activity.runOnUiThread(R())
         
-
             timed_subtitles = [(r, t) for r, t in zip(regions, transcripts) if t]
-            timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcripts) if t]
             formatter = FORMATTERS.get("srt")
             formatted_subtitles = formatter(timed_subtitles)
-            formatted_translated_subtitles = formatter(timed_translated_subtitles)
 
             base, ext = os.path.splitext(filename)
-            output = "{base}.{format}".format(base=base, format="srt")
-            translated_output = output[ :-4] + '_translated.srt'
+            srt_file = "{base}.{format}".format(base=base, format="srt")
 
-            with open(output, 'wb') as f:
+            with open(srt_file, 'wb') as f:
                 f.write(formatted_subtitles.encode("utf-8"))
                 f.close()
 
-            with open(output, 'a') as f:
+            with open(srt_file, 'a') as f:
                 f.write("\n")
                 f.close()
-
-            with open(translated_output, 'wb') as ft:
-                ft.write(formatted_translated_subtitles.encode("utf-8"))
-                ft.close()
-
-            with open(translated_output, 'a') as ft:
-                ft.write("\n")
-                ft.close()
-
 
             os.remove(wav_filename)
 
             if os.path.isfile(cancelfile):
                 os.remove(cancelfile)
-                if os.path.isfile(wav_filename): os.remove(wav_filename)
+                if wav_filename:
+                    if os.path.isfile(wav_filename):
+                        os.remove(wav_filename)
                 converter = None
                 recognizer = None
                 transcripts = None
@@ -791,25 +902,24 @@ def transcribe(src, dest, filename, textView_debug):
                     for transcript in transcripts:
                         transcript = None
                     transcripts = None
-                if os.path.isfile(output): os.remove(output)
+                if os.path.isfile(srt_file): os.remove(srt_file)
                 pool.terminate()
                 pool.close()
                 pool.join()
                 pool = None
+                class R(dynamic_proxy(Runnable)):
+                    def run(self):
+                        textView_debug.setText("Process has been canceled")
+                        time.sleep(1)
+                activity.runOnUiThread(R())
         
 
-            if (not is_same_language(src, dest)) and (os.path.isfile(output)) and (not os.path.isfile(cancelfile)):
-                srt_file = output
+            if (not is_same_language(src, dest)) and (os.path.isfile(srt_file)) and (not os.path.isfile(cancelfile)):
+                print("Translating transcripts")
                 entries = entries_generator(srt_file)
-
-                #for number_in_sequence, timecode, subtitles in entries:
-                    #print(number_in_sequence, timecode, subtitles)
-
-                translated_file = srt_file[ :-4] + '_translated.srt'
-
+                translated_srt_file = srt_file[ :-4] + '_translated.srt'
                 total_entries = CountEntries(srt_file)
                 print('Total Entries = {}'.format(total_entries))
-                #print("Translating")
 
                 #prompt = "Translating from %5s to %5s         : " %(src, dest)
                 #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
@@ -818,13 +928,15 @@ def transcribe(src, dest, filename, textView_debug):
                 '''
                 translated_entries = []
                 e=0
-                with open(translated_file, 'w', encoding='utf-8') as f:
+                with open(translated_srt_file, 'w', encoding='utf-8') as f:
                     for i, translated_entry in enumerate(pool.imap(subtitle_translator, entries)):
                     #for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
 
                         if os.path.isfile(cancelfile):
                             os.remove(cancelfile)
-                            if os.path.isfile(wav_filename): os.remove(wav_filename)
+                            if wav_filename:
+                                if os.path.isfile(wav_filename):
+                                    os.remove(wav_filename)
                             converter = None
                             recognizer = None
                             transcripts = None
@@ -837,8 +949,8 @@ def transcribe(src, dest, filename, textView_debug):
                                 for transcript in transcripts:
                                     transcript = None
                                 transcripts = None
-                            if os.path.isfile(output): os.remove(output)
-                            if os.path.isfile(translated_file): os.remove(translated_file)
+                            if os.path.isfile(srt_file): os.remove(srt_file)
+                            if os.path.isfile(translated_srt_file): os.remove(translated_srt_file)
                             pool.terminate()
                             pool.close()
                             pool.join()
@@ -858,28 +970,80 @@ def transcribe(src, dest, filename, textView_debug):
                     #pbar.finish()
                 '''
 
-                print('Done.')
-                print("Original subtitles file created at      : {}".format(srt_file))
-                print('Translated subtitles file created at    : {}' .format(translated_file))
+                transcript_translator = TranscriptTranslator(src=src, dest=dest)
+                translated_transcripts = []
+                for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcripts)):
+                    translated_transcripts.append(translated_transcript)
+                    if (i%(len(transcripts)/5) == 0):
+                        pBar(i, len(transcripts), "Translating transcripts: ", activity, textView_debug)
+
+                    if os.path.isfile(cancelfile):
+                        os.remove(cancelfile)
+                        if wav_filename:
+                            if os.path.isfile(wav_filename):
+                                os.remove(wav_filename)
+                        converter = None
+                        recognizer = None
+                        transcripts = None
+                        if extracted_regions:
+                            for extracted_region in extracted_regions:
+                                if os.path.isfile(extracted_region): os.remove(extracted_region)
+                            extracted_regions = None
+                    
+                        if transcripts:
+                            for transcript in transcripts:
+                                transcript = None
+                            transcripts = None
+                        if os.path.isfile(srt_file): os.remove(srt_file)
+                        if os.path.isfile(translated_srt_file): os.remove(translated_srt_file)
+                        class R(dynamic_proxy(Runnable)):
+                            def run(self):
+                                textView_debug.setText("Process has been canceled")
+                                time.sleep(1)
+                        activity.runOnUiThread(R())
+
+                pBar(len(transcripts), len(transcripts), "Translating transcripts: ", activity, textView_debug)
+
+                timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcripts) if t]
+                formatter = FORMATTERS.get("srt")
+                formatted_translated_subtitles = formatter(timed_translated_subtitles)
+                base, ext = os.path.splitext(filename)
+                srt_file = "{base}.{format}".format(base=base, format="srt")
+                translated_srt_file = srt_file[ :-4] + '_translated.srt'
+
+                with open(translated_srt_file, 'wb') as ft:
+                    ft.write(formatted_translated_subtitles.encode("utf-8"))
+                    ft.close()
+
+                with open(translated_srt_file, 'a') as ft:
+                    ft.write("\n")
+                    ft.close()
+
+            print('Done.')
+            print("Original subtitles file created at      : {}".format(srt_file))
+            if (not is_same_language(src, dest)) and (os.path.isfile(srt_file)) and (not os.path.isfile(cancelfile)):
+                print('Translated subtitles file created at    : {}' .format(translated_srt_file))
                 #print('Total failure to translate entries      : {0}/{1}'.format(count_failure, count_entries))
                 #failure_ratio = count_failure / count_entries
                 #if failure_ratio > 0:
                     #print('If you expect a lower failure ratio or completed translate, please check out the usage of [-p | --postion] argument.')
 
-                textView_debug.append("\n\nDone!\n\n")
-                textView_debug.append("SRT subtitles file created at :\n")
-                textView_debug.append(srt_file + "\n\n")
-                textView_debug.append("Translated SRT subtitles file created at:\n")
-                textView_debug.append(translated_file + "\n")
-
-                pool.terminate()
-                pool.close()
-                pool.join()
-                pool = None
+            class R(dynamic_proxy(Runnable)):
+                def run(self):
+                    time.sleep(1)
+                    textView_debug.append("\n\nSRT subtitles file created at :\n")
+                    textView_debug.append(srt_file + "\n\n")
+                    if (not is_same_language(src, dest)) and (os.path.isfile(srt_file)) and (not os.path.isfile(cancelfile)):
+                        textView_debug.append("Translated SRT subtitles file created at:\n")
+                        textView_debug.append(translated_srt_file + "\n\n")
+                    textView_debug.append("Done!")
+            activity.runOnUiThread(R())
 
         except KeyboardInterrupt:
             print("Cancelling transcription")
-            if os.path.isfile(wav_filename): os.remove(wav_filename)
+            if wav_filename:
+                if os.path.isfile(wav_filename):
+                    os.remove(wav_filename)
             if os.path.isfile(cancelfile): os.remove(cancelfile)
             converter = None
             recognizer = None
@@ -891,19 +1055,29 @@ def transcribe(src, dest, filename, textView_debug):
                     transcript = None
                 transcripts = None
                 extracted_regions = None
-                if os.path.isfile(output): os.remove(output)
-                if os.path.isfile(translated_file): os.remove(translated_file)
+                if os.path.isfile(srt_file): os.remove(srt_file)
+                if os.path.isfile(translated_srt_file): os.remove(translated_srt_file)
             pbar.finish()
             pool.terminate()
             pool.close()
             pool.join()
             pool = None
-    return translated_file
+            class R(dynamic_proxy(Runnable)):
+                def run(self):
+                    textView_debug.setText("Process has been canceled")
+                    time.sleep(1)
+            activity.runOnUiThread(R())
+
+    pool.close()
+    pool.join()
+    pool = None
+
+    return translated_srt_file
 
 
 def main(src, dest, content, uriDisplayName, textView_debug):
     print("Starting main")
-    textView_debug.setText("Creating a copy of " + uriDisplayName)
+    textView_debug.append("Creating a copy of " + uriDisplayName + "\n")
     context = Python.getPlatform().getApplication()
     files_dir = str(context.getExternalFilesDir(None))
     working_dir = join(files_dir,uriDisplayName[ :-4])
@@ -923,8 +1097,8 @@ def main(src, dest, content, uriDisplayName, textView_debug):
 # SPLITTED transcribe() FUNCTION
 
 def create_copy(content, uriDisplayName, textView_debug):
-    # we need to create a copy of original file because in Android 10 Scopped Storage we can't get its REAL PATH directly
-    # only by creating a copy we know exactly the REAL PATH OF THIS COPY so we can then proceeed to next steps
+    # we need to create a copy of original file because in Android API 29 Scopped Storage we can't get its REAL PATH directly
+    # by copying it into a path the we knew we can then proceeed it to next steps
     files_dir = str(context.getExternalFilesDir(None))
     cancelfile = join(files_dir, 'cancel.txt')
     filename = None
@@ -939,14 +1113,23 @@ def create_copy(content, uriDisplayName, textView_debug):
         binary_file.write(content)
     else:
         os.remove(cancelfile)
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
     return filename
 
 
-def convert_to_wav(filename, channels, rate, textView_debug):
-    #print("Converting to a temporary WAV file...")
-    #print("filename = {}".format(filename))
-    textView_debug.setText("Running python script...");
-    textView_debug.setText("Converting to a temporary WAV file...");
+def convert_to_wav(filename, channels, rate, activity, textView_debug):
+    print("Converting to a temporary WAV file...")
+    print("filename = {}".format(filename))
+    class R(dynamic_proxy(Runnable)):
+        def run(self):
+            textView_debug.setText("Running python script...\n\n");
+            textView_debug.append("Converting to a temporary WAV file...\n");
+    activity.runOnUiThread(R())
+
     files_dir = str(context.getExternalFilesDir(None))
     cancelfile = join(files_dir, 'cancel.txt')
     wav_filename = None
@@ -955,22 +1138,41 @@ def convert_to_wav(filename, channels, rate, textView_debug):
         if not os.path.isfile(filename):
             msg = "The given file does not exist: {0}".format(filename)
             print(msg)
-            textView_debug.setText(msg)
-            #textView_debug.setText("\n")
+            class R(dynamic_proxy(Runnable)):
+                def run(self):
+                    textView_debug.append(msg + "\n")
+            activity.runOnUiThread(R())
             raise Exception("Invalid filepath: {0}".format(filename))
         FFmpeg.execute("-y -i " + "\"" + filename + "\"" + " -ac " + str(channels) + " -ar " + str(rate) + " " + "\"" + temp.name + "\"" )
         wav_filename = temp.name
+        print("wav_filename = {}".format(wav_filename))
+
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.append("Converted WAV file is :\n" + temp.name + "\n")
+                time.sleep(1)
+        activity.runOnUiThread(R())
+
     else:
         os.remove(cancelfile)
-        if os.path.isfile(wav_filename): os.remove(wav_filename)
-
-    #textView_debug.setText("Converted WAV file is :\n" + temp.name + "\n")
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
 
     return wav_filename
 
 
-def find_audio_regions(filename, frame_width, min_region_size, max_region_size, textView_debug):
-    textView_debug.setText("Find speech regions of WAV file...");
+def find_audio_regions(filename, frame_width, min_region_size, max_region_size, activity, textView_debug):
+    class R(dynamic_proxy(Runnable)):
+        def run(self):
+            textView_debug.setText("Finding speech regions of WAV file...\n\n");
+    activity.runOnUiThread(R())
+
     files_dir = str(context.getExternalFilesDir(None))
     cache_dir =  str(context.getExternalCacheDir())
 
@@ -1026,15 +1228,37 @@ def find_audio_regions(filename, frame_width, min_region_size, max_region_size, 
 
     else:
         os.remove(cancelfile)
-        if os.path.isfile(wav_filename): os.remove(wav_filename)
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
         regions = None
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
 
-    #textView_debug.setText("Speech regions are :" + str(regions));
+    num = len(regions)
+    class R(dynamic_proxy(Runnable)):
+        def run(self):
+            textView_debug.append("Speech regions found = " + str(num) + "\n\n")
+            time.sleep(1)
+    activity.runOnUiThread(R())
+
+    #class R(dynamic_proxy(Runnable)):
+        #def run(self):
+            #textView_debug.append("Speech regions are :\n" + str(regions) + "\n")
+    #activity.runOnUiThread(R())
+
     return regions
 
 
-def perform_speech_recognition(filename, wav_filename, src, textView_debug):
-    textView_debug.setText("Creating SRT subtitle file...");
+def perform_speech_recognition(filename, wav_filename, src, activity, textView_debug):
+    class R(dynamic_proxy(Runnable)):
+        def run(self):
+            textView_debug.setText("Creating transcripts...\n");
+    activity.runOnUiThread(R())
+
     cache_dir =  str(context.getExternalCacheDir())
     files_dir = str(context.getExternalFilesDir(None))
     cancelfile = join(files_dir, 'cancel.txt')
@@ -1063,22 +1287,36 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
     
     if os.path.isfile(cancelfile):
         os.remove(cancelfile)
-        if os.path.isfile(wav_filename): os.remove(wav_filename)
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
         pool.terminate()
         pool.close()
         pool.join()
         pool = None
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
 
     converter = FLACConverter(source_path=wav_filename)
 
     if os.path.isfile(cancelfile):
         os.remove(cancelfile)
-        if os.path.isfile(wav_filename): os.remove(wav_filename)
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
         pool.terminate()
         pool.close()
         pool.join()
         pool = None
         converter = None
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
 
     audio_rate = 16000
     recognizer = SpeechRecognizer(language=src, rate=audio_rate, api_key=GOOGLE_SPEECH_API_KEY)
@@ -1086,7 +1324,9 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
 
     if os.path.isfile(cancelfile):
         os.remove(cancelfile)
-        if os.path.isfile(wav_filename): os.remove(wav_filename)
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
         pool.terminate()
         pool.close()
         pool.join()
@@ -1094,6 +1334,11 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
         converter = None
         recognizer = None
         transcripts = None
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                textView_debug.setText("Process has been canceled")
+                time.sleep(1)
+        activity.runOnUiThread(R())
 
     if regions:
         try:
@@ -1107,7 +1352,9 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
 
                     if os.path.isfile(cancelfile):
                         os.remove(cancelfile)
-                        if os.path.isfile(wav_filename): os.remove(wav_filename)
+                        if wav_filename:
+                            if os.path.isfile(wav_filename):
+                                os.remove(wav_filename)
                         converter = None
                         recognizer = None
                         transcripts = None
@@ -1126,9 +1373,12 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
                 '''
 
                 for i, extracted_region in enumerate(pool.imap(converter, regions)):
+
                     if os.path.isfile(cancelfile):
                         os.remove(cancelfile)
-                        if os.path.isfile(wav_filename): os.remove(wav_filename)
+                        if wav_filename:
+                            if os.path.isfile(wav_filename):
+                                os.remove(wav_filename)
                         converter = None
                         recognizer = None
                         transcripts = None
@@ -1140,13 +1390,24 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
                         pool.close()
                         pool.join()
                         pool = None
+                        class R(dynamic_proxy(Runnable)):
+                            def run(self):
+                                textView_debug.setText("Process has been canceled")
+                                time.sleep(1)
+                        activity.runOnUiThread(R())
+
                     extracted_regions.append(extracted_region)
                     #progressbar(i, len(regions), "Converting speech regions to FLAC files : ")
-                    pBar(i, len(regions), "Converting speech regions to FLAC: ", textView_debug)
+                    percentage = round(100.0 * i/float(len(regions)),1)
+                    if (i%(len(regions)/10) == 0) or (percentage == 100):
+                        pBar(i, len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
+                pBar(len(regions), len(regions), "Converting speech regions to FLAC: ", activity, textView_debug) 
 
             if os.path.isfile(cancelfile):
                 os.remove(cancelfile)
-                if os.path.isfile(wav_filename): os.remove(wav_filename)
+                if wav_filename:
+                    if os.path.isfile(wav_filename):
+                        os.remove(wav_filename)
                 converter = None
                 recognizer = None
                 transcripts = None
@@ -1158,6 +1419,11 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
                 pool.close()
                 pool.join()
                 pool = None
+                class R(dynamic_proxy(Runnable)):
+                    def run(self):
+                        textView_debug.setText("Process has been canceled")
+                        time.sleep(1)
+                activity.runOnUiThread(R())
         
 
             if not os.path.isfile(cancelfile):
@@ -1169,7 +1435,9 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
 
                     if os.path.isfile(cancelfile):
                         os.remove(cancelfile)
-                        if os.path.isfile(wav_filename): os.remove(wav_filename)
+                        if wav_filename:
+                            if os.path.isfile(wav_filename):
+                                os.remove(wav_filename)
                         converter = None
                         recognizer = None
                         transcripts = None
@@ -1192,9 +1460,12 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
                 '''
 
                 for i, transcript in enumerate(pool.imap(recognizer, extracted_regions)):
+
                     if os.path.isfile(cancelfile):
                         os.remove(cancelfile)
-                        if os.path.isfile(wav_filename): os.remove(wav_filename)
+                        if wav_filename:
+                            if os.path.isfile(wav_filename):
+                                os.remove(wav_filename)
                         converter = None
                         recognizer = None
                         transcripts = None
@@ -1211,12 +1482,19 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
                         pool.close()
                         pool.join()
                         pool = None
+                        class R(dynamic_proxy(Runnable)):
+                            def run(self):
+                                textView_debug.setText("Process has been canceled")
+                                time.sleep(1)
+                        activity.runOnUiThread(R())
+
                     transcripts.append(transcript)
-                    #progressbar(i, len(regions), "Performing speech recognition           : ")
-                    pBar(i, len(regions), "Performing speech recognition: ", textView_debug)
-            
+                    percentage = round(100.0 * i/float(len(regions)),1)
+                    if (i%(len(regions)/10) == 0) or (percentage == 100):
+                        pBar(i, len(regions), "Creating transcripts: ", activity, textView_debug)
+                pBar(len(regions), len(regions), "Creating transcripts: ", activity, textView_debug)
+
                 files_dir = str(context.getExternalFilesDir(None))
-                #working_dir = join(files_dir,uriDisplayName[ :-4])
                 transcripts_file = join(files_dir, "transcripts.txt")
                 ft = open(transcripts_file, 'w')
                 ft.write('')
@@ -1228,7 +1506,9 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
 
             if os.path.isfile(cancelfile):
                 os.remove(cancelfile)
-                if os.path.isfile(wav_filename): os.remove(wav_filename)
+                if wav_filename:
+                    if os.path.isfile(wav_filename):
+                        os.remove(wav_filename)
                 if extracted_regions:
                     for extracted_region in extracted_regions:
                         if os.path.isfile(extracted_region): os.remove(extracted_region)
@@ -1245,19 +1525,24 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
                 pool.close()
                 pool.join()
                 pool = None
+                class R(dynamic_proxy(Runnable)):
+                    def run(self):
+                        textView_debug.setText("Process has been canceled")
+                        time.sleep(1)
+                activity.runOnUiThread(R())
         
             timed_subtitles = [(r, t) for r, t in zip(regions, transcripts) if t]
             formatter = FORMATTERS.get("srt")
             formatted_subtitles = formatter(timed_subtitles)
 
             base, ext = os.path.splitext(filename)
-            output = "{base}.{format}".format(base=base, format="srt")
+            srt_file = "{base}.{format}".format(base=base, format="srt")
 
-            with open(output, 'wb') as f:
+            with open(srt_file, 'wb') as f:
                 f.write(formatted_subtitles.encode("utf-8"))
                 f.close()
 
-            with open(output, 'a') as f:
+            with open(srt_file, 'a') as f:
                 f.write("\n")
                 f.close()
 
@@ -1265,7 +1550,9 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
 
             if os.path.isfile(cancelfile):
                 os.remove(cancelfile)
-                if os.path.isfile(wav_filename): os.remove(wav_filename)
+                if wav_filename:
+                    if os.path.isfile(wav_filename):
+                        os.remove(wav_filename)
                 converter = None
                 recognizer = None
                 transcripts = None
@@ -1273,21 +1560,26 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
                     for extracted_region in extracted_regions:
                         if os.path.isfile(extracted_region): os.remove(extracted_region)
                     extracted_regions = None
-                    
                 if transcripts:
                     for transcript in transcripts:
                         transcript = None
                     transcripts = None
-                if os.path.isfile(output): os.remove(output)
+                if os.path.isfile(srt_file): os.remove(srt_file)
                 pool.terminate()
                 pool.close()
                 pool.join()
                 pool = None
+                class R(dynamic_proxy(Runnable)):
+                    def run(self):
+                        textView_debug.setText("Process has been canceled")
+                        time.sleep(1)
+                activity.runOnUiThread(R())
         
-
         except KeyboardInterrupt:
             print("Cancelling transcription")
-            if os.path.isfile(wav_filename): os.remove(wav_filename)
+            if wav_filename:
+                if os.path.isfile(wav_filename):
+                    os.remove(wav_filename)
             if os.path.isfile(cancelfile): os.remove(cancelfile)
             converter = None
             recognizer = None
@@ -1299,20 +1591,33 @@ def perform_speech_recognition(filename, wav_filename, src, textView_debug):
                     transcript = None
                 transcripts = None
                 extracted_regions = None
-                if os.path.isfile(output): os.remove(output)
-                if os.path.isfile(translated_file): os.remove(translated_file)
+                if os.path.isfile(srt_file): os.remove(srt_file)
+                if os.path.isfile(translated_srt_file): os.remove(translated_srt_file)
             pbar.finish()
             pool.terminate()
             pool.close()
             pool.join()
             pool = None
+            class R(dynamic_proxy(Runnable)):
+                def run(self):
+                    textView_debug.setText("Process has been canceled")
+                    time.sleep(1)
+            activity.runOnUiThread(R())
     
-    textView_debug.setText("SRT subtitle file created at : " + output);
-    return output
+    #class C(dynamic_proxy(Runnable)):
+        #def run(self):
+            #textView_debug.append("SRT subtitle file created at : " + srt_file + "\n");
+            #time.sleep(1)
+    #activity.runOnUiThread(C())
+    return srt_file
 
 
-def perform_translation(output, src, dest, textView_debug):
-    textView_debug.setText("Translating SRT subtitle file...");
+def perform_translation(srt_file, src, dest, activity, textView_debug):
+    class C(dynamic_proxy(Runnable)):
+        def run(self):
+            textView_debug.setText("Translating transcripts...\n\n");
+    activity.runOnUiThread(C())
+
     files_dir = str(context.getExternalFilesDir(None))
     cache_dir = str(context.getExternalCacheDir())
     cancelfile = join(files_dir, 'cancel.txt')
@@ -1344,10 +1649,15 @@ def perform_translation(output, src, dest, textView_debug):
     for k in range(len(region_start)):
         regions.append((region_start[k], elapsed_time[k]))
 
+    translated_srt_file = None
+    pool = multiprocessing.pool.ThreadPool(10)
+
     try:
         if os.path.isfile(cancelfile):
             os.remove(cancelfile)
-            if os.path.isfile(wav_filename): os.remove(wav_filename)
+            if wav_filename:
+                if os.path.isfile(wav_filename):
+                    os.remove(wav_filename)
             converter = None
             recognizer = None
             transcripts = None
@@ -1355,27 +1665,32 @@ def perform_translation(output, src, dest, textView_debug):
                 for extracted_region in extracted_regions:
                     if os.path.isfile(extracted_region): os.remove(extracted_region)
                 extracted_regions = None
-
             if transcripts:
                 for transcript in transcripts:
                     transcript = None
                 transcripts = None
-            if os.path.isfile(output): os.remove(output)
+            if os.path.isfile(srt_file): os.remove(srt_file)
+            class R(dynamic_proxy(Runnable)):
+                def run(self):
+                    textView_debug.setText("Process has been canceled")
+                    time.sleep(1)
+            activity.runOnUiThread(R())
 
-        if (not is_same_language(src, dest)) and (os.path.isfile(output)) and (not os.path.isfile(cancelfile)):
-            pool = multiprocessing.pool.ThreadPool(10)
-            srt_file = output
-            translated_file = srt_file[ :-4] + '_translated.srt'
-
+        if (not is_same_language(src, dest)) and (os.path.isfile(srt_file)) and (not os.path.isfile(cancelfile)):
+            translated_srt_file = srt_file[ :-4] + '_translated.srt'
             transcript_translator = TranscriptTranslator(src=src, dest=dest)
             translated_transcripts = []
             for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcripts)):
                 translated_transcripts.append(translated_transcript)
-                pBar(i, len(transcripts), "Translating transcripts: ", textView_debug)
+                percentage = round(100.0 * i/float(len(transcripts)),1)
+                if (i%((len(transcripts))/10) == 0):
+                    pBar(i, len(transcripts), "Translating transcripts: ", activity, textView_debug)
 
                 if os.path.isfile(cancelfile):
                     os.remove(cancelfile)
-                    if os.path.isfile(wav_filename): os.remove(wav_filename)
+                    if wav_filename:
+                        if os.path.isfile(wav_filename):
+                            os.remove(wav_filename)
                     converter = None
                     recognizer = None
                     transcripts = None
@@ -1383,13 +1698,19 @@ def perform_translation(output, src, dest, textView_debug):
                         for extracted_region in extracted_regions:
                             if os.path.isfile(extracted_region): os.remove(extracted_region)
                         extracted_regions = None
-                    
                     if transcripts:
                         for transcript in transcripts:
                             transcript = None
                         transcripts = None
-                    if os.path.isfile(output): os.remove(output)
-                    if os.path.isfile(translated_file): os.remove(translated_file)
+                    if os.path.isfile(srt_file): os.remove(srt_file)
+                    if os.path.isfile(translated_srt_file): os.remove(translated_srt_file)
+                    class R(dynamic_proxy(Runnable)):
+                        def run(self):
+                            textView_debug.setText("Process has been canceled")
+                            time.sleep(1)
+                    activity.runOnUiThread(R())
+
+            pBar(len(transcripts), len(transcripts), "Translating transcripts: ", activity, textView_debug)
 
             timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcripts) if t]
             formatter = FORMATTERS.get("srt")
@@ -1404,7 +1725,6 @@ def perform_translation(output, src, dest, textView_debug):
                 ft.write("\n")
                 ft.close()
 
-
             #entries = entries_generator(srt_file)
             #total_entries = CountEntries(srt_file)
             #print('Total Entries = {}'.format(total_entries))
@@ -1415,12 +1735,14 @@ def perform_translation(output, src, dest, textView_debug):
 
             '''
             e=0
-            with open(translated_file, 'w', encoding='utf-8') as f:
+            with open(translated_srt_file, 'w', encoding='utf-8') as f:
                 for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
 
                     if os.path.isfile(cancelfile):
                         os.remove(cancelfile)
-                        if os.path.isfile(wav_filename): os.remove(wav_filename)
+                        if wav_filename:
+                            if os.path.isfile(wav_filename):
+                                os.remove(wav_filename)
                         converter = None
                         recognizer = None
                         transcripts = None
@@ -1433,8 +1755,8 @@ def perform_translation(output, src, dest, textView_debug):
                             for transcript in transcripts:
                                 transcript = None
                             transcripts = None
-                        if os.path.isfile(output): os.remove(output)
-                        if os.path.isfile(translated_file): os.remove(translated_file)
+                        if os.path.isfile(srt_file): os.remove(srt_file)
+                        if os.path.isfile(translated_srt_file): os.remove(translated_srt_file)
                 
 
                     f.write(number_in_sequence)
@@ -1450,9 +1772,9 @@ def perform_translation(output, src, dest, textView_debug):
                 #pbar.finish()
             '''
 
-            #print('Done.')
-            #print("Original subtitles file created at      : {}".format(srt_file))
-            #print('Translated subtitles file created at    : {}' .format(translated_file))
+            print('Done.')
+            print("Original subtitles file created at      : {}".format(srt_file))
+            print('Translated subtitles file created at    : {}' .format(translated_srt_file))
             #print('Total failure to translate entries      : {0}/{1}'.format(count_failure, count_entries))
             #failure_ratio = count_failure / count_entries
             #if failure_ratio > 0:
@@ -1460,7 +1782,9 @@ def perform_translation(output, src, dest, textView_debug):
 
     except KeyboardInterrupt:
         print("Cancelling transcription")
-        if os.path.isfile(wav_filename): os.remove(wav_filename)
+        if wav_filename:
+            if os.path.isfile(wav_filename):
+                os.remove(wav_filename)
         if os.path.isfile(cancelfile): os.remove(cancelfile)
         converter = None
         recognizer = None
@@ -1472,18 +1796,31 @@ def perform_translation(output, src, dest, textView_debug):
                 transcript = None
             transcripts = None
             extracted_regions = None
-            if os.path.isfile(output): os.remove(output)
-            if os.path.isfile(translated_file): os.remove(translated_file)
-        pbar.finish()
+            if os.path.isfile(srt_file): os.remove(srt_file)
+            if os.path.isfile(translated_srt_file): os.remove(translated_srt_file)
+            class R(dynamic_proxy(Runnable)):
+                def run(self):
+                    textView_debug.setText("Process has been canceled")
+                    time.sleep(1)
+            activity.runOnUiThread(R())
 
+    class R(dynamic_proxy(Runnable)):
+        def run(self):
+            textView_debug.append("\n\nSRT subtitles file created at :\n")
+            textView_debug.append(srt_file + "\n")
+            textView_debug.append("\nTranslated SRT subtitles file created at:\n")
+            textView_debug.append(translated_srt_file + "\n\n")
+            textView_debug.append("Done!\n")
+    activity.runOnUiThread(R())
 
-    textView_debug.append("\n\nSRT subtitles file created at :\n")
-    textView_debug.append(srt_file + "\n")
-    textView_debug.append("\nTranslated SRT subtitles file created at:\n")
-    textView_debug.append(translated_file + "\n\n")
-    textView_debug.append("Done!\n")
+    pool.close()
+    pool.join()
 
-    return translated_file
+    files_dir = str(context.getExternalFilesDir(None))
+    transcripts_file = join(files_dir, "transcripts.txt")
+    os.remove(transcripts_file)
+
+    return translated_srt_file
 
 
 def printEnvironmentDir():
@@ -1519,14 +1856,15 @@ def printEnvironmentDir():
  
     return "OK"
 
-
-def pBar(count_value, total, prefix, textView_debug):
+def pBar(count_value, total, prefix, activity, textView_debug):
     bar_length = 10
-    filled_up_Length = int(round(bar_length*count_value/(total)))
-    percentage = round(100.0 * count_value/(total),1)
+    filled_up_Length = int(round(bar_length*count_value/float(total)))
+    percentage = round(100.0 * count_value/float(total),1)
     bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
-    textView_debug.setText('%s [%s] %s%s\r' %(prefix, bar, percentage, '%'))
-
+    class R(dynamic_proxy(Runnable)):
+        def run(self):
+            textView_debug.setText('%s [%s] %s%s\r' %(prefix, bar, percentage, '%'))
+    activity.runOnUiThread(R())
 
 def progressbar(count_value, total, prefix='', suffix=''):
     bar_length = 50
@@ -1536,6 +1874,21 @@ def progressbar(count_value, total, prefix='', suffix=''):
     sys.stdout.write('%s [%s] %s%s %s\r' %(prefix, bar, percentage, '%', suffix))
     sys.stdout.flush()
 
+
+def print_it(i, activity, textView_debug):
+    threading.Timer(5.0, print_it, args=[i, activity, textView_debug]).start()
+    #print(i)
+    class R(dynamic_proxy(Runnable)):
+        def run(self):
+            textView_debug.setText(str(i))
+    activity.runOnUiThread(R())
+
+def print_i(i, activity, textView):
+    class R(dynamic_proxy(Runnable)):
+        def run(self):
+            textView.setText(str(i))
+    activity.runOnUiThread(R())
+    time.sleep(2)
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()

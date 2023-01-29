@@ -151,6 +151,7 @@
             android:textAlignment="gravity"
             android:textSize="12sp"
             android:scrollbars="vertical"
+            android:isScrollContainer="true"
             android:background="@android:drawable/editbox_background"
             android:typeface="sans"
             android:layout_width="match_parent"

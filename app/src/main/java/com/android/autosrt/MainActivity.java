@@ -660,7 +660,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
 
-
         spinner_src_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
                 src_country = spinner_src_languages.getSelectedItem().toString();
@@ -714,14 +713,48 @@ public class MainActivity extends AppCompatActivity {
                 runpy.interrupt();
                 runpy = null;
             }
+            cancelFile = getApplicationContext().getExternalFilesDir(null) + File.separator + "cancel.txt";
+            if (new File(cancelFile).exists()) {
+                new File(cancelFile).delete();
+            }
             transcribeIsRunning = !transcribeIsRunning;
             if (mediaURI != null) canceled = !canceled;
 
             if (transcribeIsRunning) {
+                String t = "Cancel";
+                button_start.setText(t);
                 transcribe();
             } else {
                 canceled = true;
-                new Handler(Looper.getMainLooper()).post(() -> {
+                runOnUiThread(() -> {
+                    String m = "Process has been canceled\n";
+                    textview_debug.setText(m);
+                    String t = "Start";
+                    button_start.setText(t);
+                    File fc = new File(cancelFile);
+                    try {
+                        FileWriter out = new FileWriter(fc);
+                        out.write("true");
+                        out.close();
+                    } catch (IOException e) {
+                        Log.e("Error: ", Objects.requireNonNull(e.getMessage()));
+                        e.printStackTrace();
+                    }
+
+                    if (srtFile != null) {
+                        File sf = new File(srtFile).getAbsoluteFile();
+                        if(sf.exists() && sf.delete()){
+                            System.out.println(new File(srtFile).getAbsoluteFile().delete());
+                        }
+                    }
+                    if (srtFileTranslated != null) {
+                        File stf = new File(srtFileTranslated).getAbsoluteFile();
+                        if(stf.exists() && stf.delete()){
+                            System.out.println(new File(srtFileTranslated).getAbsoluteFile().delete());
+                        }
+                    }
+                });
+                /*new Handler(Looper.getMainLooper()).post(() -> {
                     String m = "Process has been canceled\n";
                     addText(textview_debug, m);
                     String t = "Start";
@@ -749,9 +782,10 @@ public class MainActivity extends AppCompatActivity {
                             System.out.println(new File(srtFileTranslated).getAbsoluteFile().delete());
                         }
                     }
-                });
+                });*/
                 if (runpy != null) {
                     runpy.interrupt();
+                    runpy = null;
                 }
                 transcribeIsRunning = false;
             }
@@ -856,8 +890,6 @@ public class MainActivity extends AppCompatActivity {
     }*/
 
     private void transcribe() {
-        String t = "Cancel";
-        button_start.setText(t);
         runpy = new Thread(() -> {
             if (Looper.myLooper() == null) {
                 Looper.prepare();
@@ -868,6 +900,9 @@ public class MainActivity extends AppCompatActivity {
                     if (!canceled && mediaURI != null && uriDisplayName != null) {
                         String folderName = substring(uriDisplayName,0,uriDisplayName.length()-4);
                         String prefix = "Creating a copy of " + uriDisplayName + " : ";
+                        // WE NEED TO GET A COPY OF ORIGINAL FILE BECAUSE ON SCOPE STORAGE WE CAN'T
+                        // GET THE REAL PATH OF THE ORIGINAL FILE, SO BY COPYING IT INTO SOME PATH THE WE
+                        // KNEW ALREADY, WE CAN THEN PROCEED IT WITH NEXT STEPs OF autosrt.py SCRIPT
                         String copyPath = copyFileToExternalFilesDir(mediaURI, folderName, prefix);
                         if (copyPath != null) {
                             sourceCopy = copyPath;
@@ -878,15 +913,26 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                     if (!canceled && mediaURI != null && sourceCopy != null) {
-                        Handler handler = new Handler(Looper.getMainLooper()) {
-                            @Override
-                            public void handleMessage(@NonNull Message msg) {
-                                textview_debug.append(" \n");
-                                textview_debug.append("Copy created at :\n");
-                                textview_debug.append(sourceCopy + "\n\n");
+                        runOnUiThread(() -> {
+                            if (canceled) {
+                                String m = "Process has been canceled";
+                                textview_debug.setText(m);
+                                if (runpy != null) {
+                                    runpy.interrupt();
+                                }
+                                transcribeIsRunning = false;
                             }
-                        };
-                        handler.sendEmptyMessage(1);
+                            textview_debug.append("Copy created at :\n");
+                            textview_debug.append(sourceCopy + "\n\n");
+                            if (canceled) {
+                                String m = "Process has been canceled";
+                                textview_debug.setText(m);
+                                if (runpy != null) {
+                                    runpy.interrupt();
+                                }
+                                transcribeIsRunning = false;
+                            }
+                        });
                     }
 
                     if (!Python.isStarted()) {
@@ -895,29 +941,53 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     // ALTERNATIVE 1 : run a single function transcribe() of autosrt.py
-                    // RUNNING FINE ON EMULATOR BUT CRASHED ON REAL DEVICE!!!
+                    // WE NEED TO USE SOME time.sleep() FUNCTION ON PYTHON SCRIPT TO AVOID CRASHED
                     /*if (!canceled && mediaURI != null && sourceCopy != null) {
-                        PyObject pyObjsrtFileTranslated = py.getModule("autosrt").callAttr("transcribe", src, dst, sourceCopy, textview_debug);
+                        if (canceled) {
+                            String m = "Process has been canceled";
+                            textview_debug.setText(m);
+                            if (runpy != null) {
+                                runpy.interrupt();
+                            }
+                            transcribeIsRunning = false;
+                        }
+                        PyObject pyObjsrtFileTranslated = py.getModule("autosrt").callAttr("transcribe", src, dst, sourceCopy, MainActivity.this, textview_debug);
                         if (pyObjsrtFileTranslated != null) {
                             srtFileTranslated = pyObjsrtFileTranslated.toString();
+                        }
+                        if (canceled) {
+                            String m = "Process has been canceled";
+                            textview_debug.setText(m);
+                            if (runpy != null) {
+                                runpy.interrupt();
+                            }
+                            transcribeIsRunning = false;
                         }
                     }*/
 
                     // ALTERNATIVE 2 : run split functions of transcibe() in autosrt.py
+                    if (canceled) {
+                        String m = "Process has been canceled";
+                        textview_debug.setText(m);
+                        if (runpy != null) {
+                            runpy.interrupt();
+                        }
+                        transcribeIsRunning = false;
+                    }
                     if (!canceled && mediaURI != null && sourceCopy != null) {
-                        PyObject pyObjTempName = py.getModule("autosrt").callAttr("convert_to_wav", sourceCopy, 1, 16000, textview_debug);
+                        PyObject pyObjTempName = py.getModule("autosrt").callAttr("convert_to_wav", sourceCopy, 1, 16000, MainActivity.this, textview_debug);
                         if (pyObjTempName != null) tempName = pyObjTempName.toString();
                     }
                     if (!canceled && mediaURI != null && tempName != null) {
-                        PyObject pyObjRegions = py.getModule("autosrt").callAttr("find_audio_regions", tempName, 4096, 0.3, 8, textview_debug);
+                        PyObject pyObjRegions = py.getModule("autosrt").callAttr("find_audio_regions", tempName, 4096, 0.3, 8, MainActivity.this, textview_debug);
                         if (pyObjRegions != null) regions = pyObjRegions.toString();
                     }
                     if (!canceled && mediaURI != null && sourceCopy != null && tempName != null) {
-                        PyObject pyObjSrtFile = py.getModule("autosrt").callAttr("perform_speech_recognition", sourceCopy, tempName, src, textview_debug);
+                        PyObject pyObjSrtFile = py.getModule("autosrt").callAttr("perform_speech_recognition", sourceCopy, tempName, src, MainActivity.this, textview_debug);
                         if (pyObjSrtFile != null) srtFile = pyObjSrtFile.toString();
                     }
                     if (!canceled && mediaURI != null && srtFile != null) {
-                        PyObject pyObjSrtFileTranslated = py.getModule("autosrt").callAttr("perform_translation", srtFile, src, dst, textview_debug);
+                        PyObject pyObjSrtFileTranslated = py.getModule("autosrt").callAttr("perform_translation", srtFile, src, dst, MainActivity.this, textview_debug);
                         if (pyObjSrtFileTranslated != null) srtFileTranslated = pyObjSrtFileTranslated.toString();
                     }
 
@@ -925,6 +995,14 @@ public class MainActivity extends AppCompatActivity {
                         if (runpy != null) {
                             runpy.interrupt();
                         }
+                    }
+                    if (canceled) {
+                        String m = "Process has been canceled";
+                        textview_debug.setText(m);
+                        if (runpy != null) {
+                            runpy.interrupt();
+                        }
+                        transcribeIsRunning = false;
                     }
 
                     runOnUiThread(() -> {
@@ -938,13 +1016,10 @@ public class MainActivity extends AppCompatActivity {
                             canceled = true;
                         }
                     });
-
-
                 } catch (Exception e) {
                     Log.e("Error: ", Objects.requireNonNull(e.getMessage()));
                     e.printStackTrace();
                 }
-
             }
             else if (mediaURI != null && canceled) {
                 if (runpy != null) {
@@ -954,6 +1029,8 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     String t1 = "Start";
                     button_start.setText(t1);
+                    String m = "Process has been canceled";
+                    textview_debug.setText(m);
                 });
             }
             else if (mediaURI == null) {
@@ -1000,6 +1077,14 @@ public class MainActivity extends AppCompatActivity {
             output = new File(getApplicationContext().getExternalFilesDir(null) + "/" + name);
         }
         try {
+            if (canceled) {
+                String m = "Process has been canceled";
+                textview_debug.setText(m);
+                if (runpy != null) {
+                    runpy.interrupt();
+                }
+                transcribeIsRunning = false;
+            }
             InputStream inputStream = getApplicationContext().getContentResolver().openInputStream(uri);
             FileOutputStream outputStream = new FileOutputStream(output);
             long length  = Long.parseLong(size);
@@ -1008,6 +1093,14 @@ public class MainActivity extends AppCompatActivity {
             int bufferSize = 1024;
             final byte[] buffers = new byte[bufferSize];
             while ((read = inputStream.read(buffers)) != -1) {
+                if (canceled) {
+                    String m = "Process has been canceled";
+                    textview_debug.setText(m);
+                    if (runpy != null) {
+                        runpy.interrupt();
+                    }
+                    transcribeIsRunning = false;
+                }
                 counter += read;
                 outputStream.write(buffers, 0, read);
                 //pBar(counter, length, prefix);
@@ -1016,13 +1109,31 @@ public class MainActivity extends AppCompatActivity {
                 String pounds = StringUtils.repeat('#', round(bar_length * counter/(float)(length)));
                 String equals = StringUtils.repeat('=', (bar_length - round(bar_length * counter/(float)(length))));
                 String bar = pounds + equals;
-                textview_debug.setText(prefix + " [" + bar + "] " + percentage + '%');
+                runOnUiThread(() -> {
+                    if (canceled) {
+                        String m = "Process has been canceled";
+                        textview_debug.setText(m);
+                        if (runpy != null) {
+                            runpy.interrupt();
+                        }
+                        transcribeIsRunning = false;
+                    }
+                    textview_debug.setText(prefix + " [" + bar + "] " + percentage + '%');
+                    if (canceled) {
+                        String m = "Process has been canceled";
+                        textview_debug.setText(m);
+                        if (runpy != null) {
+                            runpy.interrupt();
+                        }
+                        transcribeIsRunning = false;
+                    }
+                });
             }
             inputStream.close();
             outputStream.close();
+            runOnUiThread(() -> textview_debug.append("\n"));
 
         } catch (Exception e) {
-
             Log.e("Exception", Objects.requireNonNull(e.getMessage()));
         }
         return output.getPath();
