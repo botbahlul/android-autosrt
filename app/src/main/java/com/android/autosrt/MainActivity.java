@@ -754,35 +754,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 });
-                /*new Handler(Looper.getMainLooper()).post(() -> {
-                    String m = "Process has been canceled\n";
-                    addText(textview_debug, m);
-                    String t = "Start";
-                    button_start.setText(t);
 
-                    File fc = new File(cancelFile);
-                    try {
-                        FileWriter out = new FileWriter(fc);
-                        out.write("true");
-                        out.close();
-                    } catch (IOException e) {
-                        Log.e("Error: ", Objects.requireNonNull(e.getMessage()));
-                        e.printStackTrace();
-                    }
-
-                    if (srtFile != null) {
-                        File sf = new File(srtFile).getAbsoluteFile();
-                        if(sf.exists() && sf.delete()){
-                            System.out.println(new File(srtFile).getAbsoluteFile().delete());
-                        }
-                    }
-                    if (srtFileTranslated != null) {
-                        File stf = new File(srtFileTranslated).getAbsoluteFile();
-                        if(stf.exists() && stf.delete()){
-                            System.out.println(new File(srtFileTranslated).getAbsoluteFile().delete());
-                        }
-                    }
-                });*/
                 if (runpy != null) {
                     runpy.interrupt();
                     runpy = null;
@@ -966,6 +938,7 @@ public class MainActivity extends AppCompatActivity {
                     }*/
 
                     // ALTERNATIVE 2 : run split functions of transcibe() in autosrt.py
+                    // It seems faster
                     if (canceled) {
                         String m = "Process has been canceled";
                         textview_debug.setText(m);
