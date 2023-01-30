@@ -7,4 +7,4 @@ This app is a GUI VERSION of AUTOSRT PYHTON SCRIPT https://github.com/botbahlul/
 
 It's developed to running on ANDROID with the help of CHAQUOPY https://chaquo.com/chaquopy/
 
-Tested on Pixel 2 API 25 emulator, Nexus 5X API 29 emulator, and Xiaomi Redmi Note 7 Pro API 29 with crashes occasionaly due to dynamic_proxy of chaquopy being called to fast repeatly
+Tested on Pixel 2 API 25 emulator, Nexus 5X API 29 emulator, and Xiaomi Redmi Note 7 Pro API 29
