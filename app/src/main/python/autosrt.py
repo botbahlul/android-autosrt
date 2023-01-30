@@ -391,7 +391,7 @@ class SpeechRecognizer(object):
                 for line in resp.content.decode('utf-8').split("\n"):
                     try:
                         line = json.loads(line)
-                        line = line['result'][0]['alternative'][0]['transcription']
+                        line = line['result'][0]['alternative'][0]['transcript']
                         return line[:1].upper() + line[1:]
                     except:
                         # no result
@@ -401,7 +401,7 @@ class SpeechRecognizer(object):
             return
 
 
-class TranscriptTranslator(object):
+class TranscriptionTranslator(object):
     def __init__(self, src, dest):
         self.src = src
         self.dest = dest
@@ -409,8 +409,8 @@ class TranscriptTranslator(object):
     def __call__(self, transcription):
         try:
             if not transcription == None:
-                translated_transcript = Translator().translate(transcription, src=self.src, dest=self.dest).text
-                return translated_transcript
+                translated_transcription = Translator().translate(transcription, src=self.src, dest=self.dest).text
+                return translated_transcription
             else:
                 return
         except KeyboardInterrupt:
@@ -729,12 +729,12 @@ def transcribe(src, dest, filename, activity, textView_debug):
                         #pbar.finish()
                     '''
 
-                    transcript_translator = TranscriptTranslator(src=src, dest=dest)
+                    transcription_translator = TranscriptionTranslator(src=src, dest=dest)
                     translated_transcriptions = []
                     time.sleep(1)
-                    for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcriptions)):
+                    for i, translated_transcription in enumerate(pool.imap(transcription_translator, transcriptions)):
                         check_cancel_file()
-                        translated_transcriptions.append(translated_transcript)
+                        translated_transcriptions.append(translated_transcription)
                         #pbar.update(i)
                         pBar(i, len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
                     #pbar.finish()
@@ -1240,11 +1240,11 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
 
         if (not is_same_language(src, dest)) and (os.path.isfile(srt_file)) and (not os.path.isfile(cancel_file)):
             translated_srt_file = srt_file[ :-4] + '_translated.srt'
-            transcript_translator = TranscriptTranslator(src=src, dest=dest)
+            transcription_translator = TranscriptionTranslator(src=src, dest=dest)
             translated_transcriptions = []
             time.sleep(1)
-            for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcriptions)):
-                translated_transcriptions.append(translated_transcript)
+            for i, translated_transcription in enumerate(pool.imap(transcription_translator, transcriptions)):
+                translated_transcriptions.append(translated_transcription)
                 pBar(i, len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
                 check_cancel_file()
             pBar(len(transcriptions), len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
