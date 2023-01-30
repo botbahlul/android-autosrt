@@ -17,8 +17,6 @@ import android.os.Environment;
 import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
-import android.text.Editable;
-import android.text.Selection;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.View;
@@ -922,8 +920,8 @@ public class MainActivity extends AppCompatActivity {
                             transcribeIsRunning = false;
                         } else {
                             runOnUiThread(() -> {
-                                textview_debug.append("Copy created at :\n");
-                                textview_debug.append(sourceCopy + "\n\n");
+                                textview_debug.append("\nCopy created at :\n");
+                                textview_debug.append(sourceCopy);
                             });
                         }
 
