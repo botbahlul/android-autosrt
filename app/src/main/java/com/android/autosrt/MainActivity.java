@@ -932,7 +932,7 @@ public class MainActivity extends AppCompatActivity {
 
                         // ALTERNATIVE 1 : run a single function transcribe() of autosrt.py
                         // WE NEED TO USE SOME time.sleep() FUNCTION ON PYTHON SCRIPT TO AVOID CRASHED
-                        /*if (!canceled && mediaURI != null && sourceCopy != null) {
+                        if (!canceled && mediaURI != null && sourceCopy != null) {
                             if (canceled) {
                                 String m = "Process has been canceled";
                                 textview_debug.setText(m);
@@ -948,10 +948,10 @@ public class MainActivity extends AppCompatActivity {
                                     }
                                 }
                             }
-                        }*/
+                        }
 
                         // ALTERNATIVE 2 : run split functions of transcibe() in autosrt.py
-                        if (canceled) {
+                        /*if (canceled) {
                             String m = "Process has been canceled";
                             textview_debug.setText(m);
                             if (runpy != null) {
@@ -982,13 +982,13 @@ public class MainActivity extends AppCompatActivity {
                                     srtFileTranslated = pyObjSrtFileTranslated.toString();
                             }
                         }
-
                         if (!canceled && mediaURI != null && srtFile != null && srtFileTranslated != null) {
                             if (runpy != null) {
                                 runpy.interrupt();
                                 runpy = null;
                             }
-                        }
+                        }*/
+
                         if (canceled) {
                             String m = "Process has been canceled";
                             textview_debug.setText(m);
@@ -999,18 +999,18 @@ public class MainActivity extends AppCompatActivity {
                             transcribeIsRunning = false;
                         }
 
-                        runOnUiThread(() -> {
-                            if (!canceled && mediaURI != null && srtFileTranslated != null) {
+                        if (!canceled && mediaURI != null && srtFileTranslated != null) {
+                            runOnUiThread(() -> {
                                 String t1 = "Start";
                                 button_start.setText(t1);
-                                if (runpy != null) {
-                                    runpy.interrupt();
-                                    runpy = null;
-                                }
-                                transcribeIsRunning = false;
-                                canceled = true;
+                            });
+                            if (runpy != null) {
+                                runpy.interrupt();
+                                runpy = null;
                             }
-                        });
+                            transcribeIsRunning = false;
+                            canceled = true;
+                            }
                     } catch (Exception e) {
                         Log.e("Error: ", Objects.requireNonNull(e.getMessage()));
                         e.printStackTrace();
@@ -1142,10 +1142,12 @@ public class MainActivity extends AppCompatActivity {
                         String pounds = StringUtils.repeat('#', round(bar_length * counter / (float) (length)));
                         String equals = StringUtils.repeat('=', (bar_length - round(bar_length * counter / (float) (length))));
                         String bar = pounds + equals;
-                        runOnUiThread(() -> {
-                            textview_debug.setText(prefix + " [" + bar + "] " + percentage + '%');
-                            //textview_debug.setText(prefix + " [" + bar + "] " + percentage + "% " + str_remainingTime);
-                        });
+                        if ((int)(percentage) % 10 == 0){
+                            runOnUiThread(() -> {
+                                textview_debug.setText(prefix + " [" + bar + "] " + percentage + '%');
+                                //textview_debug.setText(prefix + " [" + bar + "] " + percentage + "% " + str_remainingTime);
+                            });
+                        }
                     }
                 }
                 inputStream.close();

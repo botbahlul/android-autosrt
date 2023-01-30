@@ -577,6 +577,7 @@ def transcribe(src, dest, filename, activity, textView_debug):
     if not os.path.isfile(cancel_file):
 
         '''
+        // Use this if we want to create a copy from python script
         context = Python.getPlatform().getApplication()
         files_dir = str(context.getExternalFilesDir(None))
         content = bytes(content)
@@ -643,6 +644,10 @@ def transcribe(src, dest, filename, activity, textView_debug):
             try:
                 if not os.path.isfile(cancel_file):
                     print("Converting speech regions to FLAC files")
+
+                    # widgets and pbar are from progressbar module, we don't use it because we can't show it on textview_debug
+                    # we use self made pBar to show progress on textview
+
                     #widgets = ["Converting speech regions to FLAC files : ", Percentage(), ' ', Bar(), ' ', ETA()]
                     #pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
 
@@ -652,20 +657,9 @@ def transcribe(src, dest, filename, activity, textView_debug):
                         check_cancel_file()
                         extracted_regions.append(extracted_region)
                         #pbar.update(i)
-                        #pBar(i, len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
-
-                        bar_length = 10
-                        filled_up_Length = int(round(bar_length*i/(len(regions))))
-                        percentage = round(100.0 * i/(len(regions)),1)
-                        bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
-                        if (int(percentage) % 10 == 0):
-                            class R(dynamic_proxy(Runnable)):
-                                def run(self):
-                                    textView_debug.setText('%s [%s] %s%s\r' %("Converting speech regions to FLAC: ", bar, percentage, '%'))
-                            activity.runOnUiThread(R())
-                    time.sleep(1)
-
+                        pBar(i, len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
                     #pbar.finish()
+                    time.sleep(1)
                     pBar(len(regions), len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
 
                     check_cancel_file()
@@ -675,23 +669,12 @@ def transcribe(src, dest, filename, activity, textView_debug):
                     #pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
                     time.sleep(1)
                     for i, transcript in enumerate(pool.imap(recognizer, extracted_regions)):
-                        check_cancel_file()
+                        #check_cancel_file()
                         transcripts.append(transcript)
                         #pbar.update(i)
-                        #pBar(i, len(regions), "Creating transcripts: ", activity, textView_debug)
-
-                        bar_length = 10
-                        filled_up_Length = int(round(bar_length*i/(len(regions))))
-                        percentage = round(100.0 * i/(len(regions)),1)
-                        bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
-                        if (int(percentage) % 10 == 0):
-                            class R(dynamic_proxy(Runnable)):
-                                def run(self):
-                                    textView_debug.setText('%s [%s] %s%s\r' %("Creating transcripts: ", bar, percentage, '%'))
-                            activity.runOnUiThread(R())
-
-                    time.sleep(1)
+                        pBar(i, len(regions), "Creating transcripts: ", activity, textView_debug)
                     #pbar.finish()
+                    time.sleep(1)
                     pBar(len(regions), len(regions), "Creating transcripts: ", activity, textView_debug)
 
                     check_cancel_file()
@@ -727,6 +710,7 @@ def transcribe(src, dest, filename, activity, textView_debug):
                     #pbar = ProgressBar(widgets=widgets, maxval=len(transcripts)).start()
 
                     '''
+                    # Use this if we want to know number of translate failures
                     translated_entries = []
                     e=0
                     with open(translated_srt_file, 'w', encoding='utf-8') as f:
@@ -752,22 +736,9 @@ def transcribe(src, dest, filename, activity, textView_debug):
                         check_cancel_file()
                         translated_transcripts.append(translated_transcript)
                         #pbar.update(i)
-                        #pBar(i, len(transcripts), "Translating transcripts: ", activity, textView_debug)
-
-                        bar_length = 10
-                        filled_up_Length = int(round(bar_length*i/(len(transcripts))))
-                        percentage = round(100.0 * i/(len(transcripts)),1)
-                        bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
-                        if (int(percentage) % 10 == 0):
-                            class R(dynamic_proxy(Runnable)):
-                                def run(self):
-                                    textView_debug.setText('%s [%s] %s%s\r' %("Translating transcripts: ", bar, percentage, '%'))
-                            activity.runOnUiThread(R())
-
-                        #check_cancel_file()
-
-                    time.sleep(1)
+                        pBar(i, len(transcripts), "Translating transcripts: ", activity, textView_debug)
                     #pbar.finish()
+                    time.sleep(1)
                     pBar(len(transcripts), len(transcripts), "Translating transcripts: ", activity, textView_debug)
 
                     check_cancel_file()
@@ -1433,6 +1404,7 @@ def pBar(count_value, total, prefix, activity, textView_debug):
     bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
     # dynamic_proxy will make app crash if repeatly called to fast that's why we made a barrier 'if (int(percentage) % 10 == 0):'
     if (int(percentage) % 10 == 0):
+        time.sleep(1)
         class R(dynamic_proxy(Runnable)):
             def run(self):
                 #time.sleep(1)
