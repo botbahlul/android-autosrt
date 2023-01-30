@@ -932,7 +932,7 @@ public class MainActivity extends AppCompatActivity {
 
                         // ALTERNATIVE 1 : run a single function transcribe() of autosrt.py
                         // WE NEED TO USE SOME time.sleep() FUNCTION ON PYTHON SCRIPT TO AVOID CRASHED
-                        /*if (!canceled && mediaURI != null && sourceCopy != null) {
+                        if (!canceled && mediaURI != null && sourceCopy != null) {
                             if (canceled) {
                                 String m = "Process has been canceled";
                                 textview_debug.setText(m);
@@ -948,10 +948,10 @@ public class MainActivity extends AppCompatActivity {
                                     }
                                 }
                             }
-                        }*/
+                        }
 
                         // ALTERNATIVE 2 : run split functions of transcibe() in autosrt.py
-                        if (canceled) {
+                        /*if (canceled) {
                             String m = "Process has been canceled";
                             textview_debug.setText(m);
                             if (runpy != null) {
@@ -959,37 +959,36 @@ public class MainActivity extends AppCompatActivity {
                                 runpy = null;
                             }
                             transcribeIsRunning = false;
-                        }
-
-                        if (!canceled && mediaURI != null && sourceCopy != null) {
-                            try (PyObject pyObjTempName = py.getModule("autosrt").callAttr("convert_to_wav", sourceCopy, 1, 16000, MainActivity.this, textview_debug)) {
-                                if (pyObjTempName != null) tempName = pyObjTempName.toString();
+                        } else {
+                            if (!canceled && mediaURI != null && sourceCopy != null) {
+                                try (PyObject pyObjTempName = py.getModule("autosrt").callAttr("convert_to_wav", sourceCopy, 1, 16000, MainActivity.this, textview_debug)) {
+                                    if (pyObjTempName != null) tempName = pyObjTempName.toString();
+                                }
                             }
-                        }
-                        if (!canceled && mediaURI != null && tempName != null) {
-                            try (PyObject pyObjRegions = py.getModule("autosrt").callAttr("find_audio_regions", tempName, 4096, 0.3, 8, MainActivity.this, textview_debug)) {
-                                if (pyObjRegions != null) regions = pyObjRegions.toString();
+                            if (!canceled && mediaURI != null && tempName != null) {
+                                try (PyObject pyObjRegions = py.getModule("autosrt").callAttr("find_audio_regions", tempName, 4096, 0.3, 8, MainActivity.this, textview_debug)) {
+                                    if (pyObjRegions != null) regions = pyObjRegions.toString();
+                                }
                             }
-                        }
-                        if (!canceled && mediaURI != null && sourceCopy != null && tempName != null) {
-                            try (PyObject pyObjSrtFile = py.getModule("autosrt").callAttr("perform_speech_recognition", sourceCopy, tempName, src, MainActivity.this, textview_debug)) {
-                                if (pyObjSrtFile != null) srtFile = pyObjSrtFile.toString();
+                            if (!canceled && mediaURI != null && sourceCopy != null && tempName != null) {
+                                try (PyObject pyObjSrtFile = py.getModule("autosrt").callAttr("perform_speech_recognition", sourceCopy, tempName, src, MainActivity.this, textview_debug)) {
+                                    if (pyObjSrtFile != null) srtFile = pyObjSrtFile.toString();
+                                }
                             }
-                        }
-                        if (!canceled && mediaURI != null && srtFile != null) {
-                            try (PyObject pyObjSrtFileTranslated = py.getModule("autosrt").callAttr("perform_translation", srtFile, src, dst, MainActivity.this, textview_debug)) {
-                                if (pyObjSrtFileTranslated != null)
-                                    srtFileTranslated = pyObjSrtFileTranslated.toString();
+                            if (!canceled && mediaURI != null && srtFile != null) {
+                                try (PyObject pyObjSrtFileTranslated = py.getModule("autosrt").callAttr("perform_translation", srtFile, src, dst, MainActivity.this, textview_debug)) {
+                                    if (pyObjSrtFileTranslated != null)
+                                        srtFileTranslated = pyObjSrtFileTranslated.toString();
+                                }
                             }
-                        }
-                        if (!canceled && mediaURI != null && srtFile != null && srtFileTranslated != null) {
-                            if (runpy != null) {
-                                runpy.interrupt();
-                                runpy = null;
+                            if (!canceled && mediaURI != null && srtFile != null && srtFileTranslated != null) {
+                                if (runpy != null) {
+                                    runpy.interrupt();
+                                    runpy = null;
+                                }
                             }
-                        }
-
-                        if (canceled) {
+                        }*/
+                        /*if (canceled) {
                             String m = "Process has been canceled";
                             textview_debug.setText(m);
                             if (runpy != null) {
@@ -997,7 +996,7 @@ public class MainActivity extends AppCompatActivity {
                                 runpy = null;
                             }
                             transcribeIsRunning = false;
-                        }
+                        }*/
 
                         if (!canceled && mediaURI != null && srtFileTranslated != null) {
                             runOnUiThread(() -> {

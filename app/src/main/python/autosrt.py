@@ -408,7 +408,7 @@ class TranscriptionTranslator(object):
 
     def __call__(self, transcription):
         try:
-            if not transcription == None:
+            if transcription:
                 translated_transcription = Translator().translate(transcription, src=self.src, dest=self.dest).text
                 return translated_transcription
             else:
@@ -709,11 +709,29 @@ def transcribe(src, dest, filename, activity, textView_debug):
                     #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
                     #pbar = ProgressBar(widgets=widgets, maxval=len(transcriptions)).start()
 
+                e=0
+                with open(translated_srt_file, 'w', encoding='utf-8') as f:
+                    for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
+                        check_cancel_file()
+                        f.write(number_in_sequence)
+                        f.write(timecode)
+                        for subtitle in subtitles:
+                            f.write(subtitle)
+                            f.write('\n')
+                            e += 1
+                            pBar(e, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
+                            #pbar.update(e)
+                    #pbar.finish()
+                    pBar(total_entries, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
+
+                    '''
                     transcription_translator = TranscriptionTranslator(src=src, dest=dest)
                     translated_transcriptions = []
                     time.sleep(1)
                     for i, translated_transcription in enumerate(pool.imap(transcription_translator, transcriptions)):
                         check_cancel_file()
+                        if not translated_transcription:
+                            continue
                         translated_transcriptions.append(translated_transcription)
                         #pbar.update(i)
                         pBar(i, len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
@@ -737,6 +755,8 @@ def transcribe(src, dest, filename, activity, textView_debug):
                     with open(translated_srt_file, 'a') as ft:
                         ft.write("\n")
                         ft.close()
+                    '''
+
 
                 print('Done.')
                 print("Original subtitles file created at      : {}".format(srt_file))
@@ -962,10 +982,11 @@ def find_audio_regions(filename, frame_width, min_region_size, max_region_size, 
 
 
 def perform_speech_recognition(filename, wav_filename, src, activity, textView_debug):
+    print("Performing speech recognition...")
     time.sleep(1)
     class R(dynamic_proxy(Runnable)):
         def run(self):
-            textView_debug.setText("Performing speech recognition...\n");
+            textView_debug.setText("Performing speech recognition...\n")
     activity.runOnUiThread(R())
     time.sleep(1)
 
@@ -1042,6 +1063,7 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                 '''
 
                 time.sleep(1)
+                print("Converting speech regions to FLAC")
                 for i, extracted_region in enumerate(pool.imap(converter, regions)):
                     check_cancel_file()
                     extracted_regions.append(extracted_region)
@@ -1085,6 +1107,7 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                 '''
 
                 time.sleep(1)
+                print("Creating transcriptions")
                 for i, transcription in enumerate(pool.imap(recognizer, extracted_regions)):
                     check_cancel_file()
                     transcriptions.append(transcription)
@@ -1099,7 +1122,8 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                 ft.close()
                 ft = open(transcriptions_file, 'a')
                 for t in transcriptions:
-                    ft.write(f'{t}\n')
+                    if t:
+                        ft.write(f'{t}\n')
                 ft.close()
 
             check_cancel_file()
@@ -1168,6 +1192,7 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
 
 
 def perform_translation(srt_file, src, dest, activity, textView_debug):
+    print("Translating transcriptions...")
     class C(dynamic_proxy(Runnable)):
         def run(self):
             textView_debug.setText("Translating transcriptions...\n\n");
@@ -1220,10 +1245,14 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
 
         if (not is_same_language(src, dest)) and (os.path.isfile(srt_file)) and (not os.path.isfile(cancel_file)):
             translated_srt_file = srt_file[ :-4] + '_translated.srt'
+
+            '''
             transcription_translator = TranscriptionTranslator(src=src, dest=dest)
             translated_transcriptions = []
             time.sleep(1)
             for i, translated_transcription in enumerate(pool.imap(transcription_translator, transcriptions)):
+                if not translated_transcription:
+                    continue
                 translated_transcriptions.append(translated_transcription)
                 pBar(i, len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
                 check_cancel_file()
@@ -1242,53 +1271,32 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
             with open(translated_srt_file, 'a') as ft:
                 ft.write("\n")
                 ft.close()
+            '''
 
-            #entries = entries_generator(srt_file)
-            #total_entries = CountEntries(srt_file)
-            #print('Total Entries = {}'.format(total_entries))
+            entries = entries_generator(srt_file)
+            total_entries = CountEntries(srt_file)
+            print('Total Entries = {}'.format(total_entries))
 
             #prompt = "Translating from %5s to %5s         : " %(src, dest)
             #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
             #pbar = ProgressBar(widgets=widgets, maxval=total_entries).start()
 
-            '''
             e=0
             with open(translated_srt_file, 'w', encoding='utf-8') as f:
+                time.sleep(1)
                 for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
-
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        if wav_filename:
-                            if os.path.isfile(wav_filename):
-                                os.remove(wav_filename)
-                        converter = None
-                        recognizer = None
-                        transcriptions = None
-                        if extracted_regions:
-                            for extracted_region in extracted_regions:
-                                if os.path.isfile(extracted_region): os.remove(extracted_region)
-                            extracted_regions = None
-                    
-                        if transcriptions:
-                            for transcription in transcriptions:
-                                transcription = None
-                            transcriptions = None
-                        if os.path.isfile(srt_file): os.remove(srt_file)
-                        if os.path.isfile(translated_srt_file): os.remove(translated_srt_file)
-                
-
+                    check_cancel_file()
                     f.write(number_in_sequence)
                     f.write(timecode)
                     for subtitle in subtitles:
                         f.write(subtitle)
                         f.write('\n')
                         e += 1
-                        #progressbar(e, total_entries, "Translating from %5s to %5s         : " %(src, dest))
-                        #progressbar(e, total_entries, "Translating from %s to %s : " %(src, dest))
-                        pBar(e, total_entries, "Translating from %s to %s: " %(src, dest), textView_debug)
+                        pBar(e, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
                         #pbar.update(e)
                 #pbar.finish()
-            '''
+                pBar(total_entries, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
+                time.sleep(1)
 
             print('Done.')
             print("Original subtitles file created at      : {}".format(srt_file))
