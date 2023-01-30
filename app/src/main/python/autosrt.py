@@ -1095,8 +1095,8 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                     check_cancel_file()
                     extracted_regions.append(extracted_region)
                     pBar(i, len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
-                #time.sleep(1)
                 pBar(len(regions), len(regions), "Converting speech regions to FLAC: ", activity, textView_debug) 
+                time.sleep(1)
 
             check_cancel_file()
 
@@ -1138,8 +1138,8 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                     check_cancel_file()
                     transcripts.append(transcript)
                     pBar(i, len(regions), "Creating transcripts: ", activity, textView_debug)
-                #time.sleep(1)
                 pBar(len(regions), len(regions), "Creating transcripts: ", activity, textView_debug)
+                time.sleep(1)
 
                 files_dir = str(context.getExternalFilesDir(None))
                 transcripts_file = join(files_dir, "transcripts.txt")
@@ -1276,8 +1276,8 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
                 translated_transcripts.append(translated_transcript)
                 pBar(i, len(transcripts), "Translating transcripts: ", activity, textView_debug)
                 check_cancel_file()
-            #time.sleep(1)
             pBar(len(transcripts), len(transcripts), "Translating transcripts: ", activity, textView_debug)
+            time.sleep(1)
 
             timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcripts) if t]
             formatter = FORMATTERS.get("srt")
