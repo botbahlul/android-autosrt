@@ -590,24 +590,26 @@ def transcribe(src, dest, filename, activity, textView_debug):
         binary_file.write(content)
         '''
 
-        time.sleep(1)
+        time.sleep(2)
+        print("Converting to a temporary WAV file")
+        print("Converted WAV file is : {}".format(wav_filename))
         class R(dynamic_proxy(Runnable)):
             def run(self):
                 textView_debug.setText("Running python script...\n\n");
-                textView_debug.append("Converting to a temporary WAV file...\n");
-                textView_debug.append("Converted WAV file is :\n" + wav_filename + "\n\n")
-                time.sleep(1)
+                textView_debug.append("Converting to a temporary WAV file...\n\n");
+                textView_debug.append("Converted WAV file is :\n" + wav_filename)
         activity.runOnUiThread(R())
+        time.sleep(2)
 
     else:
         check_cancel_file()
 
     if not os.path.isfile(cancel_file):
-        #time.sleep(1)
+        time.sleep(2)
+        print("Finding speech regions of WAV file")
         class R(dynamic_proxy(Runnable)):
             def run(self):
-                textView_debug.append("Finding speech regions of WAV file...\n")
-                #time.sleep(1)
+                textView_debug.setText("Finding speech regions of WAV file...\n\n")
         activity.runOnUiThread(R())
 
         regions = find_speech_regions(wav_filename)
@@ -615,9 +617,10 @@ def transcribe(src, dest, filename, activity, textView_debug):
         #time.sleep(1)
         class R(dynamic_proxy(Runnable)):
             def run(self):
-                textView_debug.append("Speech regions found = " + str(num) + "\n\n")
-                time.sleep(1)
+                textView_debug.append("Speech regions found = " + str(num))
         activity.runOnUiThread(R())
+        print("Speech regions found = {}".format(str(num)))
+        time.sleep(3)
 
         #textView_debug.append(str(regions) + "\n")
         #i=0
@@ -644,47 +647,50 @@ def transcribe(src, dest, filename, activity, textView_debug):
                     #pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
 
                     extracted_regions = []
+                    time.sleep(1)
                     for i, extracted_region in enumerate(pool.imap(converter, regions)):
                         check_cancel_file()
                         extracted_regions.append(extracted_region)
                         #pbar.update(i)
-                        pBar(i, len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
+                        #pBar(i, len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
 
-                        #bar_length = 10
-                        #filled_up_Length = int(round(bar_length*i/(len(regions))))
-                        #percentage = round(100.0 * i/(len(regions)),1)
-                        #bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
-                        #if (int(percentage) % 10 == 0):
-                            #class R(dynamic_proxy(Runnable)):
-                                #def run(self):
-                                    #time.sleep(1)
-                                    #textView_debug.setText('%s [%s] %s%s\r' %("Converting speech regions to FLAC: ", bar, percentage, '%'))
-                            #activity.runOnUiThread(R())
+                        bar_length = 10
+                        filled_up_Length = int(round(bar_length*i/(len(regions))))
+                        percentage = round(100.0 * i/(len(regions)),1)
+                        bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
+                        if (int(percentage) % 10 == 0):
+                            class R(dynamic_proxy(Runnable)):
+                                def run(self):
+                                    textView_debug.setText('%s [%s] %s%s\r' %("Converting speech regions to FLAC: ", bar, percentage, '%'))
+                            activity.runOnUiThread(R())
+                    time.sleep(1)
 
                     #pbar.finish()
                     pBar(len(regions), len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
 
-                    #check_cancel_file()
+                    check_cancel_file()
         
                     print("Creating transcripts")
                     #widgets = ["Performing speech recognition           : ", Percentage(), ' ', Bar(), ' ', ETA()]
                     #pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
+                    time.sleep(1)
                     for i, transcript in enumerate(pool.imap(recognizer, extracted_regions)):
                         check_cancel_file()
                         transcripts.append(transcript)
                         #pbar.update(i)
-                        pBar(i, len(regions), "Creating transcripts: ", activity, textView_debug)
+                        #pBar(i, len(regions), "Creating transcripts: ", activity, textView_debug)
 
-                        #bar_length = 10
-                        #filled_up_Length = int(round(bar_length*i/(len(regions))))
-                        #percentage = round(100.0 * i/(len(regions)),1)
-                        #bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
-                        #if (int(percentage) % 10 == 0):
-                            #class R(dynamic_proxy(Runnable)):
-                                #def run(self):
-                                    #textView_debug.setText('%s [%s] %s%s\r' %("Creating transcripts: ", bar, percentage, '%'))
-                            #activity.runOnUiThread(R())
+                        bar_length = 10
+                        filled_up_Length = int(round(bar_length*i/(len(regions))))
+                        percentage = round(100.0 * i/(len(regions)),1)
+                        bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
+                        if (int(percentage) % 10 == 0):
+                            class R(dynamic_proxy(Runnable)):
+                                def run(self):
+                                    textView_debug.setText('%s [%s] %s%s\r' %("Creating transcripts: ", bar, percentage, '%'))
+                            activity.runOnUiThread(R())
 
+                    time.sleep(1)
                     #pbar.finish()
                     pBar(len(regions), len(regions), "Creating transcripts: ", activity, textView_debug)
 
@@ -741,26 +747,28 @@ def transcribe(src, dest, filename, activity, textView_debug):
 
                     transcript_translator = TranscriptTranslator(src=src, dest=dest)
                     translated_transcripts = []
+                    time.sleep(1)
                     for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcripts)):
                         check_cancel_file()
                         translated_transcripts.append(translated_transcript)
                         #pbar.update(i)
-                        pBar(i, len(transcripts), "Translating transcripts: ", activity, textView_debug)
+                        #pBar(i, len(transcripts), "Translating transcripts: ", activity, textView_debug)
 
-                        #bar_length = 10
-                        #filled_up_Length = int(round(bar_length*i/(len(transcripts))))
-                        #percentage = round(100.0 * i/(len(transcripts)),1)
-                        #bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
-                        #if (int(percentage) % 10 == 0):
-                            #class R(dynamic_proxy(Runnable)):
-                                #def run(self):
-                                    #textView_debug.setText('%s [%s] %s%s\r' %("Translating transcripts: ", bar, percentage, '%'))
-                            #activity.runOnUiThread(R())
+                        bar_length = 10
+                        filled_up_Length = int(round(bar_length*i/(len(transcripts))))
+                        percentage = round(100.0 * i/(len(transcripts)),1)
+                        bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
+                        if (int(percentage) % 10 == 0):
+                            class R(dynamic_proxy(Runnable)):
+                                def run(self):
+                                    textView_debug.setText('%s [%s] %s%s\r' %("Translating transcripts: ", bar, percentage, '%'))
+                            activity.runOnUiThread(R())
 
                         #check_cancel_file()
 
+                    time.sleep(1)
                     #pbar.finish()
-                    #pBar(len(transcripts), len(transcripts), "Translating transcripts: ", activity, textView_debug)
+                    pBar(len(transcripts), len(transcripts), "Translating transcripts: ", activity, textView_debug)
 
                     check_cancel_file()
 
@@ -888,11 +896,11 @@ def create_copy(content, uriDisplayName, textView_debug):
 def convert_to_wav(filename, channels, rate, activity, textView_debug):
     print("Converting to a temporary WAV file...")
     print("filename = {}".format(filename))
-    time.sleep(1)
+    time.sleep(2)
     class R(dynamic_proxy(Runnable)):
         def run(self):
             textView_debug.setText("Running python script...\n\n");
-            textView_debug.append("Converting to a temporary WAV file...\n");
+            textView_debug.append("Converting to a temporary WAV file...\n\n");
     activity.runOnUiThread(R())
 
     files_dir = str(context.getExternalFilesDir(None))
@@ -914,9 +922,9 @@ def convert_to_wav(filename, channels, rate, activity, textView_debug):
 
         class R(dynamic_proxy(Runnable)):
             def run(self):
-                textView_debug.append("Converted WAV file is :\n" + temp.name + "\n")
+                textView_debug.append("Converted WAV file is :\n" + temp.name)
         activity.runOnUiThread(R())
-        time.sleep(1)
+        time.sleep(3)
 
     else:
         check_cancel_file()
@@ -984,12 +992,12 @@ def find_audio_regions(filename, frame_width, min_region_size, max_region_size, 
             elapsed_time += chunk_duration
 
         num = len(regions)
+        time.sleep(1)
         class R(dynamic_proxy(Runnable)):
             def run(self):
-                time.sleep(1)
-                textView_debug.append("Speech regions found = " + str(num) + "\n\n")
+                textView_debug.append("Speech regions found = " + str(num))
         activity.runOnUiThread(R())
-        time.sleep(1)
+        time.sleep(3)
 
     else:
         check_cancel_file()
@@ -1003,10 +1011,12 @@ def find_audio_regions(filename, frame_width, min_region_size, max_region_size, 
 
 
 def perform_speech_recognition(filename, wav_filename, src, activity, textView_debug):
+    time.sleep(1)
     class R(dynamic_proxy(Runnable)):
         def run(self):
-            textView_debug.setText("Creating transcripts...\n");
+            textView_debug.setText("Performing speech recognition...\n");
     activity.runOnUiThread(R())
+    time.sleep(1)
 
     cache_dir =  str(context.getExternalCacheDir())
     files_dir = str(context.getExternalFilesDir(None))
@@ -1080,10 +1090,12 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                 pbar.finish()
                 '''
 
+                time.sleep(1)
                 for i, extracted_region in enumerate(pool.imap(converter, regions)):
                     check_cancel_file()
                     extracted_regions.append(extracted_region)
                     pBar(i, len(regions), "Converting speech regions to FLAC: ", activity, textView_debug)
+                #time.sleep(1)
                 pBar(len(regions), len(regions), "Converting speech regions to FLAC: ", activity, textView_debug) 
 
             check_cancel_file()
@@ -1121,10 +1133,12 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                 pbar.finish()
                 '''
 
+                time.sleep(1)
                 for i, transcript in enumerate(pool.imap(recognizer, extracted_regions)):
                     check_cancel_file()
                     transcripts.append(transcript)
                     pBar(i, len(regions), "Creating transcripts: ", activity, textView_debug)
+                #time.sleep(1)
                 pBar(len(regions), len(regions), "Creating transcripts: ", activity, textView_debug)
 
                 files_dir = str(context.getExternalFilesDir(None))
@@ -1257,10 +1271,12 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
             translated_srt_file = srt_file[ :-4] + '_translated.srt'
             transcript_translator = TranscriptTranslator(src=src, dest=dest)
             translated_transcripts = []
+            time.sleep(1)
             for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcripts)):
                 translated_transcripts.append(translated_transcript)
                 pBar(i, len(transcripts), "Translating transcripts: ", activity, textView_debug)
                 check_cancel_file()
+            #time.sleep(1)
             pBar(len(transcripts), len(transcripts), "Translating transcripts: ", activity, textView_debug)
 
             timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcripts) if t]
@@ -1415,8 +1431,8 @@ def pBar(count_value, total, prefix, activity, textView_debug):
     filled_up_Length = int(round(bar_length*count_value/(total)))
     percentage = round(100.0 * count_value/(total),1)
     bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
-    # dynamic_proxy will make app crash if repeatly called to fast that's why we made a barrier 'if (int(percentage) % 5 == 0):'
-    if (int(percentage) % 5 == 0):
+    # dynamic_proxy will make app crash if repeatly called to fast that's why we made a barrier 'if (int(percentage) % 10 == 0):'
+    if (int(percentage) % 10 == 0):
         class R(dynamic_proxy(Runnable)):
             def run(self):
                 #time.sleep(1)
