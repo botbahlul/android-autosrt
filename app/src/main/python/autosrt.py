@@ -709,26 +709,6 @@ def transcribe(src, dest, filename, activity, textView_debug):
                     #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
                     #pbar = ProgressBar(widgets=widgets, maxval=len(transcriptions)).start()
 
-                    '''
-                    # Use this if we want to know number of translate failures
-                    translated_entries = []
-                    e=0
-                    with open(translated_srt_file, 'w', encoding='utf-8') as f:
-                        for i, translated_entry in enumerate(pool.imap(subtitle_translator, entries)):
-                        #for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
-                            #f.write(number_in_sequence)
-                            #f.write(timecode)
-                            #for subtitle in subtitles:
-                                #f.write(subtitle)
-                                #f.write('\n')
-                                #e += 1
-                                #pbar.update(e)
-                                #pBar(e, total_entries, "Translating from %s to %s: " %(src, dest), textView_debug)
-                                translated_entries.append(translated_entry)
-                                pBar(i, total_entries, "Translating from %s to %s: " %(src, dest), textView_debug)
-                        #pbar.finish()
-                    '''
-
                     transcription_translator = TranscriptionTranslator(src=src, dest=dest)
                     translated_transcriptions = []
                     time.sleep(1)
