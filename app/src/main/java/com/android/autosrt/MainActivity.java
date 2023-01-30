@@ -932,7 +932,7 @@ public class MainActivity extends AppCompatActivity {
 
                         // ALTERNATIVE 1 : run a single function transcribe() of autosrt.py
                         // WE NEED TO USE SOME time.sleep() FUNCTION ON PYTHON SCRIPT TO AVOID CRASHED
-                        if (!canceled && mediaURI != null && sourceCopy != null) {
+                        /*if (!canceled && mediaURI != null && sourceCopy != null) {
                             if (canceled) {
                                 String m = "Process has been canceled";
                                 textview_debug.setText(m);
@@ -948,10 +948,10 @@ public class MainActivity extends AppCompatActivity {
                                     }
                                 }
                             }
-                        }
+                        }*/
 
                         // ALTERNATIVE 2 : run split functions of transcibe() in autosrt.py
-                        /*if (canceled) {
+                        if (canceled) {
                             String m = "Process has been canceled";
                             textview_debug.setText(m);
                             if (runpy != null) {
@@ -987,7 +987,7 @@ public class MainActivity extends AppCompatActivity {
                                 runpy.interrupt();
                                 runpy = null;
                             }
-                        }*/
+                        }
 
                         if (canceled) {
                             String m = "Process has been canceled";

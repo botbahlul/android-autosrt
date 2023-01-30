@@ -307,7 +307,7 @@ LANGUAGE_CODES = map_language_of_code
 context = Python.getPlatform().getApplication()
 files_dir = str(context.getExternalFilesDir(None))
 cancel_file = join(files_dir, 'cancel.txt')
-transcripts_file = join(files_dir, "transcripts.txt")
+transcriptions_file = join(files_dir, "transcriptions.txt")
 cache_dir = str(context.getExternalCacheDir())
 region_start_file = join(cache_dir, 'region_starts.txt')
 elapsed_time_file = join(cache_dir, 'elapsed_time.txt')
@@ -391,7 +391,7 @@ class SpeechRecognizer(object):
                 for line in resp.content.decode('utf-8').split("\n"):
                     try:
                         line = json.loads(line)
-                        line = line['result'][0]['alternative'][0]['transcript']
+                        line = line['result'][0]['alternative'][0]['transcription']
                         return line[:1].upper() + line[1:]
                     except:
                         # no result
@@ -406,10 +406,10 @@ class TranscriptTranslator(object):
         self.src = src
         self.dest = dest
 
-    def __call__(self, transcript):
+    def __call__(self, transcription):
         try:
-            if not transcript == None:
-                translated_transcript = Translator().translate(transcript, src=self.src, dest=self.dest).text
+            if not transcription == None:
+                translated_transcript = Translator().translate(transcription, src=self.src, dest=self.dest).text
                 return translated_transcript
             else:
                 return
@@ -637,8 +637,8 @@ def transcribe(src, dest, filename, activity, textView_debug):
         pool = multiprocessing.pool.ThreadPool(10)
         converter = FLACConverter(source_path=wav_filename)
         recognizer = SpeechRecognizer(language=src, rate=audio_rate, api_key=GOOGLE_SPEECH_API_KEY)
-        transcripts = []
-        translated_transcripts = []
+        transcriptions = []
+        translated_transcriptions = []
 
         if regions:
             try:
@@ -664,22 +664,22 @@ def transcribe(src, dest, filename, activity, textView_debug):
 
                     check_cancel_file()
         
-                    print("Creating transcripts")
+                    print("Creating transcriptions")
                     #widgets = ["Performing speech recognition           : ", Percentage(), ' ', Bar(), ' ', ETA()]
                     #pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
                     time.sleep(1)
-                    for i, transcript in enumerate(pool.imap(recognizer, extracted_regions)):
+                    for i, transcription in enumerate(pool.imap(recognizer, extracted_regions)):
                         #check_cancel_file()
-                        transcripts.append(transcript)
+                        transcriptions.append(transcription)
                         #pbar.update(i)
-                        pBar(i, len(regions), "Creating transcripts: ", activity, textView_debug)
+                        pBar(i, len(regions), "Creating transcriptions: ", activity, textView_debug)
                     #pbar.finish()
                     time.sleep(1)
-                    pBar(len(regions), len(regions), "Creating transcripts: ", activity, textView_debug)
+                    pBar(len(regions), len(regions), "Creating transcriptions: ", activity, textView_debug)
 
                     check_cancel_file()
 
-                    timed_subtitles = [(r, t) for r, t in zip(regions, transcripts) if t]
+                    timed_subtitles = [(r, t) for r, t in zip(regions, transcriptions) if t]
                     formatter = FORMATTERS.get("srt")
                     formatted_subtitles = formatter(timed_subtitles)
 
@@ -699,7 +699,7 @@ def transcribe(src, dest, filename, activity, textView_debug):
                 check_cancel_file()
 
                 if (not is_same_language(src, dest)) and (os.path.isfile(srt_file)) and (not os.path.isfile(cancel_file)):
-                    print("Translating transcripts")
+                    print("Translating transcriptions")
                     entries = entries_generator(srt_file)
                     translated_srt_file = srt_file[ :-4] + '_translated.srt'
                     total_entries = CountEntries(srt_file)
@@ -707,7 +707,7 @@ def transcribe(src, dest, filename, activity, textView_debug):
 
                     #prompt = "Translating from %5s to %5s         : " %(src, dest)
                     #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
-                    #pbar = ProgressBar(widgets=widgets, maxval=len(transcripts)).start()
+                    #pbar = ProgressBar(widgets=widgets, maxval=len(transcriptions)).start()
 
                     '''
                     # Use this if we want to know number of translate failures
@@ -730,20 +730,20 @@ def transcribe(src, dest, filename, activity, textView_debug):
                     '''
 
                     transcript_translator = TranscriptTranslator(src=src, dest=dest)
-                    translated_transcripts = []
+                    translated_transcriptions = []
                     time.sleep(1)
-                    for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcripts)):
+                    for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcriptions)):
                         check_cancel_file()
-                        translated_transcripts.append(translated_transcript)
+                        translated_transcriptions.append(translated_transcript)
                         #pbar.update(i)
-                        pBar(i, len(transcripts), "Translating transcripts: ", activity, textView_debug)
+                        pBar(i, len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
                     #pbar.finish()
                     time.sleep(1)
-                    pBar(len(transcripts), len(transcripts), "Translating transcripts: ", activity, textView_debug)
+                    pBar(len(transcriptions), len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
 
                     check_cancel_file()
 
-                    timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcripts) if t]
+                    timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcriptions) if t]
                     formatter = FORMATTERS.get("srt")
                     formatted_translated_subtitles = formatter(timed_translated_subtitles)
                     base, ext = os.path.splitext(filename)
@@ -789,9 +789,9 @@ def transcribe(src, dest, filename, activity, textView_debug):
                     if extracted_region:
                         if os.path.isfile(extracted_region): os.remove(extracted_region)
                     extracted_regions = None
-                for transcript in transcripts:
-                    transcript = None
-                transcripts = None
+                for transcription in transcriptions:
+                    transcription = None
+                transcriptions = None
                 if srt_file:
                     if os.path.isfile(srt_file): os.remove(srt_file)
                 if translated_srt_file:
@@ -1025,7 +1025,7 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
 
     audio_rate = 16000
     recognizer = SpeechRecognizer(language=src, rate=audio_rate, api_key=GOOGLE_SPEECH_API_KEY)
-    transcripts = []
+    transcriptions = []
 
     check_cancel_file()
 
@@ -1046,7 +1046,7 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                                 os.remove(wav_filename)
                         converter = None
                         recognizer = None
-                        transcripts = None
+                        transcriptions = None
                         if extracted_regions:
                             for extracted_region in extracted_regions:
                                 if os.path.isfile(extracted_region): os.remove(extracted_region)
@@ -1076,7 +1076,7 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                 widgets = ["Performing speech recognition           : ", Percentage(), ' ', Bar(), ' ', ETA()]
                 pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
 
-                for i, transcript in enumerate(pool.imap(recognizer, extracted_regions)):
+                for i, transcription in enumerate(pool.imap(recognizer, extracted_regions)):
 
                     if os.path.isfile(cancel_file):
                         os.remove(cancel_file)
@@ -1085,46 +1085,46 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                                 os.remove(wav_filename)
                         converter = None
                         recognizer = None
-                        transcripts = None
+                        transcriptions = None
                         if extracted_regions:
                             for extracted_region in extracted_regions:
                                 if os.path.isfile(extracted_region): os.remove(extracted_region)
                             extracted_regions = None
                     
-                        if transcripts:
-                            for transcript in transcripts:
-                                transcript = None
-                            transcripts = None
+                        if transcriptions:
+                            for transcription in transcriptions:
+                                transcription = None
+                            transcriptions = None
                         pool.terminate()
                         pool.close()
                         pool.join()
                         pool = None
-                    transcripts.append(transcript)
+                    transcriptions.append(transcription)
                     pbar.update(i)
                 pbar.finish()
                 '''
 
                 time.sleep(1)
-                for i, transcript in enumerate(pool.imap(recognizer, extracted_regions)):
+                for i, transcription in enumerate(pool.imap(recognizer, extracted_regions)):
                     check_cancel_file()
-                    transcripts.append(transcript)
-                    pBar(i, len(regions), "Creating transcripts: ", activity, textView_debug)
-                pBar(len(regions), len(regions), "Creating transcripts: ", activity, textView_debug)
+                    transcriptions.append(transcription)
+                    pBar(i, len(regions), "Creating transcriptions: ", activity, textView_debug)
+                pBar(len(regions), len(regions), "Creating transcriptions: ", activity, textView_debug)
                 time.sleep(1)
 
                 files_dir = str(context.getExternalFilesDir(None))
-                transcripts_file = join(files_dir, "transcripts.txt")
-                ft = open(transcripts_file, 'w')
+                transcriptions_file = join(files_dir, "transcriptions.txt")
+                ft = open(transcriptions_file, 'w')
                 ft.write('')
                 ft.close()
-                ft = open(transcripts_file, 'a')
-                for t in transcripts:
+                ft = open(transcriptions_file, 'a')
+                for t in transcriptions:
                     ft.write(f'{t}\n')
                 ft.close()
 
             check_cancel_file()
         
-            timed_subtitles = [(r, t) for r, t in zip(regions, transcripts) if t]
+            timed_subtitles = [(r, t) for r, t in zip(regions, transcriptions) if t]
             formatter = FORMATTERS.get("srt")
             formatted_subtitles = formatter(timed_subtitles)
 
@@ -1154,9 +1154,9 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                 if extracted_region:
                     if os.path.isfile(extracted_region): os.remove(extracted_region)
                 extracted_regions = None
-            for transcript in transcripts:
-                transcript = None
-            transcripts = None
+            for transcription in transcriptions:
+                transcription = None
+            transcriptions = None
             if srt_file:
                 if os.path.isfile(srt_file): os.remove(srt_file)
             if translated_srt_file:
@@ -1190,7 +1190,7 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
 def perform_translation(srt_file, src, dest, activity, textView_debug):
     class C(dynamic_proxy(Runnable)):
         def run(self):
-            textView_debug.setText("Translating transcripts...\n\n");
+            textView_debug.setText("Translating transcriptions...\n\n");
     activity.runOnUiThread(C())
 
     files_dir = str(context.getExternalFilesDir(None))
@@ -1199,12 +1199,12 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
 
     check_cancel_file()
 
-    transcripts_file = join(files_dir, "transcripts.txt")
-    transcripts = []
-    ft = open(transcripts_file, "r")
+    transcriptions_file = join(files_dir, "transcriptions.txt")
+    transcriptions = []
+    ft = open(transcriptions_file, "r")
     for line in ft:
-        curr_transcripts = line[:-1]
-        transcripts.append(curr_transcripts)
+        curr_transcriptions = line[:-1]
+        transcriptions.append(curr_transcriptions)
     ft.close()
 
     region_start = []
@@ -1241,16 +1241,16 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
         if (not is_same_language(src, dest)) and (os.path.isfile(srt_file)) and (not os.path.isfile(cancel_file)):
             translated_srt_file = srt_file[ :-4] + '_translated.srt'
             transcript_translator = TranscriptTranslator(src=src, dest=dest)
-            translated_transcripts = []
+            translated_transcriptions = []
             time.sleep(1)
-            for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcripts)):
-                translated_transcripts.append(translated_transcript)
-                pBar(i, len(transcripts), "Translating transcripts: ", activity, textView_debug)
+            for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcriptions)):
+                translated_transcriptions.append(translated_transcript)
+                pBar(i, len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
                 check_cancel_file()
-            pBar(len(transcripts), len(transcripts), "Translating transcripts: ", activity, textView_debug)
+            pBar(len(transcriptions), len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
             time.sleep(1)
 
-            timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcripts) if t]
+            timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcriptions) if t]
             formatter = FORMATTERS.get("srt")
             formatted_translated_subtitles = formatter(timed_translated_subtitles)
             translated_srt_file = srt_file[ :-4] + '_translated.srt'
@@ -1283,16 +1283,16 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
                                 os.remove(wav_filename)
                         converter = None
                         recognizer = None
-                        transcripts = None
+                        transcriptions = None
                         if extracted_regions:
                             for extracted_region in extracted_regions:
                                 if os.path.isfile(extracted_region): os.remove(extracted_region)
                             extracted_regions = None
                     
-                        if transcripts:
-                            for transcript in transcripts:
-                                transcript = None
-                            transcripts = None
+                        if transcriptions:
+                            for transcription in transcriptions:
+                                transcription = None
+                            transcriptions = None
                         if os.path.isfile(srt_file): os.remove(srt_file)
                         if os.path.isfile(translated_srt_file): os.remove(translated_srt_file)
                 
@@ -1329,9 +1329,9 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
         for extracted_region in extracted_regions:
             if os.path.isfile(extracted_region): os.remove(extracted_region)
         extracted_regions = None
-        for transcript in transcripts:
-            transcript = None
-        transcripts = None
+        for transcription in transcriptions:
+            transcription = None
+        transcriptions = None
         extracted_regions = None
         if srt_file:
             if os.path.isfile(srt_file): os.remove(srt_file)
@@ -1358,8 +1358,8 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
         pool = None
 
     files_dir = str(context.getExternalFilesDir(None))
-    transcripts_file = join(files_dir, "transcripts.txt")
-    os.remove(transcripts_file)
+    transcriptions_file = join(files_dir, "transcriptions.txt")
+    os.remove(transcriptions_file)
 
     return translated_srt_file
 
@@ -1442,10 +1442,10 @@ def check_cancel_file():
             for extracted_region in extracted_regions:
                 if os.path.isfile(extracted_region): os.remove(extracted_region)
             extracted_regions = None
-        if transcripts:
-            for transcript in transcripts:
-                transcript = None
-            transcripts = None
+        if transcriptions:
+            for transcription in transcriptions:
+                transcription = None
+            transcriptions = None
         if srt_file:
             if os.path.isfile(srt_file): os.remove(srt_file)
         if translated_srt_file:
