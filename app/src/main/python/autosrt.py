@@ -1858,10 +1858,12 @@ def pBar(count_value, total, prefix, activity, textView_debug):
     filled_up_Length = int(round(bar_length*count_value/float(total)))
     percentage = round(100.0 * count_value/float(total),1)
     bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
-    class R(dynamic_proxy(Runnable)):
-        def run(self):
-            textView_debug.setText('%s [%s] %s%s\r' %(prefix, bar, percentage, '%'))
-    activity.runOnUiThread(R())
+    if (int(percentage) % 10 == 0):
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
+                #time.sleep(1)
+                textView_debug.setText('%s [%s] %s%s\r' %(prefix, bar, percentage, '%'))
+        activity.runOnUiThread(R())
 
 def progressbar(count_value, total, prefix='', suffix=''):
     bar_length = 50
