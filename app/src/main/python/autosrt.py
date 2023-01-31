@@ -576,7 +576,7 @@ class SubtitleTranslator(object):
         return number_in_sequence, timecode, translated_subtitles
 
 def transcribe(src, dest, filename, activity, textView_debug):
-    wav_filename, audio_rate = extract_audio(filename)
+    wav_filename = None
     pool = multiprocessing.pool.ThreadPool(10)
 
     if not os.path.isfile(cancel_file):
@@ -596,13 +596,20 @@ def transcribe(src, dest, filename, activity, textView_debug):
         binary_file.write(content)
         '''
 
-        time.sleep(2)
         print("Converting to a temporary WAV file")
-        print("Converted WAV file is : {}".format(wav_filename))
         class R(dynamic_proxy(Runnable)):
             def run(self):
                 textView_debug.setText("Running python script...\n\n");
                 textView_debug.append("Converting to a temporary WAV file...\n\n");
+        activity.runOnUiThread(R())
+        time.sleep(1)
+
+        wav_filename, audio_rate = extract_audio(filename)
+
+        print("Converted WAV file is : {}".format(wav_filename))
+
+        class R(dynamic_proxy(Runnable)):
+            def run(self):
                 textView_debug.append("Converted WAV file is :\n" + wav_filename)
         activity.runOnUiThread(R())
         time.sleep(2)
@@ -611,7 +618,7 @@ def transcribe(src, dest, filename, activity, textView_debug):
         check_cancel_file()
 
     if not os.path.isfile(cancel_file):
-        time.sleep(2)
+        time.sleep(1)
         print("Finding speech regions of WAV file")
         class R(dynamic_proxy(Runnable)):
             def run(self):
@@ -620,7 +627,7 @@ def transcribe(src, dest, filename, activity, textView_debug):
 
         regions = find_speech_regions(wav_filename)
         num = len(regions)
-        #time.sleep(1)
+        time.sleep(1)
         class R(dynamic_proxy(Runnable)):
             def run(self):
                 textView_debug.append("Speech regions found = " + str(num))
@@ -847,6 +854,7 @@ def convert_to_wav(filename, channels, rate, activity, textView_debug):
     files_dir = str(context.getExternalFilesDir(None))
     cancel_file = join(files_dir, 'cancel.txt')
     wav_filename = None
+
     if not os.path.isfile(cancel_file):
         temp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
         if not os.path.isfile(filename):
@@ -1305,8 +1313,7 @@ def pBar(count_value, total, prefix, activity, textView_debug):
         time.sleep(1)
         class R(dynamic_proxy(Runnable)):
             def run(self):
-                #time.sleep(1)
-                textView_debug.setText('%s [%s] %s%s\r' %(prefix, bar, percentage, '%'))
+                textView_debug.setText('%s [%s] %s%s\r' %(prefix, bar, int(percentage), '%'))
         activity.runOnUiThread(R())
 
 
