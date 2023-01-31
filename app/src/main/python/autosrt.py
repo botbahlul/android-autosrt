@@ -307,8 +307,8 @@ LANGUAGE_CODES = map_language_of_code
 context = Python.getPlatform().getApplication()
 files_dir = str(context.getExternalFilesDir(None))
 cancel_file = join(files_dir, 'cancel.txt')
-transcriptions_file = join(files_dir, "transcriptions.txt")
 cache_dir = str(context.getExternalCacheDir())
+transcriptions_file = join(cache_dir, "transcriptions.txt")
 region_start_file = join(cache_dir, 'region_starts.txt')
 elapsed_time_file = join(cache_dir, 'elapsed_time.txt')
 wav_filename = None
@@ -568,21 +568,39 @@ class SubtitleTranslator(object):
         number_in_sequence, timecode, subtitles = entries
 
         for i, subtitle in enumerate(subtitles, 1):
+            # handle the special case: empty string.
             if not subtitle:
                 translated_subtitles.append(subtitle)
             translated_subtitle = translator.translate(subtitle, src=self.src, dest=self.dest).text
             translated_subtitle = translator.translate(translated_subtitle, src=self.src, dest=self.dest).text
             translated_subtitles.append(translated_subtitle + '\n')
         return number_in_sequence, timecode, translated_subtitles
+        #yield number_in_sequence, timecode, translated_subtitles, count_failure, count_entries
+
+
+class TranscriptionTranslator(object):
+    def __init__(self, src, dest):
+        self.src = src
+        self.dest = dest
+
+    def __call__(self, transcription):
+        try:
+            translated_transcription = Translator().translate(transcription, src=self.src, dest=self.dest).text
+            return translated_transcription
+
+        except KeyboardInterrupt:
+            return
+
+
 
 def transcribe(src, dest, filename, activity, textView_debug):
-    wav_filename = None
     pool = multiprocessing.pool.ThreadPool(10)
+    wav_filename = None
 
     if not os.path.isfile(cancel_file):
 
         '''
-        // Use this if we want to create a copy from python script
+        # Use this if we want to create a copy from python script
         context = Python.getPlatform().getApplication()
         files_dir = str(context.getExternalFilesDir(None))
         content = bytes(content)
@@ -608,6 +626,7 @@ def transcribe(src, dest, filename, activity, textView_debug):
 
         print("Converted WAV file is : {}".format(wav_filename))
 
+        #time.sleep(2)
         class R(dynamic_proxy(Runnable)):
             def run(self):
                 textView_debug.append("Converted WAV file is :\n" + wav_filename)
@@ -616,6 +635,7 @@ def transcribe(src, dest, filename, activity, textView_debug):
 
     else:
         check_cancel_file()
+
 
     if not os.path.isfile(cancel_file):
         time.sleep(1)
@@ -658,6 +678,7 @@ def transcribe(src, dest, filename, activity, textView_debug):
 
                     # widgets and pbar are from progressbar module, we don't use it because we can't show it on textview_debug
                     # we use self made pBar to show progress on textview
+
                     #widgets = ["Converting speech regions to FLAC files : ", Percentage(), ' ', Bar(), ' ', ETA()]
                     #pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
 
@@ -844,17 +865,16 @@ def create_copy(content, uriDisplayName, textView_debug):
 def convert_to_wav(filename, channels, rate, activity, textView_debug):
     print("Converting to a temporary WAV file...")
     print("filename = {}".format(filename))
-    time.sleep(2)
     class R(dynamic_proxy(Runnable)):
         def run(self):
             textView_debug.setText("Running python script...\n\n");
             textView_debug.append("Converting to a temporary WAV file...\n\n");
     activity.runOnUiThread(R())
+    time.sleep(1)
 
     files_dir = str(context.getExternalFilesDir(None))
     cancel_file = join(files_dir, 'cancel.txt')
     wav_filename = None
-
     if not os.path.isfile(cancel_file):
         temp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
         if not os.path.isfile(filename):
@@ -1040,8 +1060,8 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
                 pBar(len(regions), len(regions), "Creating transcriptions: ", activity, textView_debug)
                 time.sleep(1)
 
-                files_dir = str(context.getExternalFilesDir(None))
-                transcriptions_file = join(files_dir, "transcriptions.txt")
+                cache_dir = str(context.getExternalCacheDir())
+                transcriptions_file = join(cache_dir, "transcriptions.txt")
                 ft = open(transcriptions_file, 'w')
                 ft.write('')
                 ft.close()
@@ -1129,7 +1149,8 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
 
     check_cancel_file()
 
-    transcriptions_file = join(files_dir, "transcriptions.txt")
+    cache_dir = str(context.getExternalCacheDir())
+    transcriptions_file = join(cache_dir, "transcriptions.txt")
     transcriptions = []
     ft = open(transcriptions_file, "r")
     for line in ft:
@@ -1199,7 +1220,6 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
                 time.sleep(1)
             '''
 
-            # running translation task in concurrent threads
             subtitle_translator = SubtitleTranslator(src=src, dest=dest)
             translated_entries = []
             for i, translated_entry in enumerate(pool.imap(subtitle_translator, entries)):
@@ -1263,9 +1283,14 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
         pool.join()
         pool = None
 
-    files_dir = str(context.getExternalFilesDir(None))
-    transcriptions_file = join(files_dir, "transcriptions.txt")
-    os.remove(transcriptions_file)
+    cache_dir = str(context.getExternalCacheDir())
+    transcriptions_file = join(cache_dir, "transcriptions.txt")
+    if os.path.isfile(transcriptions_file): os.remove(transcriptions_file)
+    cache_dir = str(context.getExternalCacheDir())
+    region_start_file = join(cache_dir, 'region_starts.txt')
+    elapsed_time_file = join(cache_dir, 'elapsed_time.txt')
+    if os.path.isfile(region_start_file): os.remove(region_start_file)
+    if os.path.isfile(elapsed_time_file): os.remove(elapsed_time_file)
 
     return translated_srt_file
 
@@ -1321,7 +1346,7 @@ def progressbar(count_value, total, prefix='', suffix=''):
     bar_length = 50
     filled_up_Length = int(round(bar_length* count_value / float(total)))
     percentage = round(100.0 * count_value/float(total),1)
-    bar = '#' * filled_up_Length + '-' * (bar_length - filled_up_Length)
+    bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
     sys.stdout.write('%s [%s] %s%s %s\r' %(prefix, bar, percentage, '%', suffix))
     sys.stdout.flush()
 
