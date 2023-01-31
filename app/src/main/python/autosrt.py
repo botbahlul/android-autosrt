@@ -693,20 +693,20 @@ def transcribe(src, dest, filename, activity, textView_debug):
                     #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
                     #pbar = ProgressBar(widgets=widgets, maxval=len(transcriptions)).start()
 
-                e=0
-                with open(translated_srt_file, 'w', encoding='utf-8') as f:
-                    for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
-                        check_cancel_file()
-                        f.write(number_in_sequence)
-                        f.write(timecode)
-                        for subtitle in subtitles:
-                            f.write(subtitle)
-                            f.write('\n')
-                            e += 1
-                            pBar(e, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
-                            #pbar.update(e)
-                    #pbar.finish()
-                    pBar(total_entries, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
+                    e=0
+                    with open(translated_srt_file, 'w', encoding='utf-8') as f:
+                        for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
+                            check_cancel_file()
+                            f.write(number_in_sequence)
+                            f.write(timecode)
+                            for subtitle in subtitles:
+                                f.write(subtitle)
+                                f.write('\n')
+                                e += 1
+                                pBar(e, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
+                                #pbar.update(e)
+                        #pbar.finish()
+                        pBar(total_entries, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
 
 
                 print('Done.')
