@@ -401,6 +401,7 @@ class SpeechRecognizer(object):
             return
 
 
+
 def extract_audio(filename, channels=1, rate=16000):
     temp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
     if not os.path.isfile(filename):
@@ -555,8 +556,56 @@ def translate(entries, src, dest, patience, verbose):
         yield number_in_sequence, timecode, translated_subtitles, count_failure, count_entries
 
 
+
+class SubtitleTranslator(object):
+    def __init__(self, src, dest):
+        self.src = src
+        self.dest = dest
+
+    def __call__(self, entries):
+        translator = Translator()
+        translated_subtitles = []
+        number_in_sequence, timecode, subtitles = entries
+
+        #translated_subtitles = translator.translate(subtitles, src=self.src, dest=self.dest).text
+
+        for i, subtitle in enumerate(subtitles, 1):
+            # handle the special case: empty string.
+            if not subtitle:
+                translated_subtitles.append(subtitle)
+            translated_subtitle = translator.translate(subtitle, src=self.src, dest=self.dest).text
+            translated_subtitle = translator.translate(translated_subtitle, src=self.src, dest=self.dest).text
+            #if translated_subtitle[-1] == '\n':
+                #fail_to_translate = False
+        #if subtitles: translated_subtitles = translator.translate(subtitles, src=self.src, dest=self.dest).text
+        #translated_subtitle = translator.translate(translated_subtitle, src=self.src, dest=self.dest).text
+            translated_subtitles.append(translated_subtitle + '\n')
+
+        #translated_entries = (number_in_sequence, timecode, [translated_subtitles])
+
+        #return translated_entries
+        return number_in_sequence, timecode, translated_subtitles
+        #yield number_in_sequence, timecode, translated_subtitles, count_failure, count_entries
+
+
+class TranscriptionTranslator(object):
+    def __init__(self, src, dest):
+        self.src = src
+        self.dest = dest
+
+    def __call__(self, transcription):
+        try:
+            translated_transcription = Translator().translate(transcription, src=self.src, dest=self.dest).text
+            return translated_transcription
+
+        except KeyboardInterrupt:
+            return
+
+
+
 def transcribe(src, dest, filename, activity, textView_debug):
     wav_filename, audio_rate = extract_audio(filename)
+    pool = multiprocessing.pool.ThreadPool(10)
 
     if not os.path.isfile(cancel_file):
 
@@ -618,7 +667,6 @@ def transcribe(src, dest, filename, activity, textView_debug):
         check_cancel_file()
 
     if not os.path.isfile(cancel_file):
-        pool = multiprocessing.pool.ThreadPool(10)
         converter = FLACConverter(source_path=wav_filename)
         recognizer = SpeechRecognizer(language=src, rate=audio_rate, api_key=GOOGLE_SPEECH_API_KEY)
         transcriptions = []
@@ -693,21 +741,21 @@ def transcribe(src, dest, filename, activity, textView_debug):
                     #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
                     #pbar = ProgressBar(widgets=widgets, maxval=len(transcriptions)).start()
 
-                    e=0
+                    subtitle_translator = SubtitleTranslator(src=src, dest=dest)
+                    translated_entries = []
+                    for i, translated_entry in enumerate(pool.imap(subtitle_translator, entries)):
+                        check_cancel_file()
+                        translated_entries.append(translated_entry)
+                        pBar(i, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
+                    pBar(total_entries, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
+
                     with open(translated_srt_file, 'w', encoding='utf-8') as f:
-                        for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
-                            check_cancel_file()
+                        for number_in_sequence, timecode, translated_subtitles in translated_entries:
                             f.write(number_in_sequence)
                             f.write(timecode)
-                            for subtitle in subtitles:
-                                f.write(subtitle)
+                            for translated_subtitle in translated_subtitles:
+                                f.write(translated_subtitle)
                                 f.write('\n')
-                                e += 1
-                                pBar(e, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
-                                #pbar.update(e)
-                        #pbar.finish()
-                        pBar(total_entries, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
-
 
                 print('Done.')
                 print("Original subtitles file created at      : {}".format(srt_file))
@@ -985,6 +1033,7 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
         try:
             if not os.path.isfile(cancel_file):
                 extracted_regions = []
+
                 #widgets = ["Converting speech regions to FLAC files : ", Percentage(), ' ', Bar(), ' ', ETA()]
                 #pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
 
@@ -1151,10 +1200,12 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
             #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
             #pbar = ProgressBar(widgets=widgets, maxval=total_entries).start()
 
+            '''
             e=0
             with open(translated_srt_file, 'w', encoding='utf-8') as f:
                 time.sleep(1)
-                for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
+                #for number_in_sequence, timecode, subtitles, count_failure, count_entries in translate(entries, src=src, dest=dest, patience="", verbose=""):
+                for number_in_sequence, timecode, subtitles, count_failure, count_entries in pool.imap(translate, entries, src=src, dest=dest, patience="", verbose=""):
                     check_cancel_file()
                     f.write(number_in_sequence)
                     f.write(timecode)
@@ -1167,6 +1218,23 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
                 #pbar.finish()
                 pBar(total_entries, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
                 time.sleep(1)
+            '''
+
+            subtitle_translator = SubtitleTranslator(src=src, dest=dest)
+            translated_entries = []
+            for i, translated_entry in enumerate(pool.imap(subtitle_translator, entries)):
+                check_cancel_file()
+                translated_entries.append(translated_entry)
+                pBar(i, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
+            pBar(total_entries, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
+
+            with open(translated_srt_file, 'w', encoding='utf-8') as f:
+                for number_in_sequence, timecode, translated_subtitles in translated_entries:
+                    f.write(number_in_sequence)
+                    f.write(timecode)
+                    for translated_subtitle in translated_subtitles:
+                        f.write(translated_subtitle)
+                        f.write('\n')
 
             print('Done.')
             print("Original subtitles file created at      : {}".format(srt_file))
@@ -1252,7 +1320,8 @@ def printEnvironmentDir():
     #for md in media_dirs:
         #print("media_dirs = {}".format(md))
     # /storage/emulated/0/Android/media
-     return
+ 
+    return "OK"
 
 def pBar(count_value, total, prefix, activity, textView_debug):
     bar_length = 10
@@ -1312,6 +1381,8 @@ def check_cancel_file():
                 textView_debug.setText("Process has been canceled")
                 time.sleep(1)
         activity.runOnUiThread(R())
+
+   
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
