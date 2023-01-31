@@ -567,41 +567,13 @@ class SubtitleTranslator(object):
         translated_subtitles = []
         number_in_sequence, timecode, subtitles = entries
 
-        #translated_subtitles = translator.translate(subtitles, src=self.src, dest=self.dest).text
-
         for i, subtitle in enumerate(subtitles, 1):
-            # handle the special case: empty string.
             if not subtitle:
                 translated_subtitles.append(subtitle)
             translated_subtitle = translator.translate(subtitle, src=self.src, dest=self.dest).text
             translated_subtitle = translator.translate(translated_subtitle, src=self.src, dest=self.dest).text
-            #if translated_subtitle[-1] == '\n':
-                #fail_to_translate = False
-        #if subtitles: translated_subtitles = translator.translate(subtitles, src=self.src, dest=self.dest).text
-        #translated_subtitle = translator.translate(translated_subtitle, src=self.src, dest=self.dest).text
             translated_subtitles.append(translated_subtitle + '\n')
-
-        #translated_entries = (number_in_sequence, timecode, [translated_subtitles])
-
-        #return translated_entries
         return number_in_sequence, timecode, translated_subtitles
-        #yield number_in_sequence, timecode, translated_subtitles, count_failure, count_entries
-
-
-class TranscriptionTranslator(object):
-    def __init__(self, src, dest):
-        self.src = src
-        self.dest = dest
-
-    def __call__(self, transcription):
-        try:
-            translated_transcription = Translator().translate(transcription, src=self.src, dest=self.dest).text
-            return translated_transcription
-
-        except KeyboardInterrupt:
-            return
-
-
 
 def transcribe(src, dest, filename, activity, textView_debug):
     wav_filename, audio_rate = extract_audio(filename)
@@ -679,7 +651,6 @@ def transcribe(src, dest, filename, activity, textView_debug):
 
                     # widgets and pbar are from progressbar module, we don't use it because we can't show it on textview_debug
                     # we use self made pBar to show progress on textview
-
                     #widgets = ["Converting speech regions to FLAC files : ", Percentage(), ' ', Bar(), ' ', ETA()]
                     #pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
 
@@ -1220,6 +1191,7 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
                 time.sleep(1)
             '''
 
+            # running translation task in concurrent threads
             subtitle_translator = SubtitleTranslator(src=src, dest=dest)
             translated_entries = []
             for i, translated_entry in enumerate(pool.imap(subtitle_translator, entries)):
