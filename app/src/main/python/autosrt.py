@@ -401,22 +401,6 @@ class SpeechRecognizer(object):
             return
 
 
-class TranscriptionTranslator(object):
-    def __init__(self, src, dest):
-        self.src = src
-        self.dest = dest
-
-    def __call__(self, transcription):
-        try:
-            if transcription:
-                translated_transcription = Translator().translate(transcription, src=self.src, dest=self.dest).text
-                return translated_transcription
-            else:
-                return
-        except KeyboardInterrupt:
-            return
-
-
 def extract_audio(filename, channels=1, rate=16000):
     temp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
     if not os.path.isfile(filename):
@@ -724,39 +708,6 @@ def transcribe(src, dest, filename, activity, textView_debug):
                     #pbar.finish()
                     pBar(total_entries, total_entries, "Translating from %s to %s: " %(src, dest), activity, textView_debug)
 
-                    '''
-                    transcription_translator = TranscriptionTranslator(src=src, dest=dest)
-                    translated_transcriptions = []
-                    time.sleep(1)
-                    for i, translated_transcription in enumerate(pool.imap(transcription_translator, transcriptions)):
-                        check_cancel_file()
-                        if not translated_transcription:
-                            continue
-                        translated_transcriptions.append(translated_transcription)
-                        #pbar.update(i)
-                        pBar(i, len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
-                    #pbar.finish()
-                    time.sleep(1)
-                    pBar(len(transcriptions), len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
-
-                    check_cancel_file()
-
-                    timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcriptions) if t]
-                    formatter = FORMATTERS.get("srt")
-                    formatted_translated_subtitles = formatter(timed_translated_subtitles)
-                    base, ext = os.path.splitext(filename)
-                    srt_file = "{base}.{format}".format(base=base, format="srt")
-                    translated_srt_file = srt_file[ :-4] + '_translated.srt'
-
-                    with open(translated_srt_file, 'wb') as ft:
-                        ft.write(formatted_translated_subtitles.encode("utf-8"))
-                        ft.close()
-
-                    with open(translated_srt_file, 'a') as ft:
-                        ft.write("\n")
-                        ft.close()
-                    '''
-
 
                 print('Done.')
                 print("Original subtitles file created at      : {}".format(srt_file))
@@ -1034,33 +985,8 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
         try:
             if not os.path.isfile(cancel_file):
                 extracted_regions = []
-
-                '''
-                widgets = ["Converting speech regions to FLAC files : ", Percentage(), ' ', Bar(), ' ', ETA()]
-                pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
-                for i, extracted_region in enumerate(pool.imap(converter, regions)):
-
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        if wav_filename:
-                            if os.path.isfile(wav_filename):
-                                os.remove(wav_filename)
-                        converter = None
-                        recognizer = None
-                        transcriptions = None
-                        if extracted_regions:
-                            for extracted_region in extracted_regions:
-                                if os.path.isfile(extracted_region): os.remove(extracted_region)
-                            extracted_regions = None
-                        pool.terminate()
-                        pool.close()
-                        pool.join()
-                        pool = None
-
-                    extracted_regions.append(extracted_region)
-                    pbar.update(i)
-                pbar.finish()
-                '''
+                #widgets = ["Converting speech regions to FLAC files : ", Percentage(), ' ', Bar(), ' ', ETA()]
+                #pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
 
                 time.sleep(1)
                 print("Converting speech regions to FLAC")
@@ -1074,37 +1000,8 @@ def perform_speech_recognition(filename, wav_filename, src, activity, textView_d
             check_cancel_file()
 
             if not os.path.isfile(cancel_file):
-                '''
-                widgets = ["Performing speech recognition           : ", Percentage(), ' ', Bar(), ' ', ETA()]
-                pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
-
-                for i, transcription in enumerate(pool.imap(recognizer, extracted_regions)):
-
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        if wav_filename:
-                            if os.path.isfile(wav_filename):
-                                os.remove(wav_filename)
-                        converter = None
-                        recognizer = None
-                        transcriptions = None
-                        if extracted_regions:
-                            for extracted_region in extracted_regions:
-                                if os.path.isfile(extracted_region): os.remove(extracted_region)
-                            extracted_regions = None
-                    
-                        if transcriptions:
-                            for transcription in transcriptions:
-                                transcription = None
-                            transcriptions = None
-                        pool.terminate()
-                        pool.close()
-                        pool.join()
-                        pool = None
-                    transcriptions.append(transcription)
-                    pbar.update(i)
-                pbar.finish()
-                '''
+                #widgets = ["Performing speech recognition           : ", Percentage(), ' ', Bar(), ' ', ETA()]
+                #pbar = ProgressBar(widgets=widgets, maxval=len(regions)).start()
 
                 time.sleep(1)
                 print("Creating transcriptions")
@@ -1246,33 +1143,6 @@ def perform_translation(srt_file, src, dest, activity, textView_debug):
         if (not is_same_language(src, dest)) and (os.path.isfile(srt_file)) and (not os.path.isfile(cancel_file)):
             translated_srt_file = srt_file[ :-4] + '_translated.srt'
 
-            '''
-            transcription_translator = TranscriptionTranslator(src=src, dest=dest)
-            translated_transcriptions = []
-            time.sleep(1)
-            for i, translated_transcription in enumerate(pool.imap(transcription_translator, transcriptions)):
-                if not translated_transcription:
-                    continue
-                translated_transcriptions.append(translated_transcription)
-                pBar(i, len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
-                check_cancel_file()
-            pBar(len(transcriptions), len(transcriptions), "Translating transcriptions: ", activity, textView_debug)
-            time.sleep(1)
-
-            timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcriptions) if t]
-            formatter = FORMATTERS.get("srt")
-            formatted_translated_subtitles = formatter(timed_translated_subtitles)
-            translated_srt_file = srt_file[ :-4] + '_translated.srt'
-
-            with open(translated_srt_file, 'wb') as ft:
-                ft.write(formatted_translated_subtitles.encode("utf-8"))
-                ft.close()
-
-            with open(translated_srt_file, 'a') as ft:
-                ft.write("\n")
-                ft.close()
-            '''
-
             entries = entries_generator(srt_file)
             total_entries = CountEntries(srt_file)
             print('Total Entries = {}'.format(total_entries))
@@ -1382,8 +1252,7 @@ def printEnvironmentDir():
     #for md in media_dirs:
         #print("media_dirs = {}".format(md))
     # /storage/emulated/0/Android/media
- 
-    return "OK"
+     return
 
 def pBar(count_value, total, prefix, activity, textView_debug):
     bar_length = 10
@@ -1443,8 +1312,6 @@ def check_cancel_file():
                 textView_debug.setText("Process has been canceled")
                 time.sleep(1)
         activity.runOnUiThread(R())
-
-   
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
