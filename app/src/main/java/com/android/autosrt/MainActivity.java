@@ -897,9 +897,6 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         String folderName = substring(uriDisplayName, 0, uriDisplayName.length() - 4);
                         String prefix = "Creating a copy of " + uriDisplayName + " : ";
-                        // WE NEED TO GET A COPY OF ORIGINAL FILE BECAUSE ON SCOPE STORAGE WE CAN'T
-                        // GET THE REAL PATH OF THE ORIGINAL FILE, SO BY COPYING IT INTO SOME PATH THE WE
-                        // KNEW ALREADY, WE CAN THEN PROCEED IT WITH NEXT STEPs OF autosrt.py SCRIPT
                         String copyPath = copyFileToExternalFilesDir(mediaURI, folderName, prefix);
                         if (copyPath != null) {
                             sourceCopy = copyPath;
