@@ -838,8 +838,6 @@ def main(src, dest, content, uriDisplayName, textView_debug):
 # SPLITTED transcribe() FUNCTION
 
 def create_copy(content, uriDisplayName, textView_debug):
-    # we need to create a copy of original file because in Android API 29 Scopped Storage we can't get its REAL PATH directly
-    # by copying it into a path the we knew we can then proceeed it to next steps
     files_dir = str(context.getExternalFilesDir(None))
     cancel_file = join(files_dir, 'cancel.txt')
     filename = None
