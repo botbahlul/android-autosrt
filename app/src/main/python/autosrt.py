@@ -573,9 +573,11 @@ def translate(entries, src, dest, patience, verbose):
 
 
 class SubtitleTranslator(object):
-    def __init__(self, src, dest):
+    def __init__(self, src, dest, patience=-1, verbose=''):
         self.src = src
         self.dest = dest
+        self.patience = patience
+        self.verbose = verbose
 
     def __call__(self, entries):
         translator = Translator()
@@ -587,11 +589,25 @@ class SubtitleTranslator(object):
             if not subtitle:
                 translated_subtitles.append(subtitle)
             translated_subtitle = translator.translate(subtitle, src=self.src, dest=self.dest).text
-            translated_subtitle = translator.translate(translated_subtitle, src=self.src, dest=self.dest).text
+            fail_to_translate = translated_subtitle[-1] == '\n'
+            while fail_to_translate and patience:
+                if verbose:
+                    print('[Failure] Retry to translate...')
+                    print('The translated subtitle: {}', end=''.format(translated_subtitle))
+                translated_subtitle = translator.translate(translated_subtitle, src=self.src, dest=self.dest).text
+                if translated_subtitle[-1] == '\n':
+                    if patience == -1:
+                        continue
+                    if patience == 1:
+                        if verbose:
+                            print('This subtitle failed to translate... [Position] entry {0} line {1}'.format(count_entries,i))
+                    patience -= 1
+                else:
+                    fail_to_translate = False
+                    if verbose:
+                        print('Translate successfully. The result: {}'.format(translated_subtitle))
             translated_subtitles.append(translated_subtitle + '\n')
         return number_in_sequence, timecode, translated_subtitles
-        #yield number_in_sequence, timecode, translated_subtitles, count_failure, count_entries
-
 
 '''
 class TranscriptionTranslator(object):
@@ -741,6 +757,7 @@ def transcribe(src, dest, filePath, fileDisplayName, activity, textview_debug):
                 total_entries = CountEntries(srt_file)
                 print('Total Entries = {}'.format(total_entries))
 
+                '''
                 e=0
                 with open(translated_srt_file, 'w', encoding='utf-8') as f:
                     time.sleep(1)
@@ -757,9 +774,8 @@ def transcribe(src, dest, filePath, fileDisplayName, activity, textview_debug):
                     #pbar.finish()
                     pBar(total_entries, total_entries, "Translating from %s to %s: " %(src, dest), activity, textview_debug)
                     time.sleep(1)
-
                 '''
-                # 503 ERROR! FREE SERVICE SUCKS! CANNOT DO CONCURRENT TRANSLATION!
+
                 subtitle_translator = SubtitleTranslator(src=src, dest=dest)
                 translated_entries = []
                 time.sleep(2)
@@ -776,7 +792,6 @@ def transcribe(src, dest, filePath, fileDisplayName, activity, textview_debug):
                         for translated_subtitle in translated_subtitles:
                             f.write(translated_subtitle)
                             f.write('\n')
-                '''
 
                 print('Done.')
                 print("SRT subtitles file created at      : {}".format(srt_file))
