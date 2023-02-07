@@ -183,7 +183,7 @@ public class MainActivity extends AppCompatActivity {
         arraylist_src.add("mni");
         arraylist_src.add("lus");
         arraylist_src.add("mn");
-        arraylist_src.add("mmr");
+        arraylist_src.add("my");
         arraylist_src.add("ne");
         arraylist_src.add("no");
         arraylist_src.add("or");
