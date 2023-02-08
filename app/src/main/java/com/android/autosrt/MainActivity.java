@@ -121,12 +121,12 @@ public class MainActivity extends AppCompatActivity {
         arraylist_src.add("zh-CN");
         arraylist_src.add("zh-TW");
         arraylist_src.add("co");
-        arraylist_src.add("cr");
+        arraylist_src.add("hr");
         arraylist_src.add("cs");
         arraylist_src.add("da");
         arraylist_src.add("dv");
-        arraylist_src.add("nl");
         arraylist_src.add("doi");
+        arraylist_src.add("nl");
         arraylist_src.add("en");
         arraylist_src.add("eo");
         arraylist_src.add("et");
@@ -160,7 +160,7 @@ public class MainActivity extends AppCompatActivity {
         arraylist_src.add("kk");
         arraylist_src.add("km");
         arraylist_src.add("rw");
-        arraylist_src.add("kok");
+        arraylist_src.add("gom");
         arraylist_src.add("ko");
         arraylist_src.add("kri");
         arraylist_src.add("kmr");
@@ -180,7 +180,7 @@ public class MainActivity extends AppCompatActivity {
         arraylist_src.add("mt");
         arraylist_src.add("mi");
         arraylist_src.add("mr");
-        arraylist_src.add("mni");
+        arraylist_src.add("mni-Mtei");
         arraylist_src.add("lus");
         arraylist_src.add("mn");
         arraylist_src.add("my");
@@ -222,9 +222,9 @@ public class MainActivity extends AppCompatActivity {
         arraylist_src.add("tr");
         arraylist_src.add("tk");
         arraylist_src.add("tw");
-        arraylist_src.add("ug");
         arraylist_src.add("uk");
         arraylist_src.add("ur");
+        arraylist_src.add("ug");
         arraylist_src.add("uz");
         arraylist_src.add("vi");
         arraylist_src.add("cy");
@@ -319,7 +319,7 @@ public class MainActivity extends AppCompatActivity {
         arraylist_src_languages.add("Myanmar (Burmese)");
         arraylist_src_languages.add("Nepali");
         arraylist_src_languages.add("Norwegian");
-        arraylist_src_languages.add("Oriya");
+        arraylist_src_languages.add("Odiya (Oriya)");
         arraylist_src_languages.add("Oromo");
         arraylist_src_languages.add("Pashto");
         arraylist_src_languages.add("Persian");
@@ -337,7 +337,7 @@ public class MainActivity extends AppCompatActivity {
         arraylist_src_languages.add("Sesotho");
         arraylist_src_languages.add("Shona");
         arraylist_src_languages.add("Sindhi");
-        arraylist_src_languages.add("Sinhalese");
+        arraylist_src_languages.add("Sinhala");
         arraylist_src_languages.add("Slovak");
         arraylist_src_languages.add("Slovenian");
         arraylist_src_languages.add("Somali");
@@ -354,7 +354,7 @@ public class MainActivity extends AppCompatActivity {
         arraylist_src_languages.add("Tsonga");
         arraylist_src_languages.add("Turkish");
         arraylist_src_languages.add("Turkmen");
-        arraylist_src_languages.add("Twi");
+        arraylist_src_languages.add("Twi (Akan)");
         arraylist_src_languages.add("Ukrainian");
         arraylist_src_languages.add("Urdu");
         arraylist_src_languages.add("Uyghur");
@@ -391,12 +391,12 @@ public class MainActivity extends AppCompatActivity {
         arraylist_dst.add("zh-CN");
         arraylist_dst.add("zh-TW");
         arraylist_dst.add("co");
-        arraylist_dst.add("cr");
+        arraylist_dst.add("hr");
         arraylist_dst.add("cs");
         arraylist_dst.add("da");
         arraylist_dst.add("dv");
-        arraylist_dst.add("nl");
         arraylist_dst.add("doi");
+        arraylist_dst.add("nl");
         arraylist_dst.add("en");
         arraylist_dst.add("eo");
         arraylist_dst.add("et");
@@ -430,7 +430,7 @@ public class MainActivity extends AppCompatActivity {
         arraylist_dst.add("kk");
         arraylist_dst.add("km");
         arraylist_dst.add("rw");
-        arraylist_dst.add("kok");
+        arraylist_dst.add("gom");
         arraylist_dst.add("ko");
         arraylist_dst.add("kri");
         arraylist_dst.add("kmr");
@@ -450,7 +450,7 @@ public class MainActivity extends AppCompatActivity {
         arraylist_dst.add("mt");
         arraylist_dst.add("mi");
         arraylist_dst.add("mr");
-        arraylist_dst.add("mni");
+        arraylist_dst.add("mni-Mtei");
         arraylist_dst.add("lus");
         arraylist_dst.add("mn");
         arraylist_dst.add("my");
@@ -492,9 +492,9 @@ public class MainActivity extends AppCompatActivity {
         arraylist_dst.add("tr");
         arraylist_dst.add("tk");
         arraylist_dst.add("tw");
-        arraylist_dst.add("ug");
         arraylist_dst.add("uk");
         arraylist_dst.add("ur");
+        arraylist_dst.add("ug");
         arraylist_dst.add("uz");
         arraylist_dst.add("vi");
         arraylist_dst.add("cy");
@@ -589,7 +589,7 @@ public class MainActivity extends AppCompatActivity {
         arraylist_dst_languages.add("Myanmar (Burmese)");
         arraylist_dst_languages.add("Nepali");
         arraylist_dst_languages.add("Norwegian");
-        arraylist_dst_languages.add("Oriya");
+        arraylist_dst_languages.add("Odiya (Oriya)");
         arraylist_dst_languages.add("Oromo");
         arraylist_dst_languages.add("Pashto");
         arraylist_dst_languages.add("Persian");
@@ -607,7 +607,7 @@ public class MainActivity extends AppCompatActivity {
         arraylist_dst_languages.add("Sesotho");
         arraylist_dst_languages.add("Shona");
         arraylist_dst_languages.add("Sindhi");
-        arraylist_dst_languages.add("Sinhalese");
+        arraylist_dst_languages.add("Sinhala");
         arraylist_dst_languages.add("Slovak");
         arraylist_dst_languages.add("Slovenian");
         arraylist_dst_languages.add("Somali");
@@ -624,7 +624,7 @@ public class MainActivity extends AppCompatActivity {
         arraylist_dst_languages.add("Tsonga");
         arraylist_dst_languages.add("Turkish");
         arraylist_dst_languages.add("Turkmen");
-        arraylist_dst_languages.add("Twi");
+        arraylist_dst_languages.add("Twi (Akan)");
         arraylist_dst_languages.add("Ukrainian");
         arraylist_dst_languages.add("Urdu");
         arraylist_dst_languages.add("Uyghur");
