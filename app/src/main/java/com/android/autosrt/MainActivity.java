@@ -1,12 +1,16 @@
 package com.android.autosrt;
 
+import static android.os.Environment.DIRECTORY_DOCUMENTS;
+import static android.os.Environment.getExternalStorageDirectory;
 import static android.text.TextUtils.substring;
+import static com.arthenica.mobileffmpeg.Config.TAG;
 import static java.lang.Math.round;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -26,6 +30,8 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.Spinner;
 import android.widget.TextView;
 
@@ -46,192 +52,208 @@ import com.chaquo.python.android.AndroidPlatform;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
 
 public class MainActivity extends AppCompatActivity {
-    ArrayList<String> arraylist_src = new ArrayList<>();
-    ArrayList<String> arraylist_dst = new ArrayList<>();
+    ArrayList<String> arraylist_src_code = new ArrayList<>();
+    ArrayList<String> arraylist_dst_code = new ArrayList<>();
     ArrayList<String> arraylist_src_languages = new ArrayList<>();
     ArrayList<String> arraylist_dst_languages = new ArrayList<>();
     Map<String, String> map_src_country = new HashMap<>();
     Map<String, String> map_dst_country = new HashMap<>();
-    public static String src_country, dst_country, src, dst;
+    public static String src_language, dst_language, src_code, dst_code;
+    ArrayList<String> arraylist_subtitle_format = new ArrayList<>();
+
+    CheckBox checkbox_debug_mode;
 
     Spinner spinner_src_languages;
-    Spinner spinner_dst_languages;
-    @SuppressLint("StaticFieldLeak")
-    public static TextView textview_fileURI;
-    @SuppressLint("StaticFieldLeak")
-    public static TextView textview_filePath;
-    @SuppressLint("StaticFieldLeak")
-    public static TextView textview_fileDisplayName;
-    @SuppressLint("StaticFieldLeak")
-    public static TextView textview_isTranscribing;
-    Button button_browse, button_start;
-    @SuppressLint("StaticFieldLeak")
-    public static TextView textview_debug;
+    TextView textview_src_code;
 
-    public static Python py;
+    CheckBox checkbox_create_translation;
+
+    TextView textview_text2;
+    Spinner spinner_dst_languages;
+    TextView textview_dst_code;
+
+    Spinner spinner_subtitle_format;
+    TextView textview_subtitle_format;
+
+    TextView textview_fileURI;
+    TextView textview_filePath;
+    TextView textview_fileDisplayName;
+    TextView textview_isTranscribing;
+    Button button_browse, button_start;
+    TextView textview_debug;
+
+    Python py;
+    PyObject pyObjSubtitleFilePath;
+    PyObject pyObjWavTempName;
+    PyObject pyObjRegions;
+
     public static boolean isTranscribing = false;
     public static boolean canceled = true;
     public static Thread runpy;
     public static String cancelFile = null;
     public static String copiedPath = null;
-    public static String tempName = null;
+    public static String wavTempName = null;
     public static String regions = null;
-    public static String srtFile = null;
-    public static String returnedSrtFile = null;
+    public static String subtitleFilePath = null;
     public static Uri fileURI;
     public static String filePath;
     public static String fileDisplayName;
+    public static String subtitleFormat;
+    public static String subtitleFilePathPath;
+    public static String subtitleTranslatedFilePath;
+    public static String subtitleFolderName;
     int STORAGE_PERMISSION_CODE = 101;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        arraylist_src.add("af");
-        arraylist_src.add("sq");
-        arraylist_src.add("am");
-        arraylist_src.add("ar");
-        arraylist_src.add("hy");
-        arraylist_src.add("as");
-        arraylist_src.add("ay");
-        arraylist_src.add("az");
-        arraylist_src.add("bm");
-        arraylist_src.add("eu");
-        arraylist_src.add("be");
-        arraylist_src.add("bn");
-        arraylist_src.add("bho");
-        arraylist_src.add("bs");
-        arraylist_src.add("bg");
-        arraylist_src.add("ca");
-        arraylist_src.add("ceb");
-        arraylist_src.add("ny");
-        arraylist_src.add("zh-CN");
-        arraylist_src.add("zh-TW");
-        arraylist_src.add("co");
-        arraylist_src.add("hr");
-        arraylist_src.add("cs");
-        arraylist_src.add("da");
-        arraylist_src.add("dv");
-        arraylist_src.add("doi");
-        arraylist_src.add("nl");
-        arraylist_src.add("en");
-        arraylist_src.add("eo");
-        arraylist_src.add("et");
-        arraylist_src.add("ee");
-        arraylist_src.add("fil");
-        arraylist_src.add("fi");
-        arraylist_src.add("fr");
-        arraylist_src.add("fy");
-        arraylist_src.add("gl");
-        arraylist_src.add("ka");
-        arraylist_src.add("de");
-        arraylist_src.add("el");
-        arraylist_src.add("gn");
-        arraylist_src.add("gu");
-        arraylist_src.add("ht");
-        arraylist_src.add("ha");
-        arraylist_src.add("haw");
-        arraylist_src.add("he");
-        arraylist_src.add("hi");
-        arraylist_src.add("hmn");
-        arraylist_src.add("hu");
-        arraylist_src.add("is");
-        arraylist_src.add("ig");
-        arraylist_src.add("ilo");
-        arraylist_src.add("id");
-        arraylist_src.add("ga");
-        arraylist_src.add("it");
-        arraylist_src.add("ja");
-        arraylist_src.add("jv");
-        arraylist_src.add("kn");
-        arraylist_src.add("kk");
-        arraylist_src.add("km");
-        arraylist_src.add("rw");
-        arraylist_src.add("gom");
-        arraylist_src.add("ko");
-        arraylist_src.add("kri");
-        arraylist_src.add("kmr");
-        arraylist_src.add("ckb");
-        arraylist_src.add("ky");
-        arraylist_src.add("lo");
-        arraylist_src.add("la");
-        arraylist_src.add("lv");
-        arraylist_src.add("ln");
-        arraylist_src.add("lt");
-        arraylist_src.add("lg");
-        arraylist_src.add("lb");
-        arraylist_src.add("mk");
-        arraylist_src.add("mg");
-        arraylist_src.add("ms");
-        arraylist_src.add("ml");
-        arraylist_src.add("mt");
-        arraylist_src.add("mi");
-        arraylist_src.add("mr");
-        arraylist_src.add("mni-Mtei");
-        arraylist_src.add("lus");
-        arraylist_src.add("mn");
-        arraylist_src.add("my");
-        arraylist_src.add("ne");
-        arraylist_src.add("no");
-        arraylist_src.add("or");
-        arraylist_src.add("om");
-        arraylist_src.add("ps");
-        arraylist_src.add("fa");
-        arraylist_src.add("pl");
-        arraylist_src.add("pt");
-        arraylist_src.add("pa");
-        arraylist_src.add("qu");
-        arraylist_src.add("ro");
-        arraylist_src.add("ru");
-        arraylist_src.add("sm");
-        arraylist_src.add("sa");
-        arraylist_src.add("gd");
-        arraylist_src.add("nso");
-        arraylist_src.add("sr");
-        arraylist_src.add("st");
-        arraylist_src.add("sn");
-        arraylist_src.add("sd");
-        arraylist_src.add("si");
-        arraylist_src.add("sk");
-        arraylist_src.add("sl");
-        arraylist_src.add("so");
-        arraylist_src.add("es");
-        arraylist_src.add("su");
-        arraylist_src.add("sw");
-        arraylist_src.add("sv");
-        arraylist_src.add("tg");
-        arraylist_src.add("ta");
-        arraylist_src.add("tt");
-        arraylist_src.add("te");
-        arraylist_src.add("th");
-        arraylist_src.add("ti");
-        arraylist_src.add("ts");
-        arraylist_src.add("tr");
-        arraylist_src.add("tk");
-        arraylist_src.add("tw");
-        arraylist_src.add("uk");
-        arraylist_src.add("ur");
-        arraylist_src.add("ug");
-        arraylist_src.add("uz");
-        arraylist_src.add("vi");
-        arraylist_src.add("cy");
-        arraylist_src.add("xh");
-        arraylist_src.add("yi");
-        arraylist_src.add("yo");
-        arraylist_src.add("zu");
+        arraylist_src_code.add("af");
+        arraylist_src_code.add("sq");
+        arraylist_src_code.add("am");
+        arraylist_src_code.add("ar");
+        arraylist_src_code.add("hy");
+        arraylist_src_code.add("as");
+        arraylist_src_code.add("ay");
+        arraylist_src_code.add("az");
+        arraylist_src_code.add("bm");
+        arraylist_src_code.add("eu");
+        arraylist_src_code.add("be");
+        arraylist_src_code.add("bn");
+        arraylist_src_code.add("bho");
+        arraylist_src_code.add("bs");
+        arraylist_src_code.add("bg");
+        arraylist_src_code.add("ca");
+        arraylist_src_code.add("ceb");
+        arraylist_src_code.add("ny");
+        arraylist_src_code.add("zh-CN");
+        arraylist_src_code.add("zh-TW");
+        arraylist_src_code.add("co");
+        arraylist_src_code.add("hr");
+        arraylist_src_code.add("cs");
+        arraylist_src_code.add("da");
+        arraylist_src_code.add("dv");
+        arraylist_src_code.add("doi");
+        arraylist_src_code.add("nl");
+        arraylist_src_code.add("en");
+        arraylist_src_code.add("eo");
+        arraylist_src_code.add("et");
+        arraylist_src_code.add("ee");
+        arraylist_src_code.add("fil");
+        arraylist_src_code.add("fi");
+        arraylist_src_code.add("fr");
+        arraylist_src_code.add("fy");
+        arraylist_src_code.add("gl");
+        arraylist_src_code.add("ka");
+        arraylist_src_code.add("de");
+        arraylist_src_code.add("el");
+        arraylist_src_code.add("gn");
+        arraylist_src_code.add("gu");
+        arraylist_src_code.add("ht");
+        arraylist_src_code.add("ha");
+        arraylist_src_code.add("haw");
+        arraylist_src_code.add("he");
+        arraylist_src_code.add("hi");
+        arraylist_src_code.add("hmn");
+        arraylist_src_code.add("hu");
+        arraylist_src_code.add("is");
+        arraylist_src_code.add("ig");
+        arraylist_src_code.add("ilo");
+        arraylist_src_code.add("id");
+        arraylist_src_code.add("ga");
+        arraylist_src_code.add("it");
+        arraylist_src_code.add("ja");
+        arraylist_src_code.add("jv");
+        arraylist_src_code.add("kn");
+        arraylist_src_code.add("kk");
+        arraylist_src_code.add("km");
+        arraylist_src_code.add("rw");
+        arraylist_src_code.add("gom");
+        arraylist_src_code.add("ko");
+        arraylist_src_code.add("kri");
+        arraylist_src_code.add("kmr");
+        arraylist_src_code.add("ckb");
+        arraylist_src_code.add("ky");
+        arraylist_src_code.add("lo");
+        arraylist_src_code.add("la");
+        arraylist_src_code.add("lv");
+        arraylist_src_code.add("ln");
+        arraylist_src_code.add("lt");
+        arraylist_src_code.add("lg");
+        arraylist_src_code.add("lb");
+        arraylist_src_code.add("mk");
+        arraylist_src_code.add("mg");
+        arraylist_src_code.add("ms");
+        arraylist_src_code.add("ml");
+        arraylist_src_code.add("mt");
+        arraylist_src_code.add("mi");
+        arraylist_src_code.add("mr");
+        arraylist_src_code.add("mni-Mtei");
+        arraylist_src_code.add("lus");
+        arraylist_src_code.add("mn");
+        arraylist_src_code.add("my");
+        arraylist_src_code.add("ne");
+        arraylist_src_code.add("no");
+        arraylist_src_code.add("or");
+        arraylist_src_code.add("om");
+        arraylist_src_code.add("ps");
+        arraylist_src_code.add("fa");
+        arraylist_src_code.add("pl");
+        arraylist_src_code.add("pt");
+        arraylist_src_code.add("pa");
+        arraylist_src_code.add("qu");
+        arraylist_src_code.add("ro");
+        arraylist_src_code.add("ru");
+        arraylist_src_code.add("sm");
+        arraylist_src_code.add("sa");
+        arraylist_src_code.add("gd");
+        arraylist_src_code.add("nso");
+        arraylist_src_code.add("sr");
+        arraylist_src_code.add("st");
+        arraylist_src_code.add("sn");
+        arraylist_src_code.add("sd");
+        arraylist_src_code.add("si");
+        arraylist_src_code.add("sk");
+        arraylist_src_code.add("sl");
+        arraylist_src_code.add("so");
+        arraylist_src_code.add("es");
+        arraylist_src_code.add("su");
+        arraylist_src_code.add("sw");
+        arraylist_src_code.add("sv");
+        arraylist_src_code.add("tg");
+        arraylist_src_code.add("ta");
+        arraylist_src_code.add("tt");
+        arraylist_src_code.add("te");
+        arraylist_src_code.add("th");
+        arraylist_src_code.add("ti");
+        arraylist_src_code.add("ts");
+        arraylist_src_code.add("tr");
+        arraylist_src_code.add("tk");
+        arraylist_src_code.add("tw");
+        arraylist_src_code.add("uk");
+        arraylist_src_code.add("ur");
+        arraylist_src_code.add("ug");
+        arraylist_src_code.add("uz");
+        arraylist_src_code.add("vi");
+        arraylist_src_code.add("cy");
+        arraylist_src_code.add("xh");
+        arraylist_src_code.add("yi");
+        arraylist_src_code.add("yo");
+        arraylist_src_code.add("zu");
 
         arraylist_src_languages.add("Afrikaans");
         arraylist_src_languages.add("Albanian");
@@ -367,141 +389,141 @@ public class MainActivity extends AppCompatActivity {
         arraylist_src_languages.add("Zulu");
 
         for (int i = 0; i < arraylist_src_languages.size(); i++) {
-            map_src_country.put(arraylist_src_languages.get(i), arraylist_src.get(i));
+            map_src_country.put(arraylist_src_languages.get(i), arraylist_src_code.get(i));
         }
 
-        arraylist_dst.add("af");
-        arraylist_dst.add("sq");
-        arraylist_dst.add("am");
-        arraylist_dst.add("ar");
-        arraylist_dst.add("hy");
-        arraylist_dst.add("as");
-        arraylist_dst.add("ay");
-        arraylist_dst.add("az");
-        arraylist_dst.add("bm");
-        arraylist_dst.add("eu");
-        arraylist_dst.add("be");
-        arraylist_dst.add("bn");
-        arraylist_dst.add("bho");
-        arraylist_dst.add("bs");
-        arraylist_dst.add("bg");
-        arraylist_dst.add("ca");
-        arraylist_dst.add("ceb");
-        arraylist_dst.add("ny");
-        arraylist_dst.add("zh-CN");
-        arraylist_dst.add("zh-TW");
-        arraylist_dst.add("co");
-        arraylist_dst.add("hr");
-        arraylist_dst.add("cs");
-        arraylist_dst.add("da");
-        arraylist_dst.add("dv");
-        arraylist_dst.add("doi");
-        arraylist_dst.add("nl");
-        arraylist_dst.add("en");
-        arraylist_dst.add("eo");
-        arraylist_dst.add("et");
-        arraylist_dst.add("ee");
-        arraylist_dst.add("fil");
-        arraylist_dst.add("fi");
-        arraylist_dst.add("fr");
-        arraylist_dst.add("fy");
-        arraylist_dst.add("gl");
-        arraylist_dst.add("ka");
-        arraylist_dst.add("de");
-        arraylist_dst.add("el");
-        arraylist_dst.add("gn");
-        arraylist_dst.add("gu");
-        arraylist_dst.add("ht");
-        arraylist_dst.add("ha");
-        arraylist_dst.add("haw");
-        arraylist_dst.add("he");
-        arraylist_dst.add("hi");
-        arraylist_dst.add("hmn");
-        arraylist_dst.add("hu");
-        arraylist_dst.add("is");
-        arraylist_dst.add("ig");
-        arraylist_dst.add("ilo");
-        arraylist_dst.add("id");
-        arraylist_dst.add("ga");
-        arraylist_dst.add("it");
-        arraylist_dst.add("ja");
-        arraylist_dst.add("jv");
-        arraylist_dst.add("kn");
-        arraylist_dst.add("kk");
-        arraylist_dst.add("km");
-        arraylist_dst.add("rw");
-        arraylist_dst.add("gom");
-        arraylist_dst.add("ko");
-        arraylist_dst.add("kri");
-        arraylist_dst.add("kmr");
-        arraylist_dst.add("ckb");
-        arraylist_dst.add("ky");
-        arraylist_dst.add("lo");
-        arraylist_dst.add("la");
-        arraylist_dst.add("lv");
-        arraylist_dst.add("ln");
-        arraylist_dst.add("lt");
-        arraylist_dst.add("lg");
-        arraylist_dst.add("lb");
-        arraylist_dst.add("mk");
-        arraylist_dst.add("mg");
-        arraylist_dst.add("ms");
-        arraylist_dst.add("ml");
-        arraylist_dst.add("mt");
-        arraylist_dst.add("mi");
-        arraylist_dst.add("mr");
-        arraylist_dst.add("mni-Mtei");
-        arraylist_dst.add("lus");
-        arraylist_dst.add("mn");
-        arraylist_dst.add("my");
-        arraylist_dst.add("ne");
-        arraylist_dst.add("no");
-        arraylist_dst.add("or");
-        arraylist_dst.add("om");
-        arraylist_dst.add("ps");
-        arraylist_dst.add("fa");
-        arraylist_dst.add("pl");
-        arraylist_dst.add("pt");
-        arraylist_dst.add("pa");
-        arraylist_dst.add("qu");
-        arraylist_dst.add("ro");
-        arraylist_dst.add("ru");
-        arraylist_dst.add("sm");
-        arraylist_dst.add("sa");
-        arraylist_dst.add("gd");
-        arraylist_dst.add("nso");
-        arraylist_dst.add("sr");
-        arraylist_dst.add("st");
-        arraylist_dst.add("sn");
-        arraylist_dst.add("sd");
-        arraylist_dst.add("si");
-        arraylist_dst.add("sk");
-        arraylist_dst.add("sl");
-        arraylist_dst.add("so");
-        arraylist_dst.add("es");
-        arraylist_dst.add("su");
-        arraylist_dst.add("sw");
-        arraylist_dst.add("sv");
-        arraylist_dst.add("tg");
-        arraylist_dst.add("ta");
-        arraylist_dst.add("tt");
-        arraylist_dst.add("te");
-        arraylist_dst.add("th");
-        arraylist_dst.add("ti");
-        arraylist_dst.add("ts");
-        arraylist_dst.add("tr");
-        arraylist_dst.add("tk");
-        arraylist_dst.add("tw");
-        arraylist_dst.add("uk");
-        arraylist_dst.add("ur");
-        arraylist_dst.add("ug");
-        arraylist_dst.add("uz");
-        arraylist_dst.add("vi");
-        arraylist_dst.add("cy");
-        arraylist_dst.add("xh");
-        arraylist_dst.add("yi");
-        arraylist_dst.add("yo");
-        arraylist_dst.add("zu");
+        arraylist_dst_code.add("af");
+        arraylist_dst_code.add("sq");
+        arraylist_dst_code.add("am");
+        arraylist_dst_code.add("ar");
+        arraylist_dst_code.add("hy");
+        arraylist_dst_code.add("as");
+        arraylist_dst_code.add("ay");
+        arraylist_dst_code.add("az");
+        arraylist_dst_code.add("bm");
+        arraylist_dst_code.add("eu");
+        arraylist_dst_code.add("be");
+        arraylist_dst_code.add("bn");
+        arraylist_dst_code.add("bho");
+        arraylist_dst_code.add("bs");
+        arraylist_dst_code.add("bg");
+        arraylist_dst_code.add("ca");
+        arraylist_dst_code.add("ceb");
+        arraylist_dst_code.add("ny");
+        arraylist_dst_code.add("zh-CN");
+        arraylist_dst_code.add("zh-TW");
+        arraylist_dst_code.add("co");
+        arraylist_dst_code.add("hr");
+        arraylist_dst_code.add("cs");
+        arraylist_dst_code.add("da");
+        arraylist_dst_code.add("dv");
+        arraylist_dst_code.add("doi");
+        arraylist_dst_code.add("nl");
+        arraylist_dst_code.add("en");
+        arraylist_dst_code.add("eo");
+        arraylist_dst_code.add("et");
+        arraylist_dst_code.add("ee");
+        arraylist_dst_code.add("fil");
+        arraylist_dst_code.add("fi");
+        arraylist_dst_code.add("fr");
+        arraylist_dst_code.add("fy");
+        arraylist_dst_code.add("gl");
+        arraylist_dst_code.add("ka");
+        arraylist_dst_code.add("de");
+        arraylist_dst_code.add("el");
+        arraylist_dst_code.add("gn");
+        arraylist_dst_code.add("gu");
+        arraylist_dst_code.add("ht");
+        arraylist_dst_code.add("ha");
+        arraylist_dst_code.add("haw");
+        arraylist_dst_code.add("he");
+        arraylist_dst_code.add("hi");
+        arraylist_dst_code.add("hmn");
+        arraylist_dst_code.add("hu");
+        arraylist_dst_code.add("is");
+        arraylist_dst_code.add("ig");
+        arraylist_dst_code.add("ilo");
+        arraylist_dst_code.add("id");
+        arraylist_dst_code.add("ga");
+        arraylist_dst_code.add("it");
+        arraylist_dst_code.add("ja");
+        arraylist_dst_code.add("jv");
+        arraylist_dst_code.add("kn");
+        arraylist_dst_code.add("kk");
+        arraylist_dst_code.add("km");
+        arraylist_dst_code.add("rw");
+        arraylist_dst_code.add("gom");
+        arraylist_dst_code.add("ko");
+        arraylist_dst_code.add("kri");
+        arraylist_dst_code.add("kmr");
+        arraylist_dst_code.add("ckb");
+        arraylist_dst_code.add("ky");
+        arraylist_dst_code.add("lo");
+        arraylist_dst_code.add("la");
+        arraylist_dst_code.add("lv");
+        arraylist_dst_code.add("ln");
+        arraylist_dst_code.add("lt");
+        arraylist_dst_code.add("lg");
+        arraylist_dst_code.add("lb");
+        arraylist_dst_code.add("mk");
+        arraylist_dst_code.add("mg");
+        arraylist_dst_code.add("ms");
+        arraylist_dst_code.add("ml");
+        arraylist_dst_code.add("mt");
+        arraylist_dst_code.add("mi");
+        arraylist_dst_code.add("mr");
+        arraylist_dst_code.add("mni-Mtei");
+        arraylist_dst_code.add("lus");
+        arraylist_dst_code.add("mn");
+        arraylist_dst_code.add("my");
+        arraylist_dst_code.add("ne");
+        arraylist_dst_code.add("no");
+        arraylist_dst_code.add("or");
+        arraylist_dst_code.add("om");
+        arraylist_dst_code.add("ps");
+        arraylist_dst_code.add("fa");
+        arraylist_dst_code.add("pl");
+        arraylist_dst_code.add("pt");
+        arraylist_dst_code.add("pa");
+        arraylist_dst_code.add("qu");
+        arraylist_dst_code.add("ro");
+        arraylist_dst_code.add("ru");
+        arraylist_dst_code.add("sm");
+        arraylist_dst_code.add("sa");
+        arraylist_dst_code.add("gd");
+        arraylist_dst_code.add("nso");
+        arraylist_dst_code.add("sr");
+        arraylist_dst_code.add("st");
+        arraylist_dst_code.add("sn");
+        arraylist_dst_code.add("sd");
+        arraylist_dst_code.add("si");
+        arraylist_dst_code.add("sk");
+        arraylist_dst_code.add("sl");
+        arraylist_dst_code.add("so");
+        arraylist_dst_code.add("es");
+        arraylist_dst_code.add("su");
+        arraylist_dst_code.add("sw");
+        arraylist_dst_code.add("sv");
+        arraylist_dst_code.add("tg");
+        arraylist_dst_code.add("ta");
+        arraylist_dst_code.add("tt");
+        arraylist_dst_code.add("te");
+        arraylist_dst_code.add("th");
+        arraylist_dst_code.add("ti");
+        arraylist_dst_code.add("ts");
+        arraylist_dst_code.add("tr");
+        arraylist_dst_code.add("tk");
+        arraylist_dst_code.add("tw");
+        arraylist_dst_code.add("uk");
+        arraylist_dst_code.add("ur");
+        arraylist_dst_code.add("ug");
+        arraylist_dst_code.add("uz");
+        arraylist_dst_code.add("vi");
+        arraylist_dst_code.add("cy");
+        arraylist_dst_code.add("xh");
+        arraylist_dst_code.add("yi");
+        arraylist_dst_code.add("yo");
+        arraylist_dst_code.add("zu");
 
         arraylist_dst_languages.add("Afrikaans");
         arraylist_dst_languages.add("Albanian");
@@ -637,21 +659,43 @@ public class MainActivity extends AppCompatActivity {
         arraylist_dst_languages.add("Zulu");
 
         for (int i = 0; i < arraylist_dst_languages.size(); i++) {
-            map_dst_country.put(arraylist_dst_languages.get(i), arraylist_dst.get(i));
+            map_dst_country.put(arraylist_dst_languages.get(i), arraylist_dst_code.get(i));
         }
 
+        arraylist_subtitle_format.add("srt");
+        arraylist_subtitle_format.add("vtt");
+        arraylist_subtitle_format.add("json");
+        arraylist_subtitle_format.add("raw");
+
         setContentView(R.layout.activity_main);
+
+        checkbox_debug_mode = findViewById(R.id.checkbox_debug_mode);
         spinner_src_languages = findViewById(R.id.spinner_src_languages);
         setup_src_spinner(arraylist_src_languages);
+        textview_src_code = findViewById(R.id.textview_src_code);
+
+        checkbox_create_translation = findViewById(R.id.checkbox_create_translation);
+
+        textview_text2 = findViewById(R.id.textview_text2);
         spinner_dst_languages = findViewById(R.id.spinner_dst_languages);
         setup_dst_spinner(arraylist_dst_languages);
+        textview_dst_code = findViewById(R.id.textview_dst_code);
+
+        spinner_subtitle_format = findViewById(R.id.spinner_subtitle_format);
+        setup_subtitle_format(arraylist_subtitle_format);
+        textview_subtitle_format = findViewById(R.id.textview_subtitle_format);
+
         textview_fileURI = findViewById(R.id.textview_fileURI);
         textview_filePath = findViewById(R.id.textview_filePath);
         textview_fileDisplayName = findViewById(R.id.textview_fileDisplayName);
+
         button_browse = findViewById(R.id.button_browse);
         button_start = findViewById(R.id.button_start);
         textview_isTranscribing = findViewById(R.id.textview_isTranscribing);
         textview_debug = findViewById(R.id.textview_debug);
+
+        textview_debug.setSelected(true);
+
         spinner_src_languages.setFocusable(true);
         spinner_src_languages.requestFocus();
 
@@ -672,37 +716,128 @@ public class MainActivity extends AppCompatActivity {
         String t1 = "isTranscribing = " + isTranscribing;
         textview_isTranscribing.setText(t1);
 
+        checkbox_debug_mode.setOnClickListener(view -> {
+            if(((CompoundButton) view).isChecked()){
+                textview_src_code.setVisibility(View.VISIBLE);
+                textview_dst_code.setVisibility(View.VISIBLE);
+                textview_subtitle_format.setVisibility(View.VISIBLE);
+                textview_fileURI.setVisibility(View.VISIBLE);
+                textview_fileDisplayName.setVisibility(View.VISIBLE);
+                textview_isTranscribing.setVisibility(View.VISIBLE);
+            }
+            else {
+                textview_src_code.setVisibility(View.GONE);
+                textview_dst_code.setVisibility(View.GONE);
+                textview_subtitle_format.setVisibility(View.GONE);
+                textview_fileURI.setVisibility(View.GONE);
+                textview_fileDisplayName.setVisibility(View.GONE);
+                textview_isTranscribing.setVisibility(View.GONE);
+            }
+        });
+
         spinner_src_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
-                src_country = spinner_src_languages.getSelectedItem().toString();
-                dst_country = spinner_dst_languages.getSelectedItem().toString();
-                src = map_src_country.get(src_country);
-                dst = map_dst_country.get(dst_country);
+                src_language = spinner_src_languages.getSelectedItem().toString();
+                //dst_language = spinner_dst_languages.getSelectedItem().toString();
+                src_code = map_src_country.get(src_language);
+                //dst_code = map_dst_country.get(dst_language);
+                runOnUiThread(() -> {
+                    String lsrc = "src_code = " + src_code;
+                    textview_src_code.setText(lsrc);
+                });
             }
-
             @Override
             public void onNothingSelected(AdapterView<?> adapterView) {
-                src_country = spinner_src_languages.getSelectedItem().toString();
-                dst_country = spinner_dst_languages.getSelectedItem().toString();
-                src = map_src_country.get(src_country);
-                dst = map_dst_country.get(dst_country);
+                src_language = spinner_src_languages.getSelectedItem().toString();
+                //dst_language = spinner_dst_languages.getSelectedItem().toString();
+                src_code = map_src_country.get(src_language);
+                //dst_code = map_dst_country.get(dst_language);
+                runOnUiThread(() -> {
+                    String lsrc = "src_code = " + src_code;
+                    textview_src_code.setText(lsrc);
+                });
             }
         });
 
         spinner_dst_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
-                src_country = spinner_src_languages.getSelectedItem().toString();
-                dst_country = spinner_dst_languages.getSelectedItem().toString();
-                src = map_src_country.get(src_country);
-                dst = map_dst_country.get(dst_country);
+                //src_language = spinner_src_languages.getSelectedItem().toString();
+                dst_language = spinner_dst_languages.getSelectedItem().toString();
+                //src_code = map_src_country.get(src_language);
+                dst_code = map_dst_country.get(dst_language);
+                runOnUiThread(() -> {
+                    String ldst = "dst_code = " + dst_code;
+                    textview_dst_code.setText(ldst);
+                });
             }
-
             @Override
             public void onNothingSelected(AdapterView<?> adapterView) {
-                src_country = spinner_src_languages.getSelectedItem().toString();
-                dst_country = spinner_dst_languages.getSelectedItem().toString();
-                src = map_src_country.get(src_country);
-                dst = map_dst_country.get(dst_country);
+                //src_language = spinner_src_languages.getSelectedItem().toString();
+                dst_language = spinner_dst_languages.getSelectedItem().toString();
+                //src_code = map_src_country.get(src_language);
+                dst_code = map_dst_country.get(dst_language);
+                runOnUiThread(() -> {
+                    String ldst = "dst_code = " + dst_code;
+                    textview_dst_code.setText(ldst);
+                });
+            }
+        });
+
+        checkbox_create_translation.setOnClickListener(view -> {
+            if(((CompoundButton) view).isChecked()){
+                textview_text2.setVisibility(View.VISIBLE);
+                spinner_dst_languages.setVisibility(View.VISIBLE);
+                textview_dst_code.setVisibility(View.VISIBLE);
+
+                spinner_dst_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                    @Override
+                    public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                        src_language = spinner_src_languages.getSelectedItem().toString();
+                        dst_language = spinner_dst_languages.getSelectedItem().toString();
+                        src_code = map_src_country.get(src_language);
+                        dst_code = map_dst_country.get(dst_language);
+                        runOnUiThread(() -> {
+                            String ldst = "dst_code = " + dst_code;
+                            textview_dst_code.setText(ldst);
+                        });
+                    }
+                    @Override
+                    public void onNothingSelected(AdapterView<?> adapterView) {
+                        src_language = spinner_src_languages.getSelectedItem().toString();
+                        dst_language = spinner_dst_languages.getSelectedItem().toString();
+                        src_code = map_src_country.get(src_language);
+                        dst_code = map_dst_country.get(dst_language);
+                        runOnUiThread(() -> {
+                            String ldst = "dst_code = " + dst_code;
+                            textview_dst_code.setText(ldst);
+                        });
+                    }
+                });
+
+            }
+            else {
+                textview_text2.setVisibility(View.GONE);
+                spinner_dst_languages.setVisibility(View.GONE);
+                textview_dst_code.setVisibility(View.GONE);
+
+                dst_language = src_language;
+                spinner_dst_languages.setSelection(arraylist_dst_languages.indexOf(dst_language));
+                dst_code = map_dst_country.get(dst_language);
+            }
+        });
+
+        spinner_subtitle_format.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                subtitleFormat = spinner_subtitle_format.getSelectedItem().toString();
+                String sf = "subtitleFormat = " + subtitleFormat;
+                textview_subtitle_format.setText(sf);
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+                subtitleFormat = spinner_subtitle_format.getSelectedItem().toString();
+                String sf = "subtitleFormat = " + subtitleFormat;
+                textview_subtitle_format.setText(sf);
             }
         });
 
@@ -719,8 +854,7 @@ public class MainActivity extends AppCompatActivity {
 
         button_start.setOnClickListener(view -> {
             textview_debug.setText("");
-            srtFile = null;
-            returnedSrtFile = null;
+            subtitleFilePath = null;
             if (runpy != null) {
                 runpy.interrupt();
                 runpy = null;
@@ -755,7 +889,7 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     String ts = "isTranscribing = " + isTranscribing;
                     textview_isTranscribing.setText(ts);
-                    String t = "Start";
+                    String t = "Start Transcribe";
                     button_start.setText(t);
                 });
                 File fc = new File(cancelFile);
@@ -768,16 +902,16 @@ public class MainActivity extends AppCompatActivity {
                     e.printStackTrace();
                 }
 
-                if (srtFile != null) {
-                    File sf = new File(srtFile).getAbsoluteFile();
+                if (subtitleFilePath != null) {
+                    File sf = new File(subtitleFilePath).getAbsoluteFile();
                     if(sf.exists() && sf.delete()){
-                        System.out.println(new File(srtFile).getAbsoluteFile() + " deleted");
+                        System.out.println(new File(subtitleFilePath).getAbsoluteFile() + " deleted");
                     }
                 }
-                if (returnedSrtFile != null) {
-                    File stf = new File(returnedSrtFile).getAbsoluteFile();
+                if (subtitleFilePath != null) {
+                    File stf = new File(subtitleFilePath).getAbsoluteFile();
                     if(stf.exists() && stf.delete()){
-                        System.out.println(new File(returnedSrtFile).getAbsoluteFile() + " deleted");
+                        System.out.println(new File(subtitleFilePath).getAbsoluteFile() + " deleted");
                     }
                 }
 
@@ -836,6 +970,14 @@ public class MainActivity extends AppCompatActivity {
         spinner_dst_languages.setSelection(supported_languages.indexOf("Indonesian"));
     }
 
+    public void setup_subtitle_format(ArrayList<String> supported_formats) {
+        Collections.sort(supported_formats);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, R.layout.spinner_textview_align, supported_formats);
+        adapter.setDropDownViewResource(R.layout.spinner_textview_align);
+        spinner_subtitle_format.setAdapter(adapter);
+        spinner_subtitle_format.setSelection(supported_formats.indexOf("srt"));
+    }
+
     ActivityResultLauncher<Intent> mStartForActivity = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             new ActivityResultCallback<ActivityResult>() {
@@ -848,6 +990,8 @@ public class MainActivity extends AppCompatActivity {
                         }
                         filePath = Uri2Path(getApplicationContext(), fileURI);
                         fileDisplayName = queryName(getApplicationContext(), fileURI);
+                        subtitleFilePathPath = substring(filePath,0,filePath.length()-4) + "." + subtitleFormat;
+                        subtitleTranslatedFilePath = substring(filePath,0,filePath.length()-4) + "_translated." + subtitleFormat;
                         runOnUiThread(() -> {
                             String t1 = "fileURI = " + fileURI;
                             textview_fileURI.setText(t1);
@@ -898,25 +1042,30 @@ public class MainActivity extends AppCompatActivity {
                             py = Python.getInstance();
                         }
                         // DUE TO SCOPED STORAGE RESTRICTION THERE ARE 2 OPTIONS TO PROCEED USERS PICKED FILE
-                        // OPTION 1 : CREATE A COPY OF USERS PICKED FILE TO ExternalFilesDir/folderName
+                        // OPTION 1 : CREATE A COPY OF USERS PICKED FILE TO ExternalFilesDir/subtitleFolderName
                         // THEN PROCEED IT IN PYTHON SCRIPT (copiedPath AS filePath IN PYTHON SCRIPT)
-                        // SO USERS CAN DIRECTLY WATCH THEIR MOVIES WITH SUBTITLES IN ExternalFilesDir/folderName
+                        // SO USERS CAN DIRECTLY WATCH THEIR MOVIES WITH SUBTITLES IN ExternalFilesDir/subtitleFolderName
                         // AFTER APP EXECUTION
 
-                        // OPTION 2 : DIRECTLY USING filePath TO REDUCE EXECUTION TIME
+                        // OPTION 2 : DIRECTLY USE filePath TO REDUCE EXECUTION TIME
 
-                        // ALL SRT FILES WILL BE CREATED AT ExternalFilesDir/folderName
-                        // SO USERS SHOULD MOVE SRT FILES THEMSELF TO THEIR DESIRED FOLDER
+                        // ALL SUBTITLE FILES WILL BE CREATED AT externalFilesDir/subtitleFolderName
+                        // SO USERS SHOULD MOVE SUBTITLE FILES THEMSELF TO THEIR DESIRED FOLDER
 
-                        // folderName AND SRT FILES NAME WILL BE CREATED BASED ON fileDisplayName
+                        // BUT externalFilesDir/subtitleFolderName IS NOT A SAFE FOLDER TO STORE SUBTITLE FILE
+                        // BECAUSE IF USER UNINSTALL APP, ALL SUBTITLE FILES WILL BE GONE TOO
+                        // SO WE SHOULD COPY THEM TO A SAFE FOLDER
+                        // IN THIS CASE WE CAN SAVE THEM TO Environment.getExternalStorageDirectory().DIRECTORY_DOCUMENTS
+
+                        // subtitleFolderName AND SUBTITLE FILES NAME WILL BE CREATED BASED ON fileDisplayName
 
                         // WE SHOULD USE time.sleep(seconds) WHEN CALL dinamic_proxy FUNCTIONS
-                        // IN PYTHON SCRIPT TO AVOID CRASHED
+                        // IN PYTHON SCRIPT TO AVOID CRASH
 
-                        // USING OPTION 1
-                        /*String folderName = substring(fileDisplayName, 0, fileDisplayName.length() - 4);
+                        // USING OPTION 1 : CREATE A COPY
+                        /*subtitleFolderName = substring(fileDisplayName, 0, fileDisplayName.length() - 4);
                         String prefix = "Creating a copy of " + fileDisplayName + " : ";
-                        String copyPath = copyFileToExternalFilesDir(fileURI, folderName, prefix);
+                        String copyPath = copyFileToExternalFilesDir(fileURI, subtitleFolderName, prefix);
                         if (copyPath != null) {
                             copiedPath = copyPath;
                         }
@@ -926,7 +1075,7 @@ public class MainActivity extends AppCompatActivity {
                             transcribe();
                         }*/
 
-                        // USING OPTION 2
+                        // USING OPTION 2 : : DIRECTLY USING filePath
                         if (filePath == null) {
                             runpy.interrupt();
                             runpy = null;
@@ -937,53 +1086,57 @@ public class MainActivity extends AppCompatActivity {
                         // ALTERNATIVE 1 : RUN A SINGLE FUNCTION transcribe() IN autosrt.py
                         // ALTERNATIVE 2 : RUN SPLIT FUNCTIONS OF transcibe() IN autosrt.py
 
-                        // USING ALTERNATIVE 1 OPTION 1 : copiedPath AS filePath IN PYTHON
-                        /*PyObject pyObjReturnedSrtFile = py.getModule("autosrt").callAttr(
+                        // USING ALTERNATIVE 1 OPTION 1 :
+                        // RUN A SINGLE FUNCTION transcribe() and USING copiedPath
+                        /*pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                 "transcribe",
-                                src, dst, copiedPath, fileDisplayName, MainActivity.this, textview_debug);
-                        if (pyObjReturnedSrtFile != null) {
-                            returnedSrtFile = pyObjReturnedSrtFile.toString();
+                                src_code, dst_code, filePath, fileDisplayName, subtitleFormat, MainActivity.this, textview_debug);
+                        if (pyObjSubtitleFilePath != null) {
+                            subtitleFilePath = pyObjSubtitleFilePath.toString();
                         }*/
 
-                        // USING ALTERNATIVE 1 OPTION 2 : DIRECTLY USING filePath
-                        PyObject pyObjReturnedSrtFile = py.getModule("autosrt").callAttr(
+                        // USING ALTERNATIVE 1 OPTION 2 : 
+                        // RUN A SINGLE FUNCTION transcribe() and DIRECTLY USE filePath
+                        pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                 "transcribe",
-                                src, dst, filePath, fileDisplayName, MainActivity.this, textview_debug);
-                        if (pyObjReturnedSrtFile != null) {
-                            returnedSrtFile = pyObjReturnedSrtFile.toString();
+                                src_code, dst_code, filePath, fileDisplayName, subtitleFormat, MainActivity.this, textview_debug);
+                        if (pyObjSubtitleFilePath != null) {
+                            subtitleFilePath = pyObjSubtitleFilePath.toString();
+                            // ALL FILES IN externalFilesDir() WILL BE DELETED IF USER UNINSTALL APP
+                            // SO WE NEED TO COPY IT TO SAVE FOLDER LIKE Environment.getExternalStorageDirectory().DIRECTORY_DOCUMENTS
+                            saveSubtitleFileToDocumentsDir();
                         }
 
-                        // USING ALTERNATIVE 2 OPTION 1 : USING copiedPath AS filePath
+                        // USING ALTERNATIVE 2 OPTION 1 :
+                        // RUN SPLIT FUNCTIONS OF transcibe() and USING copiedPath AS filePath
                         /*if (!canceled && fileURI != null && copiedPath != null) {
-                            try (PyObject pyObjTempName = py.getModule("autosrt").callAttr(
+                            try (pyObjWavTempName = py.getModule("autosrt").callAttr(
                                     "convert_to_wav",
                                     copiedPath, 1, 16000, MainActivity.this, textview_debug)) {
-                                if (pyObjTempName != null) tempName = pyObjTempName.toString();
+                                if (pyObjWavTempName != null) wavTempName = pyObjWavTempName.toString();
                             }
                         }
-                        if (!canceled && fileURI != null && copiedPath != null) {
-                            try (PyObject pyObjTempName = py.getModule("autosrt").callAttr(
-                                    "convert_to_wav",
-                                    filePath, 1, 16000, MainActivity.this, textview_debug)) {
-                                if (pyObjTempName != null) tempName = pyObjTempName.toString();
-                            }
-                        }
-                        if (!canceled && fileURI != null && tempName != null) {
-                            try (PyObject pyObjRegions = py.getModule("autosrt").callAttr(
+                        if (!canceled && fileURI != null && wavTempName != null) {
+                            try (pyObjRegions = py.getModule("autosrt").callAttr(
                                     "find_audio_regions",
-                                    tempName, 4096, 0.3, 8, MainActivity.this, textview_debug)) {
+                                    wavTempName, 4096, 0.3, 8, MainActivity.this, textview_debug)) {
                                 if (pyObjRegions != null) regions = pyObjRegions.toString();
                             }
                         }
-                        if (!canceled && fileURI != null && copiedPath != null && tempName != null) {
-                            try (PyObject pyObjSrtFile = py.getModule("autosrt").callAttr(
+                        if (!canceled && fileURI != null && copiedPath != null && wavTempName != null) {
+                            try (PyObject pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                     "perform_speech_recognition",
-                                    copiedPath, fileDisplayName, tempName, src, MainActivity.this, textview_debug)) {
-                                if (pyObjSrtFile != null) srtFile = pyObjSrtFile.toString();
+                                    filePath, fileDisplayName, wavTempName, subtitleFormat, src_code, MainActivity.this, textview_debug)) {
+                                if (pyObjSubtitleFilePath != null) {
+                                    subtitleFilePath = pyObjSubtitleFilePath.toString();
+                                    if (Objects.equals(src_code, dst_code)) {
+                                        saveSubtitleFileToDocumentsDir();
+                                    }
+                                }
                             }
                         }
 
-                        if (!canceled && fileURI != null && srtFile != null && Objects.equals(src, dst)) {
+                        if (!canceled && fileURI != null && subtitleFilePath != null && Objects.equals(src_code, dst_code)) {
                             if (runpy != null) {
                                 runpy.interrupt();
                                 runpy = null;
@@ -993,51 +1146,59 @@ public class MainActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 String ts = "isTranscribing = " + isTranscribing;
                                 textview_isTranscribing.setText(ts);
-                                String t1 = "Start";
+                                String t1 = "Start Transcribe";
                                 button_start.setText(t1);
                             });
                         }
 
-                        if (!canceled && fileURI != null && srtFile != null && !Objects.equals(src, dst)) {
-                            try (PyObject pyObjReturnedSrtFile = py.getModule("autosrt").callAttr(
+                        if (!canceled && fileURI != null && subtitleFilePath != null && !Objects.equals(src_code, dst_code)) {
+                            try (pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                     "perform_translation",
-                                    srtFile, src, dst, MainActivity.this, textview_debug)) {
-                                if (pyObjReturnedSrtFile != null)
-                                    returnedSrtFile = pyObjReturnedSrtFile.toString();
+                                    subtitleFilePath, subtitleFormat, src_code, dst_code, MainActivity.this, textview_debug)) {
+                                if (pyObjSubtitleFilePath != null) {
+                                    subtitleFilePath = pyObjSubtitleFilePath.toString();
+                                    saveSubtitleFileToDocumentsDir();
+                                }
                             }
                         }*/
                         // END OF ALTERNATIVE 2 OPTION 1
 
 
-                        // USING ALTERNATIVE 2 OPTION 2 : DIRECTLY USING filePath
+                        // USING ALTERNATIVE 2 OPTION 2 :
+                        // RUN SPLIT FUNCTIONS OF transcibe() and DIRECTLY USING filePath
                         /*if (filePath == null) {
                             runpy.interrupt();
                             runpy = null;
                             transcribe();
                         }
                         if (!canceled && fileURI != null && filePath != null) {
-                            try (PyObject pyObjTempName = py.getModule("autosrt").callAttr(
+                            try (pyObjWavTempName = py.getModule("autosrt").callAttr(
                                     "convert_to_wav",
                                     filePath, 1, 16000, MainActivity.this, textview_debug)) {
-                                if (pyObjTempName != null) tempName = pyObjTempName.toString();
+                                if (pyObjWavTempName != null) wavTempName = pyObjWavTempName.toString();
                             }
                         }
-                        if (!canceled && fileURI != null && tempName != null) {
-                            try (PyObject pyObjRegions = py.getModule("autosrt").callAttr(
-                                     "find_audio_regions",
-                                    tempName, 4096, 0.3, 8, MainActivity.this, textview_debug)) {
+                        if (!canceled && fileURI != null && wavTempName != null) {
+                            try (pyObjRegions = py.getModule("autosrt").callAttr(
+                                    "find_audio_regions",
+                                    wavTempName, 4096, 0.3, 8, MainActivity.this, textview_debug)) {
                                 if (pyObjRegions != null) regions = pyObjRegions.toString();
                             }
                         }
-                        if (!canceled && fileURI != null && filePath != null && tempName != null) {
-                            try (PyObject pyObjSrtFile = py.getModule("autosrt").callAttr(
+                        if (!canceled && fileURI != null && filePath != null && wavTempName != null) {
+                            try (pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                     "perform_speech_recognition",
-                                    filePath, fileDisplayName, tempName, src, MainActivity.this, textview_debug)) {
-                                if (pyObjSrtFile != null) srtFile = pyObjSrtFile.toString();
+                                    filePath, fileDisplayName, wavTempName, subtitleFormat, src_code, MainActivity.this, textview_debug)) {
+                                if (pyObjSubtitleFilePath != null) {
+                                    subtitleFilePath = pyObjSubtitleFilePath.toString();
+                                    if (Objects.equals(src_code, dst_code)) {
+                                        saveSubtitleFileToDocumentsDir();
+                                    }
+                                }
                             }
                         }
 
-                        if (!canceled && fileURI != null && srtFile != null && Objects.equals(src, dst)) {
+                        if (!canceled && fileURI != null && subtitleFilePath != null && Objects.equals(src_code, dst_code)) {
                             if (runpy != null) {
                                 runpy.interrupt();
                                 runpy = null;
@@ -1047,24 +1208,26 @@ public class MainActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 String ts = "isTranscribing = " + isTranscribing;
                                 textview_isTranscribing.setText(ts);
-                                String t1 = "Start";
+                                String t1 = "Start Transcribe";
                                 button_start.setText(t1);
                             });
                         }
 
-                        if (!canceled && fileURI != null && srtFile != null && !Objects.equals(src, dst)) {
-                            try (PyObject pyObjReturnedSrtFile = py.getModule("autosrt").callAttr(
+                        if (!canceled && fileURI != null && subtitleFilePath != null && !Objects.equals(src_code, dst_code)) {
+                            try (pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                     "perform_translation",
-                                    srtFile, src, dst, MainActivity.this, textview_debug)) {
-                                if (pyObjReturnedSrtFile != null)
-                                    returnedSrtFile = pyObjReturnedSrtFile.toString();
+                                    subtitleFilePath, subtitleFormat, src_code, dst_code, MainActivity.this, textview_debug)) {
+                                if (pyObjSubtitleFilePath != null) {
+                                    subtitleFilePath = pyObjSubtitleFilePath.toString();
+                                    saveSubtitleFileToDocumentsDir();
+                                }
                             }
                         }*/
                         // END OF ALTERNATIVE 2 OPTION 2
 
 
                         // FINISHING
-                        if (!canceled && fileURI != null && returnedSrtFile != null) {
+                        if (!canceled && fileURI != null && subtitleFilePath != null) {
                             if (runpy != null) {
                                 runpy.interrupt();
                                 runpy = null;
@@ -1074,7 +1237,7 @@ public class MainActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 String ts = "isTranscribing = " + isTranscribing;
                                 textview_isTranscribing.setText(ts);
-                                String t1 = "Start";
+                                String t1 = "Start Transcribe";
                                 button_start.setText(t1);
                             });
                         }
@@ -1101,7 +1264,7 @@ public class MainActivity extends AppCompatActivity {
                 }
                 isTranscribing = false;
                 runOnUiThread(() -> {
-                    String t1 = "Start";
+                    String t1 = "Start Transcribe";
                     button_start.setText(t1);
                     String m = "You should browse a file first\n";
                     textview_debug.setText(m);
@@ -1126,11 +1289,11 @@ public class MainActivity extends AppCompatActivity {
         @SuppressLint("Recycle") Cursor returnCursor = getApplicationContext().getContentResolver().query(uri, new String[]{
                 OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE
         }, null, null, null);
-        /*
-         * Get the column indexes of the data in the Cursor,
-         *     * move to the first row in the Cursor, get the data,
-         *     * and display it.
-         * */
+        //*
+        //* Get the column indexes of the data in the Cursor,
+        //*     * move to the first row in the Cursor, get the data,
+        //*     * and display it.
+        //*
         if (canceled) {
             if (runpy != null) {
                 runpy.interrupt();
@@ -1162,15 +1325,15 @@ public class MainActivity extends AppCompatActivity {
                 int bufferSize = 1024;
                 final byte[] buffers = new byte[bufferSize];
 
-                /*if (counter == 0) {
-                    startTime = new java.util.Date(System.currentTimeMillis());
-                    str_startTime = new SimpleDateFormat("HH:mm:ss").format(startTime);
-                    try {
-                        startTime = tf.parse(str_startTime);
-                    } catch (ParseException e) {
-                        throw new RuntimeException(e);
-                    }
-                }*/
+                //if (counter == 0) {
+                //    startTime = new java.util.Date(System.currentTimeMillis());
+                //    str_startTime = new SimpleDateFormat("HH:mm:ss").format(startTime);
+                //    try {
+                //        startTime = tf.parse(str_startTime);
+                //    } catch (ParseException e) {
+                //        throw new RuntimeException(e);
+                //    }
+                //}
 
                 while ((read = inputStream.read(buffers)) != -1) {
                     if (canceled) {
@@ -1184,16 +1347,16 @@ public class MainActivity extends AppCompatActivity {
                         outputStream.write(buffers, 0, read);
                         //pBar(counter, length, prefix);
 
-                        /*nowTime = new java.util.Date(System.currentTimeMillis());
-                        str_nowTime = new SimpleDateFormat("HH:mm:ss").format(nowTime);
-                        try {
-                            nowTime = tf.parse(str_nowTime);
-                        } catch (ParseException e) {
-                            throw new RuntimeException(e);
-                        }
-                        long_elapsedTime = Objects.requireNonNull(nowTime).getTime() - Objects.requireNonNull(startTime).getTime();
-                        long_remainingTime = long_elapsedTime * (long) (length / counter);
-                        str_remainingTime = millisecondToDate(long_remainingTime);*/
+                        //nowTime = new java.util.Date(System.currentTimeMillis());
+                        //str_nowTime = new SimpleDateFormat("HH:mm:ss").format(nowTime);
+                        //try {
+                        //    nowTime = tf.parse(str_nowTime);
+                        //} catch (ParseException e) {
+                        //    throw new RuntimeException(e);
+                        //}
+                        //long_elapsedTime = Objects.requireNonNull(nowTime).getTime() - Objects.requireNonNull(startTime).getTime();
+                        //long_remainingTime = long_elapsedTime * (long) (length / counter);
+                        //str_remainingTime = millisecondToDate(long_remainingTime);
 
                         int bar_length = 10;
                         float percentage = round(100.0 * counter / (float) (length));
@@ -1219,9 +1382,9 @@ public class MainActivity extends AppCompatActivity {
         return Objects.requireNonNull(output).getPath();
     }
 
-    public static String millisecondToDate(long t) {
+    /*public static String millisecondToDate(long t) {
         long i = t;
-        i /= 1000;/*from   ww w .  j  a v  a  2  s .co  m*/
+        i /= 1000;  //from www.java2s.com
         long minute = i / 60;
         long hour = minute / 60;
         long second = i % 60;
@@ -1231,7 +1394,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             return String.format(Locale.getDefault(), "%02d:%02d:%02d", hour, minute, second);
         }
-    }
+    }*/
 
     public String Uri2Path(Context context, Uri uri) {
         if (uri == null) {
@@ -1295,7 +1458,7 @@ public class MainActivity extends AppCompatActivity {
     private String getPathFromExtSD(String[] pathData) {
         final String type = pathData[0];
         final String relativePath = File.separator + pathData[1];
-        String fullPath = "";
+        String fullPath;
 
         if ("primary".equalsIgnoreCase(type)) {
             System.out.println("PRIMARY");
@@ -1318,6 +1481,137 @@ public class MainActivity extends AppCompatActivity {
     private static boolean fileExists(String filePath) {
         File file = new File(filePath);
         return file.exists();
+    }
+
+    private void saveSubtitleFileToDocumentsDir() {
+        OutputStream outputStream;
+        String subtitleFolder = StringUtils.substring(fileDisplayName,0,fileDisplayName.length()-4);
+        String savedSubtitleFilePath = StringUtils.substring(fileDisplayName,0,fileDisplayName.length()-4) + "." + subtitleFormat;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, savedSubtitleFilePath); // file name savedSubtitleFilePath required to contain extension file mime
+            values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
+            Uri extVolumeUri = MediaStore.Files.getContentUri("external");
+            Uri fileUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);
+            try {
+                outputStream = getApplicationContext().getContentResolver().openOutputStream(fileUri);
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        else {
+            File root = new File(Environment.getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
+            if (!root.exists()) {
+                root.mkdirs();
+            }
+            File file = new File(root, savedSubtitleFilePath );
+            Log.d(TAG, "saveFile: file path - " + file.getAbsolutePath());
+            try {
+                outputStream = new FileOutputStream(file);
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        Uri uri = Uri.fromFile(new File(subtitleFilePath));
+        InputStream inputStream;
+        try {
+            inputStream = getApplicationContext().getContentResolver().openInputStream(uri);
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+        byte[] bytes = new byte[1024];
+        int length;
+        while (true) {
+            try {
+                if (!((length = inputStream.read(bytes)) > 0)) break;
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            try {
+                outputStream.write(bytes, 0, length);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        try {
+            outputStream.close();
+            inputStream.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        String savedTanslatedsubtitleFilePath = StringUtils.substring(fileDisplayName, 0, fileDisplayName.length() - 4) + "_translated." + subtitleFormat;
+        if (!Objects.equals(src_code, dst_code)) {
+            OutputStream outputStreamTranslated;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.MediaColumns.DISPLAY_NAME, savedTanslatedsubtitleFilePath); // file name avedTanslatedsubtitleFilePath required to contain extension file mime
+                values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+                values.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
+                Uri extVolumeUri = MediaStore.Files.getContentUri("external");
+                Uri fileUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);
+                try {
+                    outputStreamTranslated = getApplicationContext().getContentResolver().openOutputStream(fileUri);
+                } catch (FileNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
+            } else {
+                File root = new File(Environment.getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
+                if (!root.exists()) {
+                    root.mkdirs();
+                }
+                File file = new File(root, savedTanslatedsubtitleFilePath);
+                Log.d(TAG, "saveFile: file path - " + file.getAbsolutePath());
+                try {
+                    outputStreamTranslated = new FileOutputStream(file);
+                } catch (FileNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            String translatedsubtitleFilePath = StringUtils.substring(subtitleFilePath, 0, subtitleFilePath.length() - 4) + "_translated." + subtitleFormat;
+            Uri uriTranslated = Uri.fromFile(new File(translatedsubtitleFilePath));
+            InputStream inputStreamTranslated;
+            try {
+                inputStreamTranslated = getApplicationContext().getContentResolver().openInputStream(uriTranslated);
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+            byte[] bytesTranslated = new byte[1024];
+            int lengthTranslated;
+            while (true) {
+                try {
+                    if (!((lengthTranslated = inputStreamTranslated.read(bytesTranslated)) > 0))
+                        break;
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                try {
+                    outputStreamTranslated.write(bytesTranslated, 0, lengthTranslated);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            try {
+                outputStreamTranslated.close();
+                inputStreamTranslated.close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        runOnUiThread(() -> {
+            textview_debug.setText("");
+            String savedFolderPath = getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder;
+            String sf = "Subtitle file saved at : \n" + savedFolderPath + File.separator + savedSubtitleFilePath + "\n\n";
+            textview_debug.append(sf);
+            if (!Objects.equals(src_code, dst_code)) {
+                String tsf = "Translated subtitle file saved at : \n" + savedFolderPath + File.separator + savedTanslatedsubtitleFilePath + "\n\n";
+                textview_debug.append(tsf);
+            }
+            String d = "Done.";
+            textview_debug.append(d);
+        });
     }
 
     /*@SuppressLint("SetTextI18n")

@@ -15,8 +15,7 @@ try:
 except ImportError:
     JSONDecodeError = ValueError
 
-#from progressbar import ProgressBar, Percentage, Bar, ETA
-from pygoogletranslation import Translator
+from googletrans import Translator
 import pysrt
 import six
 from com.arthenica.mobileffmpeg import FFmpeg
@@ -663,8 +662,7 @@ class TranscriptionTranslator(object):
             return
 '''
 
-
-def transcribe(src, dest, filePath, fileDisplayName, activity, textview_debug):
+def transcribe(src, dest, filename, file_display_name, subtitle_format, activity, textview_debug):
     global transcribe_pid, forked_pid, pool, wav_filename, subtitle_file, translated_subtitle_file, subtitle_folder_name, converter, recognizer, extracted_regions, transcriptions
 
     watchdog = threading.Thread(target=watch_cancel_file, args=(activity, textview_debug))
@@ -687,7 +685,7 @@ def transcribe(src, dest, filePath, fileDisplayName, activity, textview_debug):
                 textview_debug.append("Converting to a temporary WAV file...\n\n")
         activity.runOnUiThread(R())
         time.sleep(1)
-        wav_filename, audio_rate = extract_audio(filePath)
+        wav_filename, audio_rate = extract_audio(filename)
         print("Converted WAV file is : {}".format(wav_filename))
         if wav_filename:
             class R(dynamic_proxy(Runnable)):
@@ -773,17 +771,17 @@ def transcribe(src, dest, filePath, fileDisplayName, activity, textview_debug):
             pBar(len(regions), len(regions), "Creating transcriptions: ", activity, textview_debug)
 
             timed_subtitles = [(r, t) for r, t in zip(regions, transcriptions) if t]
-            formatter = FORMATTERS.get("srt")
+            formatter = FORMATTERS.get(subtitle_format)
             formatted_subtitles = formatter(timed_subtitles)
 
-            #base, ext = os.path.splitext(filePath)
-            #subtitle_file = "{base}.{format}".format(base=base, format="srt")
+            #base, ext = os.path.splitext(filename)
+            #subtitle_file = "{base}.{format}".format(base=base, format=subtitle_format)
 
             files_dir = str(context.getExternalFilesDir(None))
-            subtitle_folder_name = join(files_dir, fileDisplayName[:-4])
+            subtitle_folder_name = join(files_dir, file_display_name[:-4])
             if not os.path.isdir(subtitle_folder_name):
                 os.mkdir(subtitle_folder_name)
-            subtitle_file = join(subtitle_folder_name, fileDisplayName[:-4] + ".srt")
+            subtitle_file = join(subtitle_folder_name, file_display_name[:-4] + "." + subtitle_format)
 
             with open(subtitle_file, 'wb') as f:
                 f.write(formatted_subtitles.encode("utf-8"))
@@ -796,7 +794,7 @@ def transcribe(src, dest, filePath, fileDisplayName, activity, textview_debug):
             if (not is_same_language(src, dest)) and (os.path.isfile(subtitle_file)) and (not os.path.isfile(cancel_file)):
                 print("Translating transcriptions")
                 entries = entries_generator(subtitle_file)
-                translated_subtitle_file = subtitle_file[ :-4] + '_translated.srt'
+                translated_subtitle_file = subtitle_file[ :-4] + '_translated.' + subtitle_format
                 total_entries = CountEntries(subtitle_file)
                 print('Total Entries = {}'.format(total_entries))
 
@@ -848,7 +846,7 @@ def transcribe(src, dest, filePath, fileDisplayName, activity, textview_debug):
                 pBar(len(transcriptions), len(transcriptions), "Translating from %s to %s: " %(src, dest), activity, textview_debug)
 
                 timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcriptions) if t]
-                formatter = FORMATTERS.get("srt")
+                formatter = FORMATTERS.get(subtitle_format)
                 formatted_translated_subtitles = formatter(timed_translated_subtitles)
 
                 with open(translated_subtitle_file, 'wb') as f:
@@ -856,31 +854,31 @@ def transcribe(src, dest, filePath, fileDisplayName, activity, textview_debug):
                 with open(translated_subtitle_file, 'a') as f:
                     f.write("\n")
 
-                print('Done.')
-                print("Subtitles file created at      : {}".format(subtitle_file))
-                print('Translated subtitles file created at    : {}' .format(translated_subtitle_file))
+                #print('Done.')
+                print('Temporary subtitles file created at            : {}'.format(subtitle_file))
+                print('Temporary translated subtitles file created at : {}'.format(translated_subtitle_file))
                 class R(dynamic_proxy(Runnable)):
                     def run(self):
                         time.sleep(1)
-                        textview_debug.append("\n\nSubtitles file created at :\n")
+                        textview_debug.append("\n\nTemporary subtitles file created at :\n")
                         textview_debug.append(subtitle_file + "\n\n")
-                        textview_debug.append("Translated subtitles file created at:\n")
+                        textview_debug.append("Temporary translated subtitles file created at:\n")
                         textview_debug.append(translated_subtitle_file + "\n\n")
-                        textview_debug.append("Done.")
                 activity.runOnUiThread(R())
-                return translated_subtitle_file
+                time.sleep(2)
+                #return translated_subtitle_file
 
             elif (is_same_language(src, dest)) and (os.path.isfile(subtitle_file)) and (not os.path.isfile(cancel_file)):
-                print('Done.')
-                print("Subtitles file created at      : {}".format(subtitle_file))
+                #print('Done.')
+                print("Temporary subtitles file created at      : {}".format(subtitle_file))
                 class R(dynamic_proxy(Runnable)):
                     def run(self):
                         time.sleep(1)
-                        textview_debug.append("\n\nSubtitles file created at :\n")
+                        textview_debug.append("\n\nTemporary subtitles file created at :\n")
                         textview_debug.append(subtitle_file + "\n\n")
-                        textview_debug.append("Done.")
                 activity.runOnUiThread(R())
-                return subtitle_file
+                time.sleep(2)
+                #return subtitle_file
 
         except KeyboardInterrupt:
             if os.path.isfile(cancel_file): os.remove(cancel_file)
@@ -922,8 +920,7 @@ def transcribe(src, dest, filePath, fileDisplayName, activity, textview_debug):
     pool.join()
     pool = None
     os.remove(wav_filename)
-
-
+    return subtitle_file
 
 '''
 def main(src, dest, content, uriDisplayName, textview_debug):
@@ -1169,7 +1166,7 @@ def find_audio_regions(filename, frame_width, min_region_size, max_region_size, 
     return regions
 
 
-def perform_speech_recognition(filePath, fileDisplayName, wav_filePath, src, activity, textview_debug):
+def perform_speech_recognition(filePath, file_display_name, wav_filePath, subtitle_format, src, activity, textview_debug):
 
     print("Performing speech recognition...")
     time.sleep(1)
@@ -1265,17 +1262,17 @@ def perform_speech_recognition(filePath, fileDisplayName, wav_filePath, src, act
             check_cancel_file(activity, textview_debug)
         
             timed_subtitles = [(r, t) for r, t in zip(regions, transcriptions) if t]
-            formatter = FORMATTERS.get("srt")
+            formatter = FORMATTERS.get(subtitle_format)
             formatted_subtitles = formatter(timed_subtitles)
 
             #base, ext = os.path.splitext(filePath)
-            #subtitle_file = "{base}.{format}".format(base=base, format="srt")
+            #subtitle_file = "{base}.{format}".format(base=base, format=subtitle_format)
 
             files_dir = str(context.getExternalFilesDir(None))
-            subtitle_folder_name = join(files_dir, fileDisplayName[:-4])
+            subtitle_folder_name = join(files_dir, file_display_name[:-4])
             if not os.path.isdir(subtitle_folder_name):
                 os.mkdir(subtitle_folder_name)
-            subtitle_file = join(subtitle_folder_name, fileDisplayName[:-4] + ".srt")
+            subtitle_file = join(subtitle_folder_name, file_display_name[:-4] + "." + subtitle_format)
 
             with open(subtitle_file, 'wb') as f:
                 f.write(formatted_subtitles.encode("utf-8"))
@@ -1329,8 +1326,8 @@ def perform_speech_recognition(filePath, fileDisplayName, wav_filePath, src, act
     class C(dynamic_proxy(Runnable)):
         def run(self):
             time.sleep(1)
-            textview_debug.append("\n\nSRT subtitle file created at : " + subtitle_file + "\n\n");
-            textview_debug.append("Done.")
+            textview_debug.append("\n\nTemporary subtitle file created at : " + subtitle_file + "\n\n");
+            #textview_debug.append("Done.")
     activity.runOnUiThread(C())
 
     if pool:
@@ -1341,7 +1338,7 @@ def perform_speech_recognition(filePath, fileDisplayName, wav_filePath, src, act
     return subtitle_file
 
 
-def perform_translation(subtitle_file, src, dest, activity, textview_debug):
+def perform_translation(subtitle_file, subtitle_format, src, dest, activity, textview_debug):
 
     print("Translating transcriptions...")
     class C(dynamic_proxy(Runnable)):
@@ -1395,7 +1392,7 @@ def perform_translation(subtitle_file, src, dest, activity, textview_debug):
         check_cancel_file(activity, textview_debug)
 
         if (not is_same_language(src, dest)) and (os.path.isfile(subtitle_file)) and (not os.path.isfile(cancel_file)):
-            translated_subtitle_file = subtitle_file[ :-4] + '_translated.srt'
+            translated_subtitle_file = subtitle_file[ :-4] + '_translated.' + subtitle_format
             print("subtitle_file = {}".format(subtitle_file))
             print("translated_subtitle_file = {}".format(translated_subtitle_file))
 
@@ -1407,7 +1404,7 @@ def perform_translation(subtitle_file, src, dest, activity, textview_debug):
             #widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
             #pbar = ProgressBar(widgets=widgets, maxval=total_entries).start()
 
-
+            '''
             e=0
             with open(translated_subtitle_file, 'w', encoding='utf-8') as f:
                 time.sleep(1)
@@ -1423,10 +1420,9 @@ def perform_translation(subtitle_file, src, dest, activity, textview_debug):
                 #pbar.finish()
                 pBar(total_entries, total_entries, "Translating from %s to %s: " %(src, dest), activity, textview_debug)
                 time.sleep(1)
-
+            '''
 
             '''
-            # 503 ERROR! FREE SERVICE SUCKS! CANNOT DO CONCURRENT TRANSLATION!
             subtitle_translator = SubtitleTranslator(src=src, dest=dest)
             translated_entries = []
             for i, translated_entry in enumerate(pool.imap(subtitle_translator, entries)):
@@ -1444,9 +1440,27 @@ def perform_translation(subtitle_file, src, dest, activity, textview_debug):
                         f.write('\n')
             '''
 
-            print('Done.')
-            print("Original subtitles file created at      : {}".format(subtitle_file))
-            print('Translated subtitles file created at    : {}' .format(translated_subtitle_file))
+            transcription_translator = TranscriptionTranslator(src=src, dest=dest)
+            translated_transcriptions = []
+            time.sleep(2)
+            for i, translated_transcription in enumerate(pool.imap(transcription_translator, transcriptions)):
+                translated_transcriptions.append(translated_transcription)
+                pBar(i, len(transcriptions), "Translating from %s to %s: " %(src, dest), activity, textview_debug)
+            time.sleep(1)
+            pBar(len(transcriptions), len(transcriptions), "Translating from %s to %s: " %(src, dest), activity, textview_debug)
+
+            timed_translated_subtitles = [(r, t) for r, t in zip(regions, translated_transcriptions) if t]
+            formatter = FORMATTERS.get(subtitle_format)
+            formatted_translated_subtitles = formatter(timed_translated_subtitles)
+
+            with open(translated_subtitle_file, 'wb') as f:
+                f.write(formatted_translated_subtitles.encode("utf-8"))
+            with open(translated_subtitle_file, 'a') as f:
+                f.write("\n")
+
+            #print('Done.')
+            print("Temporary subtitles file created at            : {}".format(subtitle_file))
+            print('Temporary translated subtitles file created at : {}' .format(translated_subtitle_file))
             #print('Total failure to translate entries      : {0}/{1}'.format(count_failure, count_entries))
             #failure_ratio = count_failure / count_entries
             #if failure_ratio > 0:
@@ -1491,12 +1505,13 @@ def perform_translation(subtitle_file, src, dest, activity, textview_debug):
 
     class R(dynamic_proxy(Runnable)):
         def run(self):
-            textview_debug.append("\n\nSubtitles file created at :\n")
+            textview_debug.append("\n\nTemporary subtitles file created at :\n")
             textview_debug.append(subtitle_file + "\n")
-            textview_debug.append("\nTranslated Subtitles file created at:\n")
+            textview_debug.append("\nTemporary translated Subtitles file created at:\n")
             textview_debug.append(translated_subtitle_file + "\n\n")
-            textview_debug.append("Done.\n")
+            #textview_debug.append("Done.\n")
     activity.runOnUiThread(R())
+    time.sleep(2)
 
     if pool:
         pool.close()
@@ -1512,7 +1527,7 @@ def perform_translation(subtitle_file, src, dest, activity, textview_debug):
     if os.path.isfile(region_start_file): os.remove(region_start_file)
     if os.path.isfile(elapsed_time_file): os.remove(elapsed_time_file)
 
-    return translated_subtitle_file
+    return subtitle_file
 
 
 '''
