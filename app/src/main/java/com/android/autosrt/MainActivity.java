@@ -9,6 +9,7 @@ import static java.lang.Math.round;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -103,7 +104,7 @@ public class MainActivity extends AppCompatActivity {
 
     public static boolean isTranscribing = false;
     public static boolean canceled = true;
-    public static Thread runpy;
+    public static Thread threadTranscriber;
     public static String cancelFile = null;
     public static String copiedPath = null;
     public static String wavTempName = null;
@@ -709,12 +710,43 @@ public class MainActivity extends AppCompatActivity {
 
         cancelFile = getApplicationContext().getExternalFilesDir(null) + File.separator + "cancel.txt";
         File f = new File(cancelFile);
-        if (f.exists()) {
-            f.delete();
+        if (f.exists() && f.delete()) {
+            Log.d(f.toString(), "deleted");
         }
 
         String t1 = "isTranscribing = " + isTranscribing;
         textview_isTranscribing.setText(t1);
+
+        if(checkbox_debug_mode.isChecked()){
+            textview_src_code.setVisibility(View.VISIBLE);
+            textview_dst_code.setVisibility(View.VISIBLE);
+            textview_subtitle_format.setVisibility(View.VISIBLE);
+            textview_fileURI.setVisibility(View.VISIBLE);
+            textview_fileDisplayName.setVisibility(View.VISIBLE);
+            textview_isTranscribing.setVisibility(View.VISIBLE);
+            if (filePath != null) {
+                String fp = "filePath = " + filePath;
+                textview_filePath.setText(fp);
+            }
+            else {
+                textview_filePath.setHint("filePath");
+            }
+        }
+        else {
+            textview_src_code.setVisibility(View.GONE);
+            textview_dst_code.setVisibility(View.GONE);
+            textview_subtitle_format.setVisibility(View.GONE);
+            textview_fileURI.setVisibility(View.GONE);
+            textview_fileDisplayName.setVisibility(View.GONE);
+            textview_isTranscribing.setVisibility(View.GONE);
+            if (filePath != null) {
+                String fp = "File path = " + filePath;
+                textview_filePath.setText(fp);
+            }
+            else {
+                textview_filePath.setHint("File path");
+            }
+        }
 
         checkbox_debug_mode.setOnClickListener(view -> {
             if(((CompoundButton) view).isChecked()){
@@ -724,6 +756,13 @@ public class MainActivity extends AppCompatActivity {
                 textview_fileURI.setVisibility(View.VISIBLE);
                 textview_fileDisplayName.setVisibility(View.VISIBLE);
                 textview_isTranscribing.setVisibility(View.VISIBLE);
+                if (filePath != null) {
+                    String fp = "filePath = " + filePath;
+                    textview_filePath.setText(fp);
+                }
+                else {
+                    textview_filePath.setHint("filePath");
+                }
             }
             else {
                 textview_src_code.setVisibility(View.GONE);
@@ -732,6 +771,13 @@ public class MainActivity extends AppCompatActivity {
                 textview_fileURI.setVisibility(View.GONE);
                 textview_fileDisplayName.setVisibility(View.GONE);
                 textview_isTranscribing.setVisibility(View.GONE);
+                if (filePath != null) {
+                    String fp = "File path = " + filePath;
+                    textview_filePath.setText(fp);
+                }
+                else {
+                    textview_filePath.setHint("File path");
+                }
             }
         });
 
@@ -855,21 +901,21 @@ public class MainActivity extends AppCompatActivity {
         button_start.setOnClickListener(view -> {
             textview_debug.setText("");
             subtitleFilePath = null;
-            if (runpy != null) {
-                runpy.interrupt();
-                runpy = null;
+            if (threadTranscriber != null) {
+                threadTranscriber.interrupt();
+                threadTranscriber = null;
             }
             cancelFile = getApplicationContext().getExternalFilesDir(null) + File.separator + "cancel.txt";
-            if (new File(cancelFile).exists()) {
-                new File(cancelFile).delete();
+            if (new File(cancelFile).exists() && new File(cancelFile).delete()) {
+                Log.d(cancelFile, "deleted");
             }
             File frs = new File(getApplicationContext().getExternalCacheDir().getAbsoluteFile() + File.separator + "region_start.txt");
             File fet = new File(getApplicationContext().getExternalCacheDir().getAbsoluteFile() + File.separator + "elapsed_time.txt");
-            if (frs.exists()) {
-                frs.delete();
+            if (frs.exists() && frs.delete()) {
+                Log.d(frs.toString(), "deleted");
             }
-            if (fet.exists()) {
-                fet.delete();
+            if (fet.exists() && fet.delete()) {
+                Log.d(fet.toString(), "deleted");
             }
             isTranscribing = !isTranscribing;
             if (fileURI != null) canceled = !canceled;
@@ -885,42 +931,14 @@ public class MainActivity extends AppCompatActivity {
             }
 
             else {
-                canceled = true;
-                runOnUiThread(() -> {
-                    String ts = "isTranscribing = " + isTranscribing;
-                    textview_isTranscribing.setText(ts);
-                    String t = "Start Transcribe";
-                    button_start.setText(t);
-                });
-                File fc = new File(cancelFile);
-                try {
-                    FileWriter out = new FileWriter(fc);
-                    out.write("");
-                    out.close();
-                } catch (IOException e) {
-                    Log.e("Error: ", Objects.requireNonNull(e.getMessage()));
-                    e.printStackTrace();
-                }
-
-                if (subtitleFilePath != null) {
-                    File sf = new File(subtitleFilePath).getAbsoluteFile();
-                    if(sf.exists() && sf.delete()){
-                        System.out.println(new File(subtitleFilePath).getAbsoluteFile() + " deleted");
-                    }
-                }
-                if (subtitleFilePath != null) {
-                    File stf = new File(subtitleFilePath).getAbsoluteFile();
-                    if(stf.exists() && stf.delete()){
-                        System.out.println(new File(subtitleFilePath).getAbsoluteFile() + " deleted");
-                    }
-                }
-
-                if (runpy != null) {
-                    runpy.interrupt();
-                    runpy = null;
-                }
-                isTranscribing = false;
+                showConfirmationDialogue();
             }
+
+            if (canceled) {
+                String m = "Process has been canceled\n";
+                textview_debug.setText(m);
+            }
+
         });
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !Environment.isExternalStorageLegacy()) {
@@ -931,6 +949,17 @@ public class MainActivity extends AppCompatActivity {
         }
 
     }
+
+    @Override
+    public void onBackPressed() {
+        if (isTranscribing) {
+            showConfirmationDialogue();
+        }
+        else {
+            finish();
+        }
+    }
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -995,8 +1024,14 @@ public class MainActivity extends AppCompatActivity {
                         runOnUiThread(() -> {
                             String t1 = "fileURI = " + fileURI;
                             textview_fileURI.setText(t1);
-                            String t2 = "filePath = " + filePath;
-                            textview_filePath.setText(t2);
+                            if(checkbox_debug_mode.isChecked()){
+                                String t2 = "filePath = " + filePath;
+                                textview_filePath.setText(t2);
+                            }
+                            else {
+                                String t2 = "File path = " + filePath;
+                                textview_filePath.setText(t2);
+                            }
                             String t3 = "fileDisplayName = " + fileDisplayName;
                             textview_fileDisplayName.setText(t3);
                         });
@@ -1027,8 +1062,8 @@ public class MainActivity extends AppCompatActivity {
     }*/
 
     private void transcribe() {
-        runpy = null;
-        runpy = new Thread(() -> {
+        threadTranscriber = null;
+        threadTranscriber = new Thread(() -> {
             if (Looper.myLooper() == null) {
                 Looper.prepare();
             }
@@ -1070,15 +1105,15 @@ public class MainActivity extends AppCompatActivity {
                             copiedPath = copyPath;
                         }
                         else {
-                            runpy.interrupt();
-                            runpy = null;
+                            threadTranscriber.interrupt();
+                            threadTranscriber = null;
                             transcribe();
                         }*/
 
                         // USING OPTION 2 : : DIRECTLY USING filePath
                         if (filePath == null) {
-                            runpy.interrupt();
-                            runpy = null;
+                            threadTranscriber.interrupt();
+                            threadTranscriber = null;
                             transcribe();
                         }
 
@@ -1137,9 +1172,9 @@ public class MainActivity extends AppCompatActivity {
                         }
 
                         if (!canceled && fileURI != null && subtitleFilePath != null && Objects.equals(src_code, dst_code)) {
-                            if (runpy != null) {
-                                runpy.interrupt();
-                                runpy = null;
+                            if (threadTranscriber != null) {
+                                threadTranscriber.interrupt();
+                                threadTranscriber = null;
                             }
                             isTranscribing = false;
                             canceled = true;
@@ -1167,8 +1202,8 @@ public class MainActivity extends AppCompatActivity {
                         // USING ALTERNATIVE 2 OPTION 2 :
                         // RUN SPLIT FUNCTIONS OF transcibe() and DIRECTLY USING filePath
                         /*if (filePath == null) {
-                            runpy.interrupt();
-                            runpy = null;
+                            threadTranscriber.interrupt();
+                            threadTranscriber = null;
                             transcribe();
                         }
                         if (!canceled && fileURI != null && filePath != null) {
@@ -1199,9 +1234,9 @@ public class MainActivity extends AppCompatActivity {
                         }
 
                         if (!canceled && fileURI != null && subtitleFilePath != null && Objects.equals(src_code, dst_code)) {
-                            if (runpy != null) {
-                                runpy.interrupt();
-                                runpy = null;
+                            if (threadTranscriber != null) {
+                                threadTranscriber.interrupt();
+                                threadTranscriber = null;
                             }
                             isTranscribing = false;
                             canceled = true;
@@ -1228,9 +1263,9 @@ public class MainActivity extends AppCompatActivity {
 
                         // FINISHING
                         if (!canceled && fileURI != null && subtitleFilePath != null) {
-                            if (runpy != null) {
-                                runpy.interrupt();
-                                runpy = null;
+                            if (threadTranscriber != null) {
+                                threadTranscriber.interrupt();
+                                threadTranscriber = null;
                             }
                             isTranscribing = false;
                             canceled = true;
@@ -1249,18 +1284,18 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 else {
-                    if (runpy != null) {
-                        runpy.interrupt();
-                        runpy = null;
+                    if (threadTranscriber != null) {
+                        threadTranscriber.interrupt();
+                        threadTranscriber = null;
                     }
                     isTranscribing = false;
                 }
 
             }
             else {
-                if (runpy != null) {
-                    runpy.interrupt();
-                    runpy = null;
+                if (threadTranscriber != null) {
+                    threadTranscriber.interrupt();
+                    threadTranscriber = null;
                 }
                 isTranscribing = false;
                 runOnUiThread(() -> {
@@ -1271,7 +1306,7 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
-        runpy.start();
+        threadTranscriber.start();
         runOnUiThread(() -> {
 
         });
@@ -1295,9 +1330,9 @@ public class MainActivity extends AppCompatActivity {
         //*     * and display it.
         //*
         if (canceled) {
-            if (runpy != null) {
-                runpy.interrupt();
-                runpy = null;
+            if (threadTranscriber != null) {
+                threadTranscriber.interrupt();
+                threadTranscriber = null;
             }
             isTranscribing = false;
         } else {
@@ -1309,8 +1344,8 @@ public class MainActivity extends AppCompatActivity {
 
             if (!newDirName.equals("")) {
                 File dir = new File(getApplicationContext().getExternalFilesDir(null) + "/" + newDirName);
-                if (!dir.exists()) {
-                    dir.mkdir();
+                if (!dir.exists() && dir.mkdir()) {
+                    Log.d(dir.toString(), "created");
                 }
                 output = new File(getApplicationContext().getExternalFilesDir(null) + "/" + newDirName + "/" + name);
             } else {
@@ -1337,9 +1372,9 @@ public class MainActivity extends AppCompatActivity {
 
                 while ((read = inputStream.read(buffers)) != -1) {
                     if (canceled) {
-                        if (runpy != null) {
-                            runpy.interrupt();
-                            runpy = null;
+                        if (threadTranscriber != null) {
+                            threadTranscriber.interrupt();
+                            threadTranscriber = null;
                         }
                         isTranscribing = false;
                     } else {
@@ -1502,8 +1537,8 @@ public class MainActivity extends AppCompatActivity {
         }
         else {
             File root = new File(Environment.getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
-            if (!root.exists()) {
-                root.mkdirs();
+            if (!root.exists() && root.mkdirs()) {
+                Log.d(root.toString(), "created");
             }
             File file = new File(root, savedSubtitleFilePath );
             Log.d(TAG, "saveFile: file path - " + file.getAbsolutePath());
@@ -1558,8 +1593,8 @@ public class MainActivity extends AppCompatActivity {
                 }
             } else {
                 File root = new File(Environment.getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
-                if (!root.exists()) {
-                    root.mkdirs();
+                if (!root.exists() && root.mkdirs()) {
+                    Log.d(root.toString(), "created");
                 }
                 File file = new File(root, savedTanslatedsubtitleFilePath);
                 Log.d(TAG, "saveFile: file path - " + file.getAbsolutePath());
@@ -1612,6 +1647,61 @@ public class MainActivity extends AppCompatActivity {
             String d = "Done.";
             textview_debug.append(d);
         });
+    }
+
+    private void showConfirmationDialogue() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+        builder.setTitle("Confirm");
+        builder.setMessage("Are you sure?");
+
+        builder.setPositiveButton("YES", (dialog, which) -> {
+            runOnUiThread(() -> {
+                canceled = true;
+                String ts = "isTranscribing = " + isTranscribing;
+                textview_isTranscribing.setText(ts);
+                String t = "Start Transcribe";
+                button_start.setText(t);
+
+                File fc = new File(cancelFile);
+                try {
+                    FileWriter out = new FileWriter(fc);
+                    out.write("");
+                    out.close();
+                } catch (IOException e) {
+                    Log.e("Error: ", Objects.requireNonNull(e.getMessage()));
+                    e.printStackTrace();
+                }
+
+                if (subtitleFilePath != null) {
+                    File sf = new File(subtitleFilePath).getAbsoluteFile();
+                    if(sf.exists() && sf.delete()){
+                        System.out.println(new File(subtitleFilePath).getAbsoluteFile() + " deleted");
+                    }
+                }
+                if (subtitleFilePath != null) {
+                    File stf = new File(subtitleFilePath).getAbsoluteFile();
+                    if(stf.exists() && stf.delete()){
+                        System.out.println(new File(subtitleFilePath).getAbsoluteFile() + " deleted");
+                    }
+                }
+
+                if (threadTranscriber != null) {
+                    threadTranscriber.interrupt();
+                    threadTranscriber = null;
+                }
+                isTranscribing = false;
+                dialog.dismiss();
+                String m = "Process has been canceled\n";
+                textview_debug.setText(m);
+            });
+        });
+
+        builder.setNegativeButton("NO", (dialog, which) -> {
+            // Do nothing
+            dialog.dismiss();
+        });
+        AlertDialog alert = builder.create();
+        alert.show();
     }
 
     /*@SuppressLint("SetTextI18n")
