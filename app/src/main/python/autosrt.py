@@ -482,7 +482,7 @@ class TranscriptionTranslator(object):
 
         fail_to_translate = translated_sentence[-1] == '\n'
         while fail_to_translate and patience:
-            translated_sentence = translator.translate(translated_sentence, src=self.src, dest=self.dest).text
+            translated_sentence = GoogleTranslate(translated_sentence, src=self.src, dest=self.dest).text
             if translated_sentence[-1] == '\n':
                 if patience == -1:
                     continue
