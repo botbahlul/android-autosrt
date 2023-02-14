@@ -20,7 +20,7 @@ android {
         minSdkVersion 23
         targetSdkVersion 29
         versionCode 1
-        versionName "1.3"
+        versionName "1.4"
 
         ndk {
             abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
@@ -33,9 +33,9 @@ android {
                 install "idna==2.10"
                 install "wave"
                 install "requests"
-                install "googletrans==4.0.0-rc1"
                 install "pysrt"
                 install "six"
+                install "httpx[http2]"
             }
         }
     }

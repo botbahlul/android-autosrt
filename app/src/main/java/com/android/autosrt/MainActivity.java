@@ -3,7 +3,6 @@ package com.android.autosrt;
 import static android.os.Environment.DIRECTORY_DOCUMENTS;
 import static android.os.Environment.getExternalStorageDirectory;
 import static android.text.TextUtils.substring;
-import static com.arthenica.mobileffmpeg.Config.TAG;
 import static java.lang.Math.round;
 
 import android.Manifest;
@@ -917,6 +916,7 @@ public class MainActivity extends AppCompatActivity {
             if (fet.exists() && fet.delete()) {
                 Log.d(fet.toString(), "deleted");
             }
+
             isTranscribing = !isTranscribing;
             if (fileURI != null) canceled = !canceled;
 
@@ -1070,13 +1070,14 @@ public class MainActivity extends AppCompatActivity {
 
             if (fileURI != null) {
                 if (!canceled) {
-                    Log.d("Current Thread", "Running");
+                    Log.d("transcribe", "Running");
                     try {
                         if (!Python.isStarted()) {
                             Python.start(new AndroidPlatform(MainActivity.this));
                             py = Python.getInstance();
                         }
                         // DUE TO SCOPED STORAGE RESTRICTION THERE ARE 2 OPTIONS TO PROCEED USERS PICKED FILE
+
                         // OPTION 1 : CREATE A COPY OF USERS PICKED FILE TO ExternalFilesDir/subtitleFolderName
                         // THEN PROCEED IT IN PYTHON SCRIPT (copiedPath AS filePath IN PYTHON SCRIPT)
                         // SO USERS CAN DIRECTLY WATCH THEIR MOVIES WITH SUBTITLES IN ExternalFilesDir/subtitleFolderName
@@ -1097,7 +1098,14 @@ public class MainActivity extends AppCompatActivity {
                         // WE SHOULD USE time.sleep(seconds) WHEN CALL dinamic_proxy FUNCTIONS
                         // IN PYTHON SCRIPT TO AVOID CRASH
 
-                        // USING OPTION 1 : CREATE A COPY
+                        // THERE ARE 2 ALTERNATIVE TO RUN autosrt.py PYTHON SCRIPT
+                        // ALTERNATIVE 1 : RUN A SINGLE FUNCTION transcribe() IN autosrt.py
+                        // ALTERNATIVE 2 : RUN SPLIT FUNCTIONS OF transcribe() IN autosrt.py
+
+
+                        //---------------------------------------------------------------------------//
+                        // USING ALTERNATIVE 1 OPTION 1 :
+                        // RUN A SINGLE FUNCTION transcribe() and CREATE A COPY OF filePath
                         /*subtitleFolderName = substring(fileDisplayName, 0, fileDisplayName.length() - 4);
                         String prefix = "Creating a copy of " + fileDisplayName + " : ";
                         String copyPath = copyFileToExternalFilesDir(fileURI, subtitleFolderName, prefix);
@@ -1108,30 +1116,25 @@ public class MainActivity extends AppCompatActivity {
                             threadTranscriber.interrupt();
                             threadTranscriber = null;
                             transcribe();
-                        }*/
-
-                        // USING OPTION 2 : : DIRECTLY USING filePath
-                        if (filePath == null) {
-                            threadTranscriber.interrupt();
-                            threadTranscriber = null;
-                            transcribe();
                         }
-
-                        // THERE ARE 2 ALTERNATIVE TO RUN PYTHON SCRIPT
-                        // ALTERNATIVE 1 : RUN A SINGLE FUNCTION transcribe() IN autosrt.py
-                        // ALTERNATIVE 2 : RUN SPLIT FUNCTIONS OF transcibe() IN autosrt.py
-
-                        // USING ALTERNATIVE 1 OPTION 1 :
-                        // RUN A SINGLE FUNCTION transcribe() and USING copiedPath
-                        /*pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
+                        pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                 "transcribe",
                                 src_code, dst_code, filePath, fileDisplayName, subtitleFormat, MainActivity.this, textview_debug);
                         if (pyObjSubtitleFilePath != null) {
                             subtitleFilePath = pyObjSubtitleFilePath.toString();
                         }*/
+                        // END OF ALTERNATIVE 1 OPTION 1
+                        //---------------------------------------------------------------------------//
 
-                        // USING ALTERNATIVE 1 OPTION 2 : 
-                        // RUN A SINGLE FUNCTION transcribe() and DIRECTLY USE filePath
+
+                        //---------------------------------------------------------------------------//
+                        // USING ALTERNATIVE 1 OPTION 2 :
+                        // RUN A SINGLE FUNCTION transcribe() and DIRECTLY USING filePath
+                        if (filePath == null) {
+                            threadTranscriber.interrupt();
+                            threadTranscriber = null;
+                            transcribe();
+                        }
                         pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                 "transcribe",
                                 src_code, dst_code, filePath, fileDisplayName, subtitleFormat, MainActivity.this, textview_debug);
@@ -1141,36 +1144,47 @@ public class MainActivity extends AppCompatActivity {
                             // SO WE NEED TO COPY IT TO SAVE FOLDER LIKE Environment.getExternalStorageDirectory().DIRECTORY_DOCUMENTS
                             saveSubtitleFileToDocumentsDir();
                         }
+                        // END OF ALTERNATIVE 1 OPTION 1
+                        //---------------------------------------------------------------------------//
 
+
+                        //---------------------------------------------------------------------------//
                         // USING ALTERNATIVE 2 OPTION 1 :
                         // RUN SPLIT FUNCTIONS OF transcibe() and USING copiedPath AS filePath
-                        /*if (!canceled && fileURI != null && copiedPath != null) {
-                            try (pyObjWavTempName = py.getModule("autosrt").callAttr(
+                        /*subtitleFolderName = substring(fileDisplayName, 0, fileDisplayName.length() - 4);
+                        String prefix = "Creating a copy of " + fileDisplayName + " : ";
+                        String copyPath = copyFileToExternalFilesDir(fileURI, subtitleFolderName, prefix);
+                        if (copyPath != null) {
+                            copiedPath = copyPath;
+                        }
+                        else {
+                            threadTranscriber.interrupt();
+                            threadTranscriber = null;
+                            transcribe();
+                        }
+                        if (!canceled && fileURI != null && copiedPath != null) {
+                            pyObjWavTempName = py.getModule("autosrt").callAttr(
                                     "convert_to_wav",
-                                    copiedPath, 1, 16000, MainActivity.this, textview_debug)) {
-                                if (pyObjWavTempName != null) wavTempName = pyObjWavTempName.toString();
-                            }
+                                    copiedPath, 1, 16000, MainActivity.this, textview_debug);
+                            if (pyObjWavTempName != null) wavTempName = pyObjWavTempName.toString();
                         }
                         if (!canceled && fileURI != null && wavTempName != null) {
-                            try (pyObjRegions = py.getModule("autosrt").callAttr(
+                            pyObjRegions = py.getModule("autosrt").callAttr(
                                     "find_audio_regions",
-                                    wavTempName, 4096, 0.3, 8, MainActivity.this, textview_debug)) {
-                                if (pyObjRegions != null) regions = pyObjRegions.toString();
-                            }
+                                    wavTempName, 4096, 0.3, 8, MainActivity.this, textview_debug);
+                            if (pyObjRegions != null) regions = pyObjRegions.toString();
                         }
                         if (!canceled && fileURI != null && copiedPath != null && wavTempName != null) {
-                            try (PyObject pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
+                            pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                     "perform_speech_recognition",
-                                    filePath, fileDisplayName, wavTempName, subtitleFormat, src_code, MainActivity.this, textview_debug)) {
-                                if (pyObjSubtitleFilePath != null) {
-                                    subtitleFilePath = pyObjSubtitleFilePath.toString();
-                                    if (Objects.equals(src_code, dst_code)) {
-                                        saveSubtitleFileToDocumentsDir();
-                                    }
+                                    filePath, fileDisplayName, wavTempName, subtitleFormat, src_code, MainActivity.this, textview_debug);
+                            if (pyObjSubtitleFilePath != null) {
+                                subtitleFilePath = pyObjSubtitleFilePath.toString();
+                                if (Objects.equals(src_code, dst_code)) {
+                                    saveSubtitleFileToDocumentsDir();
                                 }
                             }
                         }
-
                         if (!canceled && fileURI != null && subtitleFilePath != null && Objects.equals(src_code, dst_code)) {
                             if (threadTranscriber != null) {
                                 threadTranscriber.interrupt();
@@ -1185,20 +1199,20 @@ public class MainActivity extends AppCompatActivity {
                                 button_start.setText(t1);
                             });
                         }
-
                         if (!canceled && fileURI != null && subtitleFilePath != null && !Objects.equals(src_code, dst_code)) {
-                            try (pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
+                            pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                     "perform_translation",
-                                    subtitleFilePath, subtitleFormat, src_code, dst_code, MainActivity.this, textview_debug)) {
-                                if (pyObjSubtitleFilePath != null) {
-                                    subtitleFilePath = pyObjSubtitleFilePath.toString();
-                                    saveSubtitleFileToDocumentsDir();
-                                }
+                                    subtitleFilePath, subtitleFormat, src_code, dst_code, MainActivity.this, textview_debug);
+                            if (pyObjSubtitleFilePath != null) {
+                                subtitleFilePath = pyObjSubtitleFilePath.toString();
+                                saveSubtitleFileToDocumentsDir();
                             }
                         }*/
                         // END OF ALTERNATIVE 2 OPTION 1
+                        //---------------------------------------------------------------------------//
 
 
+                        // ------------------------------------------------------------------------ //
                         // USING ALTERNATIVE 2 OPTION 2 :
                         // RUN SPLIT FUNCTIONS OF transcibe() and DIRECTLY USING filePath
                         /*if (filePath == null) {
@@ -1206,33 +1220,34 @@ public class MainActivity extends AppCompatActivity {
                             threadTranscriber = null;
                             transcribe();
                         }
+                        if (filePath == null) {
+                            threadTranscriber.interrupt();
+                            threadTranscriber = null;
+                            transcribe();
+                        }
                         if (!canceled && fileURI != null && filePath != null) {
-                            try (pyObjWavTempName = py.getModule("autosrt").callAttr(
+                            pyObjWavTempName = py.getModule("autosrt").callAttr(
                                     "convert_to_wav",
-                                    filePath, 1, 16000, MainActivity.this, textview_debug)) {
-                                if (pyObjWavTempName != null) wavTempName = pyObjWavTempName.toString();
-                            }
+                                    filePath, 1, 16000, MainActivity.this, textview_debug);
+                            if (pyObjWavTempName != null) wavTempName = pyObjWavTempName.toString();
                         }
                         if (!canceled && fileURI != null && wavTempName != null) {
-                            try (pyObjRegions = py.getModule("autosrt").callAttr(
+                            pyObjRegions = py.getModule("autosrt").callAttr(
                                     "find_audio_regions",
-                                    wavTempName, 4096, 0.3, 8, MainActivity.this, textview_debug)) {
-                                if (pyObjRegions != null) regions = pyObjRegions.toString();
-                            }
+                                    wavTempName, 4096, 0.3, 8, MainActivity.this, textview_debug);
+                            if (pyObjRegions != null) regions = pyObjRegions.toString();
                         }
                         if (!canceled && fileURI != null && filePath != null && wavTempName != null) {
-                            try (pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
+                            pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                     "perform_speech_recognition",
-                                    filePath, fileDisplayName, wavTempName, subtitleFormat, src_code, MainActivity.this, textview_debug)) {
-                                if (pyObjSubtitleFilePath != null) {
-                                    subtitleFilePath = pyObjSubtitleFilePath.toString();
-                                    if (Objects.equals(src_code, dst_code)) {
-                                        saveSubtitleFileToDocumentsDir();
-                                    }
+                                    filePath, fileDisplayName, wavTempName, subtitleFormat, src_code, MainActivity.this, textview_debug);
+                            if (pyObjSubtitleFilePath != null) {
+                                subtitleFilePath = pyObjSubtitleFilePath.toString();
+                                if (Objects.equals(src_code, dst_code)) {
+                                    saveSubtitleFileToDocumentsDir();
                                 }
                             }
                         }
-
                         if (!canceled && fileURI != null && subtitleFilePath != null && Objects.equals(src_code, dst_code)) {
                             if (threadTranscriber != null) {
                                 threadTranscriber.interrupt();
@@ -1247,18 +1262,17 @@ public class MainActivity extends AppCompatActivity {
                                 button_start.setText(t1);
                             });
                         }
-
                         if (!canceled && fileURI != null && subtitleFilePath != null && !Objects.equals(src_code, dst_code)) {
-                            try (pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
+                            pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                     "perform_translation",
-                                    subtitleFilePath, subtitleFormat, src_code, dst_code, MainActivity.this, textview_debug)) {
-                                if (pyObjSubtitleFilePath != null) {
-                                    subtitleFilePath = pyObjSubtitleFilePath.toString();
-                                    saveSubtitleFileToDocumentsDir();
-                                }
+                                    subtitleFilePath, subtitleFormat, src_code, dst_code, MainActivity.this, textview_debug);
+                            if (pyObjSubtitleFilePath != null) {
+                                subtitleFilePath = pyObjSubtitleFilePath.toString();
+                                saveSubtitleFileToDocumentsDir();
                             }
                         }*/
                         // END OF ALTERNATIVE 2 OPTION 2
+                        //---------------------------------------------------------------------------//
 
 
                         // FINISHING
@@ -1278,7 +1292,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                     catch (Exception e) {
-                        Log.e("Error: ", Objects.requireNonNull(e.getMessage()));
+                        Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
                         e.printStackTrace();
                     }
                 }
@@ -1541,7 +1555,7 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(root.toString(), "created");
             }
             File file = new File(root, savedSubtitleFilePath );
-            Log.d(TAG, "saveFile: file path - " + file.getAbsolutePath());
+            Log.d("saveSubtitleFileToDocumentsDir", "saveFile: file path - " + file.getAbsolutePath());
             try {
                 outputStream = new FileOutputStream(file);
             } catch (FileNotFoundException e) {
@@ -1597,7 +1611,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.d(root.toString(), "created");
                 }
                 File file = new File(root, savedTanslatedsubtitleFilePath);
-                Log.d(TAG, "saveFile: file path - " + file.getAbsolutePath());
+                Log.d("saveSubtitleFileToDocumentsDir", "saveFile: file path - " + file.getAbsolutePath());
                 try {
                     outputStreamTranslated = new FileOutputStream(file);
                 } catch (FileNotFoundException e) {
@@ -1700,6 +1714,7 @@ public class MainActivity extends AppCompatActivity {
             // Do nothing
             dialog.dismiss();
         });
+
         AlertDialog alert = builder.create();
         alert.show();
     }
