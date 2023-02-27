@@ -5,10 +5,12 @@ https://user-images.githubusercontent.com/88623122/215234356-5f85a823-1447-45da-
 
 This app is ANDROID GUI VERSION of AUTOSRT PYHTON SCRIPT https://github.com/botbahlul/autosrt
 
+UPDATES NOTES : SINCE VERSION 1.5.0 YOU CAN SELECT MULTIPLE VIDEO/AUDIO FILES
+
 It's developed to running on ANDROID with the help of CHAQUOPY https://chaquo.com/chaquopy/
 
 Tested on Pixel 2 API 25 emulator, Nexus 5X API 29 emulator, and Xiaomi Redmi Note 7 Pro API 29
 
-If you don't like to see those orphaned running thread messages in Output Message box during cancelation try android-autosrt-v2 which is using 2 activities
+You can try android-autosrt-v2 which is using 2 activities
 
 https://github.com/botbahlul/android-autosrt-v2
