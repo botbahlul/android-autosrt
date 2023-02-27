@@ -2,7 +2,6 @@ package com.android.autosrt;
 
 import static android.os.Environment.DIRECTORY_DOCUMENTS;
 import static android.os.Environment.getExternalStorageDirectory;
-import static android.text.TextUtils.substring;
 import static java.lang.Math.round;
 
 import android.Manifest;
@@ -15,16 +14,20 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.os.Looper;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
+import android.text.Spannable;
 import android.text.method.ScrollingMovementMethod;
+import android.text.style.BackgroundColorSpan;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
@@ -32,6 +35,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
+import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.TextView;
 
@@ -94,28 +98,28 @@ public class MainActivity extends AppCompatActivity {
     TextView textview_fileDisplayName;
     TextView textview_isTranscribing;
     Button button_browse, button_start;
-    TextView textview_debug;
+    TextView textview_currentFilePathProceed;
+    TextView textview_output_messages;
+    TextView textview_final_results;
 
     Python py;
     PyObject pyObjSubtitleFilePath;
-    PyObject pyObjWavTempName;
-    PyObject pyObjRegions;
 
     public static boolean isTranscribing = false;
     public static boolean canceled = true;
     public static Thread threadTranscriber;
-    public static String cancelFile = null;
-    public static String copiedPath = null;
-    public static String wavTempName = null;
-    public static String regions = null;
-    public static String subtitleFilePath = null;
+    public static String cancelFile;
     public static Uri fileURI;
+    public static ArrayList<Uri> filesURI;
     public static String filePath;
+    public static ArrayList<String> filesPath;
     public static String fileDisplayName;
+    public static ArrayList<String> filesDisplayName;
     public static String subtitleFormat;
-    public static String subtitleFilePathPath;
+    public static String subtitleFilePath;
+    public static ArrayList<String> subtitleFilesPath;
     public static String subtitleTranslatedFilePath;
-    public static String subtitleFolderName;
+    public static ArrayList<String> subtitleTranslatedFilesPath;
     int STORAGE_PERMISSION_CODE = 101;
 
     @Override
@@ -692,15 +696,30 @@ public class MainActivity extends AppCompatActivity {
         button_browse = findViewById(R.id.button_browse);
         button_start = findViewById(R.id.button_start);
         textview_isTranscribing = findViewById(R.id.textview_isTranscribing);
-        textview_debug = findViewById(R.id.textview_debug);
+        textview_currentFilePathProceed = findViewById(R.id.textview_currentFilePathProceed);
+        textview_output_messages = findViewById(R.id.textview_output_messages);
+        textview_final_results = findViewById(R.id.textview_final_results);
 
-        textview_debug.setSelected(true);
+        textview_fileURI.setTextIsSelectable(true);
+        textview_filePath.setTextIsSelectable(true);
+        textview_fileDisplayName.setTextIsSelectable(true);
+        textview_output_messages.setTextIsSelectable(true);
+        textview_final_results.setTextIsSelectable(true);
+
+        textview_fileURI.setSelected(true);
+        textview_filePath.setSelected(true);
+        textview_fileDisplayName.setSelected(true);
+        textview_output_messages.setSelected(true);
+        textview_final_results.setSelected(true);
 
         spinner_src_languages.setFocusable(true);
         spinner_src_languages.requestFocus();
 
         textview_fileURI.setMovementMethod(new ScrollingMovementMethod());
-        textview_debug.setMovementMethod(new ScrollingMovementMethod());
+        textview_filePath.setMovementMethod(new ScrollingMovementMethod());
+        textview_fileDisplayName.setMovementMethod(new ScrollingMovementMethod());
+        textview_output_messages.setMovementMethod(new ScrollingMovementMethod());
+        textview_final_results.setMovementMethod(new ScrollingMovementMethod());
 
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM);
@@ -723,13 +742,17 @@ public class MainActivity extends AppCompatActivity {
             textview_fileURI.setVisibility(View.VISIBLE);
             textview_fileDisplayName.setVisibility(View.VISIBLE);
             textview_isTranscribing.setVisibility(View.VISIBLE);
-            if (filePath != null) {
-                String fp = "filePath = " + filePath;
-                textview_filePath.setText(fp);
+            if (filesPath != null) {
+                textview_filePath.setText("");
+                for (int i=0; i< filesPath.size(); i++) {
+                    String fp = "filesPath.get(" + i + ") = " + filesPath.get(i) + "\n";
+                    textview_filePath.append(fp);
+                }
             }
             else {
                 textview_filePath.setHint("filePath");
             }
+
         }
         else {
             textview_src_code.setVisibility(View.GONE);
@@ -738,9 +761,12 @@ public class MainActivity extends AppCompatActivity {
             textview_fileURI.setVisibility(View.GONE);
             textview_fileDisplayName.setVisibility(View.GONE);
             textview_isTranscribing.setVisibility(View.GONE);
-            if (filePath != null) {
-                String fp = "File path = " + filePath;
-                textview_filePath.setText(fp);
+            if (filesPath != null) {
+                textview_filePath.setText("");
+                for (int i=0; i< filesPath.size(); i++) {
+                    String fp = "File path [" + i + "] = " + filesPath.get(i) + "\n";
+                    textview_filePath.append(fp);
+                }
             }
             else {
                 textview_filePath.setHint("File path");
@@ -755,9 +781,12 @@ public class MainActivity extends AppCompatActivity {
                 textview_fileURI.setVisibility(View.VISIBLE);
                 textview_fileDisplayName.setVisibility(View.VISIBLE);
                 textview_isTranscribing.setVisibility(View.VISIBLE);
-                if (filePath != null) {
-                    String fp = "filePath = " + filePath;
-                    textview_filePath.setText(fp);
+                if (filesPath != null) {
+                    textview_filePath.setText("");
+                    for (int i=0; i< filesPath.size(); i++) {
+                        String fp = "filesPath.get(" + i + ") = " + filesPath.get(i) + "\n";
+                        textview_filePath.append(fp);
+                    }
                 }
                 else {
                     textview_filePath.setHint("filePath");
@@ -770,9 +799,12 @@ public class MainActivity extends AppCompatActivity {
                 textview_fileURI.setVisibility(View.GONE);
                 textview_fileDisplayName.setVisibility(View.GONE);
                 textview_isTranscribing.setVisibility(View.GONE);
-                if (filePath != null) {
-                    String fp = "File path = " + filePath;
-                    textview_filePath.setText(fp);
+                if (filesPath != null) {
+                    textview_filePath.setText("");
+                    for (int i=0; i< filesPath.size(); i++) {
+                        String fp = "File path [" + i + "] = " + filesPath.get(i) + "\n";
+                        textview_filePath.append(fp);
+                    }
                 }
                 else {
                     textview_filePath.setHint("File path");
@@ -783,9 +815,7 @@ public class MainActivity extends AppCompatActivity {
         spinner_src_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
                 src_language = spinner_src_languages.getSelectedItem().toString();
-                //dst_language = spinner_dst_languages.getSelectedItem().toString();
                 src_code = map_src_country.get(src_language);
-                //dst_code = map_dst_country.get(dst_language);
                 runOnUiThread(() -> {
                     String lsrc = "src_code = " + src_code;
                     textview_src_code.setText(lsrc);
@@ -794,9 +824,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onNothingSelected(AdapterView<?> adapterView) {
                 src_language = spinner_src_languages.getSelectedItem().toString();
-                //dst_language = spinner_dst_languages.getSelectedItem().toString();
                 src_code = map_src_country.get(src_language);
-                //dst_code = map_dst_country.get(dst_language);
                 runOnUiThread(() -> {
                     String lsrc = "src_code = " + src_code;
                     textview_src_code.setText(lsrc);
@@ -806,9 +834,7 @@ public class MainActivity extends AppCompatActivity {
 
         spinner_dst_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
-                //src_language = spinner_src_languages.getSelectedItem().toString();
                 dst_language = spinner_dst_languages.getSelectedItem().toString();
-                //src_code = map_src_country.get(src_language);
                 dst_code = map_dst_country.get(dst_language);
                 runOnUiThread(() -> {
                     String ldst = "dst_code = " + dst_code;
@@ -817,9 +843,7 @@ public class MainActivity extends AppCompatActivity {
             }
             @Override
             public void onNothingSelected(AdapterView<?> adapterView) {
-                //src_language = spinner_src_languages.getSelectedItem().toString();
                 dst_language = spinner_dst_languages.getSelectedItem().toString();
-                //src_code = map_src_country.get(src_language);
                 dst_code = map_dst_country.get(dst_language);
                 runOnUiThread(() -> {
                     String ldst = "dst_code = " + dst_code;
@@ -887,10 +911,25 @@ public class MainActivity extends AppCompatActivity {
         });
 
         button_browse.setOnClickListener(view -> {
-            textview_debug.setText("");
+            textview_output_messages.setText("");
             fileURI = null;
+            filesURI = null;
+            filesURI = new ArrayList<>();
+            filePath = null;
+            filesPath = null;
+            filesPath = new ArrayList<>();
+            fileDisplayName = null;
+            filesDisplayName = null;
+            filesDisplayName = new ArrayList<>();
+            subtitleFilePath = null;
+            subtitleFilesPath = null;
+            subtitleFilesPath = new ArrayList<>();
+            subtitleTranslatedFilePath = null;
+            subtitleTranslatedFilesPath = null;
+            subtitleTranslatedFilesPath = new ArrayList<>();
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
             String[] mimeTypes = {"video/*", "audio/*"};
             intent.setType("*/*");
             intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
@@ -898,8 +937,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         button_start.setOnClickListener(view -> {
-            textview_debug.setText("");
-            subtitleFilePath = null;
+            textview_output_messages.setText("");
             if (threadTranscriber != null) {
                 threadTranscriber.interrupt();
                 threadTranscriber = null;
@@ -908,17 +946,16 @@ public class MainActivity extends AppCompatActivity {
             if (new File(cancelFile).exists() && new File(cancelFile).delete()) {
                 Log.d(cancelFile, "deleted");
             }
-            File frs = new File(getApplicationContext().getExternalCacheDir().getAbsoluteFile() + File.separator + "region_start.txt");
-            File fet = new File(getApplicationContext().getExternalCacheDir().getAbsoluteFile() + File.separator + "elapsed_time.txt");
-            if (frs.exists() && frs.delete()) {
-                Log.d(frs.toString(), "deleted");
-            }
-            if (fet.exists() && fet.delete()) {
-                Log.d(fet.toString(), "deleted");
-            }
+
+            /*if (filesURI == null) {
+                String msg = "Please select at least 1 video/audio file";
+                textview_output_messages.setText(msg);
+            }*/
 
             isTranscribing = !isTranscribing;
-            if (fileURI != null) canceled = !canceled;
+            if (filesURI != null) {
+                canceled = !canceled;
+            }
 
             if (isTranscribing) {
                 runOnUiThread(() -> {
@@ -929,14 +966,13 @@ public class MainActivity extends AppCompatActivity {
                     transcribe();
                 });
             }
-
             else {
                 showConfirmationDialogue();
             }
 
             if (canceled) {
                 String m = "Process has been canceled\n";
-                textview_debug.setText(m);
+                textview_output_messages.setText(m);
             }
 
         });
@@ -968,11 +1004,11 @@ public class MainActivity extends AppCompatActivity {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 //Toast.makeText(MainActivity.this, "Storage Permission Granted", Toast.LENGTH_SHORT).show();
                 String m = "Storage permission granted";
-                textview_debug.setText(m);
+                textview_output_messages.setText(m);
             } else {
                 //Toast.makeText(MainActivity.this, "Storage Permission Denied", Toast.LENGTH_SHORT).show();
                 String m = "Storage permission denied";
-                textview_debug.setText(m);
+                textview_output_messages.setText(m);
             }
         }
     }
@@ -1014,30 +1050,42 @@ public class MainActivity extends AppCompatActivity {
                 public void onActivityResult(ActivityResult result) {
                     if (result.getResultCode() == Activity.RESULT_OK) {
                         Intent intent = result.getData();
-                        if (intent != null) {
-                            fileURI = intent.getData();
+                        if (intent != null && intent.getClipData() != null) {
+                            for (int i = 0; i < intent.getClipData().getItemCount(); i++) {
+                                fileURI = intent.getClipData().getItemAt(i).getUri();
+                                filesURI.add(fileURI);
+                                filePath = Uri2Path(getApplicationContext(), fileURI);
+                                filesPath.add(filePath);
+                                fileDisplayName = queryName(getApplicationContext(), fileURI);
+                                filesDisplayName.add(fileDisplayName);
+                            }
+                            runOnUiThread(() -> {
+                                for (int i = 0; i < intent.getClipData().getItemCount(); i++) {
+                                    String t1 = "filesURI.get(" + i + ") = " + filesURI.get(i);
+                                    textview_fileURI.append(t1 + "\n");
+                                    if (checkbox_debug_mode.isChecked()) {
+                                        String t2 = "filesPath.get(" + i + ") = " + filesPath.get(i);
+                                        textview_filePath.append(t2 + "\n");
+                                    } else {
+                                        String t2 = "File path [" + i + "] = " + filesPath.get(i);
+                                        textview_filePath.append(t2 + "\n");
+                                    }
+                                    String t3 = "filesDisplayName.get(" + i + ") = " + filesDisplayName.get(i);
+                                    textview_fileDisplayName.append(t3 + "\n");
+                                }
+                            });
                         }
-                        filePath = Uri2Path(getApplicationContext(), fileURI);
-                        fileDisplayName = queryName(getApplicationContext(), fileURI);
-                        subtitleFilePathPath = substring(filePath,0,filePath.length()-4) + "." + subtitleFormat;
-                        subtitleTranslatedFilePath = substring(filePath,0,filePath.length()-4) + "_translated." + subtitleFormat;
-                        runOnUiThread(() -> {
-                            String t1 = "fileURI = " + fileURI;
-                            textview_fileURI.setText(t1);
-                            if(checkbox_debug_mode.isChecked()){
-                                String t2 = "filePath = " + filePath;
-                                textview_filePath.setText(t2);
-                            }
-                            else {
-                                String t2 = "File path = " + filePath;
-                                textview_filePath.setText(t2);
-                            }
-                            String t3 = "fileDisplayName = " + fileDisplayName;
-                            textview_fileDisplayName.setText(t3);
-                        });
+                        else {
+                            runOnUiThread(() -> {
+                                String msg = "Please select at least 1 video/audio file";
+                                textview_output_messages.setText(msg);
+                            });
+                        }
                     }
+
                 }
             });
+
 
     private static String queryName(Context context, Uri uri) {
         Cursor returnCursor = context.getContentResolver().query(uri, null, null, null, null);
@@ -1068,7 +1116,7 @@ public class MainActivity extends AppCompatActivity {
                 Looper.prepare();
             }
 
-            if (fileURI != null) {
+            if (filesURI != null) {
                 if (!canceled) {
                     Log.d("transcribe", "Running");
                     try {
@@ -1076,207 +1124,26 @@ public class MainActivity extends AppCompatActivity {
                             Python.start(new AndroidPlatform(MainActivity.this));
                             py = Python.getInstance();
                         }
-                        // DUE TO SCOPED STORAGE RESTRICTION THERE ARE 2 OPTIONS TO PROCEED USERS PICKED FILE
 
-                        // OPTION 1 : CREATE A COPY OF USERS PICKED FILE TO ExternalFilesDir/subtitleFolderName
-                        // THEN PROCEED IT IN PYTHON SCRIPT (copiedPath AS filePath IN PYTHON SCRIPT)
-                        // SO USERS CAN DIRECTLY WATCH THEIR MOVIES WITH SUBTITLES IN ExternalFilesDir/subtitleFolderName
-                        // AFTER APP EXECUTION
-
-                        // OPTION 2 : DIRECTLY USE filePath TO REDUCE EXECUTION TIME
-
-                        // ALL SUBTITLE FILES WILL BE CREATED AT externalFilesDir/subtitleFolderName
-                        // SO USERS SHOULD MOVE SUBTITLE FILES THEMSELF TO THEIR DESIRED FOLDER
-
-                        // BUT externalFilesDir/subtitleFolderName IS NOT A SAFE FOLDER TO STORE SUBTITLE FILE
-                        // BECAUSE IF USER UNINSTALL APP, ALL SUBTITLE FILES WILL BE GONE TOO
-                        // SO WE SHOULD COPY THEM TO A SAFE FOLDER
-                        // IN THIS CASE WE CAN SAVE THEM TO Environment.getExternalStorageDirectory().DIRECTORY_DOCUMENTS
-
-                        // subtitleFolderName AND SUBTITLE FILES NAME WILL BE CREATED BASED ON fileDisplayName
-
-                        // WE SHOULD USE time.sleep(seconds) WHEN CALL dinamic_proxy FUNCTIONS
-                        // IN PYTHON SCRIPT TO AVOID CRASH
-
-                        // THERE ARE 2 ALTERNATIVE TO RUN autosrt.py PYTHON SCRIPT
-                        // ALTERNATIVE 1 : RUN A SINGLE FUNCTION transcribe() IN autosrt.py
-                        // ALTERNATIVE 2 : RUN SPLIT FUNCTIONS OF transcribe() IN autosrt.py
-
-
-                        //---------------------------------------------------------------------------//
-                        // USING ALTERNATIVE 1 OPTION 1 :
-                        // RUN A SINGLE FUNCTION transcribe() and CREATE A COPY OF filePath
-                        /*subtitleFolderName = substring(fileDisplayName, 0, fileDisplayName.length() - 4);
-                        String prefix = "Creating a copy of " + fileDisplayName + " : ";
-                        String copyPath = copyFileToExternalFilesDir(fileURI, subtitleFolderName, prefix);
-                        if (copyPath != null) {
-                            copiedPath = copyPath;
-                        }
-                        else {
+                        if (filesPath == null) {
                             threadTranscriber.interrupt();
                             threadTranscriber = null;
                             transcribe();
                         }
-                        pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
-                                "transcribe",
-                                src_code, dst_code, filePath, fileDisplayName, subtitleFormat, MainActivity.this, textview_debug);
-                        if (pyObjSubtitleFilePath != null) {
-                            subtitleFilePath = pyObjSubtitleFilePath.toString();
-                        }*/
-                        // END OF ALTERNATIVE 1 OPTION 1
-                        //---------------------------------------------------------------------------//
-
-
-                        //---------------------------------------------------------------------------//
-                        // USING ALTERNATIVE 1 OPTION 2 :
-                        // RUN A SINGLE FUNCTION transcribe() and DIRECTLY USING filePath
-                        if (filePath == null) {
-                            threadTranscriber.interrupt();
-                            threadTranscriber = null;
-                            transcribe();
-                        }
-                        pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
-                                "transcribe",
-                                src_code, dst_code, filePath, fileDisplayName, subtitleFormat, MainActivity.this, textview_debug);
-                        if (pyObjSubtitleFilePath != null) {
-                            subtitleFilePath = pyObjSubtitleFilePath.toString();
-                            // ALL FILES IN externalFilesDir() WILL BE DELETED IF USER UNINSTALL APP
-                            // SO WE NEED TO COPY IT TO SAVE FOLDER LIKE Environment.getExternalStorageDirectory().DIRECTORY_DOCUMENTS
-                            saveSubtitleFileToDocumentsDir();
-                        }
-                        // END OF ALTERNATIVE 1 OPTION 1
-                        //---------------------------------------------------------------------------//
-
-
-                        //---------------------------------------------------------------------------//
-                        // USING ALTERNATIVE 2 OPTION 1 :
-                        // RUN SPLIT FUNCTIONS OF transcibe() and USING copiedPath AS filePath
-                        /*subtitleFolderName = substring(fileDisplayName, 0, fileDisplayName.length() - 4);
-                        String prefix = "Creating a copy of " + fileDisplayName + " : ";
-                        String copyPath = copyFileToExternalFilesDir(fileURI, subtitleFolderName, prefix);
-                        if (copyPath != null) {
-                            copiedPath = copyPath;
-                        }
-                        else {
-                            threadTranscriber.interrupt();
-                            threadTranscriber = null;
-                            transcribe();
-                        }
-                        if (!canceled && fileURI != null && copiedPath != null) {
-                            pyObjWavTempName = py.getModule("autosrt").callAttr(
-                                    "convert_to_wav",
-                                    copiedPath, 1, 16000, MainActivity.this, textview_debug);
-                            if (pyObjWavTempName != null) wavTempName = pyObjWavTempName.toString();
-                        }
-                        if (!canceled && fileURI != null && wavTempName != null) {
-                            pyObjRegions = py.getModule("autosrt").callAttr(
-                                    "find_audio_regions",
-                                    wavTempName, 4096, 0.3, 8, MainActivity.this, textview_debug);
-                            if (pyObjRegions != null) regions = pyObjRegions.toString();
-                        }
-                        if (!canceled && fileURI != null && copiedPath != null && wavTempName != null) {
+                        textview_final_results.setText("");
+                        //String msg = "Saved subtitle files :\n";
+                        //runOnUiThread(() -> textview_final_results.setText(msg));
+                        for (int i = 0; i < filesURI.size(); i++) {
+                            String cfp = "Processing file : " + filesDisplayName.get(i);
+                            runOnUiThread(() -> textview_currentFilePathProceed.setText(cfp));
                             pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
-                                    "perform_speech_recognition",
-                                    filePath, fileDisplayName, wavTempName, subtitleFormat, src_code, MainActivity.this, textview_debug);
-                            if (pyObjSubtitleFilePath != null) {
-                                subtitleFilePath = pyObjSubtitleFilePath.toString();
-                                if (Objects.equals(src_code, dst_code)) {
-                                    saveSubtitleFileToDocumentsDir();
-                                }
-                            }
+                                    "transcribe",
+                                    src_code, dst_code, filesPath.get(i), filesDisplayName.get(i), subtitleFormat, MainActivity.this, textview_output_messages);
+                            saveSubtitleFileToDocumentsDir(pyObjSubtitleFilePath.toString());
                         }
-                        if (!canceled && fileURI != null && subtitleFilePath != null && Objects.equals(src_code, dst_code)) {
-                            if (threadTranscriber != null) {
-                                threadTranscriber.interrupt();
-                                threadTranscriber = null;
-                            }
-                            isTranscribing = false;
-                            canceled = true;
-                            runOnUiThread(() -> {
-                                String ts = "isTranscribing = " + isTranscribing;
-                                textview_isTranscribing.setText(ts);
-                                String t1 = "Start Transcribe";
-                                button_start.setText(t1);
-                            });
-                        }
-                        if (!canceled && fileURI != null && subtitleFilePath != null && !Objects.equals(src_code, dst_code)) {
-                            pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
-                                    "perform_translation",
-                                    subtitleFilePath, subtitleFormat, src_code, dst_code, MainActivity.this, textview_debug);
-                            if (pyObjSubtitleFilePath != null) {
-                                subtitleFilePath = pyObjSubtitleFilePath.toString();
-                                saveSubtitleFileToDocumentsDir();
-                            }
-                        }*/
-                        // END OF ALTERNATIVE 2 OPTION 1
-                        //---------------------------------------------------------------------------//
+                        textview_currentFilePathProceed.setText("");
 
-
-                        // ------------------------------------------------------------------------ //
-                        // USING ALTERNATIVE 2 OPTION 2 :
-                        // RUN SPLIT FUNCTIONS OF transcibe() and DIRECTLY USING filePath
-                        /*if (filePath == null) {
-                            threadTranscriber.interrupt();
-                            threadTranscriber = null;
-                            transcribe();
-                        }
-                        if (filePath == null) {
-                            threadTranscriber.interrupt();
-                            threadTranscriber = null;
-                            transcribe();
-                        }
-                        if (!canceled && fileURI != null && filePath != null) {
-                            pyObjWavTempName = py.getModule("autosrt").callAttr(
-                                    "convert_to_wav",
-                                    filePath, 1, 16000, MainActivity.this, textview_debug);
-                            if (pyObjWavTempName != null) wavTempName = pyObjWavTempName.toString();
-                        }
-                        if (!canceled && fileURI != null && wavTempName != null) {
-                            pyObjRegions = py.getModule("autosrt").callAttr(
-                                    "find_audio_regions",
-                                    wavTempName, 4096, 0.3, 8, MainActivity.this, textview_debug);
-                            if (pyObjRegions != null) regions = pyObjRegions.toString();
-                        }
-                        if (!canceled && fileURI != null && filePath != null && wavTempName != null) {
-                            pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
-                                    "perform_speech_recognition",
-                                    filePath, fileDisplayName, wavTempName, subtitleFormat, src_code, MainActivity.this, textview_debug);
-                            if (pyObjSubtitleFilePath != null) {
-                                subtitleFilePath = pyObjSubtitleFilePath.toString();
-                                if (Objects.equals(src_code, dst_code)) {
-                                    saveSubtitleFileToDocumentsDir();
-                                }
-                            }
-                        }
-                        if (!canceled && fileURI != null && subtitleFilePath != null && Objects.equals(src_code, dst_code)) {
-                            if (threadTranscriber != null) {
-                                threadTranscriber.interrupt();
-                                threadTranscriber = null;
-                            }
-                            isTranscribing = false;
-                            canceled = true;
-                            runOnUiThread(() -> {
-                                String ts = "isTranscribing = " + isTranscribing;
-                                textview_isTranscribing.setText(ts);
-                                String t1 = "Start Transcribe";
-                                button_start.setText(t1);
-                            });
-                        }
-                        if (!canceled && fileURI != null && subtitleFilePath != null && !Objects.equals(src_code, dst_code)) {
-                            pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
-                                    "perform_translation",
-                                    subtitleFilePath, subtitleFormat, src_code, dst_code, MainActivity.this, textview_debug);
-                            if (pyObjSubtitleFilePath != null) {
-                                subtitleFilePath = pyObjSubtitleFilePath.toString();
-                                saveSubtitleFileToDocumentsDir();
-                            }
-                        }*/
-                        // END OF ALTERNATIVE 2 OPTION 2
-                        //---------------------------------------------------------------------------//
-
-
-                        // FINISHING
-                        if (!canceled && fileURI != null && subtitleFilePath != null) {
+                        if (!canceled && filesURI != null) {
                             if (threadTranscriber != null) {
                                 threadTranscriber.interrupt();
                                 threadTranscriber = null;
@@ -1315,15 +1182,12 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     String t1 = "Start Transcribe";
                     button_start.setText(t1);
-                    String m = "You should browse a file first\n";
-                    textview_debug.setText(m);
+                    String m = "Please select at least 1 video/audio file\n";
+                    textview_output_messages.setText(m);
                 });
             }
         });
         threadTranscriber.start();
-        runOnUiThread(() -> {
-
-        });
     }
 
     /*SimpleDateFormat tf = new SimpleDateFormat("HH:mm:ss");
@@ -1414,15 +1278,15 @@ public class MainActivity extends AppCompatActivity {
                         String bar = pounds + equals;
                         if ((int)(percentage) % 10 == 0){
                             runOnUiThread(() -> {
-                                textview_debug.setText(prefix + " [" + bar + "] " + percentage + '%');
-                                //textview_debug.setText(prefix + " [" + bar + "] " + percentage + "% " + str_remainingTime);
+                                textview_output_messages.setText(prefix + " [" + bar + "] " + percentage + '%');
+                                //textview_output_messages.setText(prefix + " [" + bar + "] " + percentage + "% " + str_remainingTime);
                             });
                         }
                     }
                 }
                 inputStream.close();
                 outputStream.close();
-                runOnUiThread(() -> textview_debug.append("\n"));
+                runOnUiThread(() -> textview_output_messages.append("\n"));
 
             } catch (Exception e) {
                 Log.e("Exception", Objects.requireNonNull(e.getMessage()));
@@ -1532,10 +1396,11 @@ public class MainActivity extends AppCompatActivity {
         return file.exists();
     }
 
-    private void saveSubtitleFileToDocumentsDir() {
+    private void saveSubtitleFileToDocumentsDir(String subtitleFilePath) {
         OutputStream outputStream;
-        String subtitleFolder = StringUtils.substring(fileDisplayName,0,fileDisplayName.length()-4);
-        String savedSubtitleFilePath = StringUtils.substring(fileDisplayName,0,fileDisplayName.length()-4) + "." + subtitleFormat;
+        String subtitleFileDisplayName = subtitleFilePath.substring(subtitleFilePath.lastIndexOf("/")+1);
+        String subtitleFolder = StringUtils.substring(subtitleFileDisplayName,0,subtitleFileDisplayName.length()-4);
+        String savedSubtitleFilePath = StringUtils.substring(subtitleFileDisplayName,0,subtitleFileDisplayName.length()-4) + "." + subtitleFormat;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ContentValues values = new ContentValues();
             values.put(MediaStore.MediaColumns.DISPLAY_NAME, savedSubtitleFilePath); // file name savedSubtitleFilePath required to contain extension file mime
@@ -1590,7 +1455,7 @@ public class MainActivity extends AppCompatActivity {
             throw new RuntimeException(e);
         }
 
-        String savedTanslatedsubtitleFilePath = StringUtils.substring(fileDisplayName, 0, fileDisplayName.length() - 4) + "_translated." + subtitleFormat;
+        String savedTanslatedsubtitleFilePath = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - 4) + ".translated." + subtitleFormat;
         if (!Objects.equals(src_code, dst_code)) {
             OutputStream outputStreamTranslated;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -1619,8 +1484,8 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            String translatedsubtitleFilePath = StringUtils.substring(subtitleFilePath, 0, subtitleFilePath.length() - 4) + "_translated." + subtitleFormat;
-            Uri uriTranslated = Uri.fromFile(new File(translatedsubtitleFilePath));
+            String translatedSubtitleFilePath = StringUtils.substring(subtitleFilePath, 0, subtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
+            Uri uriTranslated = Uri.fromFile(new File(translatedSubtitleFilePath));
             InputStream inputStreamTranslated;
             try {
                 inputStreamTranslated = getApplicationContext().getContentResolver().openInputStream(uriTranslated);
@@ -1649,18 +1514,24 @@ public class MainActivity extends AppCompatActivity {
                 throw new RuntimeException(e);
             }
         }
-        runOnUiThread(() -> {
-            textview_debug.setText("");
-            String savedFolderPath = getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder;
-            String sf = "Subtitle file saved at : \n" + savedFolderPath + File.separator + savedSubtitleFilePath + "\n\n";
-            textview_debug.append(sf);
-            if (!Objects.equals(src_code, dst_code)) {
-                String tsf = "Translated subtitle file saved at : \n" + savedFolderPath + File.separator + savedTanslatedsubtitleFilePath + "\n\n";
-                textview_debug.append(tsf);
-            }
-            String d = "Done.";
-            textview_debug.append(d);
-        });
+        String savedFolderPath = getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder;
+        String sf = savedFolderPath + File.separator + savedSubtitleFilePath + "\n";
+        textview_final_results.append(sf);
+        if (!Objects.equals(src_code, dst_code)) {
+            String tsf = savedFolderPath + File.separator + savedTanslatedsubtitleFilePath + "\n";
+            textview_final_results.append(tsf);
+        }
+        int colorCode = 0;
+        if (textview_final_results.getBackground() instanceof ColorDrawable) {
+            ColorDrawable cd = (ColorDrawable) textview_final_results.getBackground();
+            colorCode = cd.getColor();
+        }
+        int finalColorCode = colorCode;
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            Spannable spannable = Spannable.Factory.getInstance().newSpannable(textview_final_results.getText());
+            spannable.setSpan(new BackgroundColorSpan(finalColorCode), 0, textview_final_results.getText().length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            textview_final_results.setText(spannable);
+        }, 1000);
     }
 
     private void showConfirmationDialogue() {
@@ -1706,7 +1577,7 @@ public class MainActivity extends AppCompatActivity {
                 isTranscribing = false;
                 dialog.dismiss();
                 String m = "Process has been canceled\n";
-                textview_debug.setText(m);
+                textview_output_messages.setText(m);
             });
         });
 
@@ -1728,7 +1599,7 @@ public class MainActivity extends AppCompatActivity {
         String pounds = StringUtils.repeat('#', filled_up_Length);
         String equals = StringUtils.repeat('=', (bar_length - filled_up_Length));
         String bar = pounds + equals;
-        textview_debug.setText(prefix + " [" + bar + "] " + percentage + '%');
+        textview_output_messages.setText(prefix + " [" + bar + "] " + percentage + '%');
     }*/
 
 }
