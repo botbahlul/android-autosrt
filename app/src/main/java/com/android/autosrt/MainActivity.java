@@ -29,6 +29,7 @@ import android.text.Spannable;
 import android.text.method.ScrollingMovementMethod;
 import android.text.style.BackgroundColorSpan;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -729,44 +730,6 @@ public class MainActivity extends AppCompatActivity {
         String t1 = "isTranscribing = " + isTranscribing;
         textview_isTranscribing.setText(t1);
 
-        if(checkbox_debug_mode.isChecked()){
-            textview_src_code.setVisibility(View.VISIBLE);
-            textview_dst_code.setVisibility(View.VISIBLE);
-            textview_subtitle_format.setVisibility(View.VISIBLE);
-            textview_fileURI.setVisibility(View.VISIBLE);
-            textview_fileDisplayName.setVisibility(View.VISIBLE);
-            textview_isTranscribing.setVisibility(View.VISIBLE);
-            if (filesPath != null) {
-                textview_filePath.setText("");
-                for (int i=0; i< filesPath.size(); i++) {
-                    String fp = "filesPath.get(" + i + ") = " + filesPath.get(i) + "\n";
-                    textview_filePath.append(fp);
-                }
-            }
-            else {
-                textview_filePath.setHint("filePath");
-            }
-
-        }
-        else {
-            textview_src_code.setVisibility(View.GONE);
-            textview_dst_code.setVisibility(View.GONE);
-            textview_subtitle_format.setVisibility(View.GONE);
-            textview_fileURI.setVisibility(View.GONE);
-            textview_fileDisplayName.setVisibility(View.GONE);
-            textview_isTranscribing.setVisibility(View.GONE);
-            if (filesPath != null) {
-                textview_filePath.setText("");
-                for (int i=0; i< filesPath.size(); i++) {
-                    String fp = "File path [" + i + "] = " + filesPath.get(i) + "\n";
-                    textview_filePath.append(fp);
-                }
-            }
-            else {
-                textview_filePath.setHint("File path");
-            }
-        }
-
         checkbox_debug_mode.setOnClickListener(view -> {
             if(((CompoundButton) view).isChecked()){
                 textview_src_code.setVisibility(View.VISIBLE);
@@ -796,7 +759,7 @@ public class MainActivity extends AppCompatActivity {
                 if (filesPath != null) {
                     textview_filePath.setText("");
                     for (int i=0; i< filesPath.size(); i++) {
-                        String fp = "File path [" + i + "] = " + filesPath.get(i) + "\n";
+                        String fp = filesPath.get(i) + "\n";
                         textview_filePath.append(fp);
                     }
                 }
@@ -805,6 +768,44 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+
+        if(checkbox_debug_mode.isChecked()){
+            textview_src_code.setVisibility(View.VISIBLE);
+            textview_dst_code.setVisibility(View.VISIBLE);
+            textview_subtitle_format.setVisibility(View.VISIBLE);
+            textview_fileURI.setVisibility(View.VISIBLE);
+            textview_fileDisplayName.setVisibility(View.VISIBLE);
+            textview_isTranscribing.setVisibility(View.VISIBLE);
+            if (filesPath != null) {
+                textview_filePath.setText("");
+                for (int i=0; i< filesPath.size(); i++) {
+                    String fp = "filesPath.get(" + i + ") = " + filesPath.get(i) + "\n";
+                    textview_filePath.append(fp);
+                }
+            }
+            else {
+                textview_filePath.setHint("filePath");
+            }
+
+        }
+        else {
+            textview_src_code.setVisibility(View.GONE);
+            textview_dst_code.setVisibility(View.GONE);
+            textview_subtitle_format.setVisibility(View.GONE);
+            textview_fileURI.setVisibility(View.GONE);
+            textview_fileDisplayName.setVisibility(View.GONE);
+            textview_isTranscribing.setVisibility(View.GONE);
+            if (filesPath != null) {
+                textview_filePath.setText("");
+                for (int i=0; i< filesPath.size(); i++) {
+                    String fp = filesPath.get(i) + "\n";
+                    textview_filePath.append(fp);
+                }
+            }
+            else {
+                textview_filePath.setHint("File path");
+            }
+        }
 
         spinner_src_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
@@ -850,19 +851,30 @@ public class MainActivity extends AppCompatActivity {
             if(((CompoundButton) view).isChecked()){
                 textview_text2.setVisibility(View.VISIBLE);
                 spinner_dst_languages.setVisibility(View.VISIBLE);
-                textview_dst_code.setVisibility(View.VISIBLE);
 
-                spinner_dst_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                if (checkbox_debug_mode.isChecked()) {
+                    textview_dst_code.setVisibility(View.VISIBLE);
+                }
+                else {
+                    textview_dst_code.setVisibility(View.GONE);
+                }
+
+                    spinner_dst_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
                     @Override
                     public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
                         src_language = spinner_src_languages.getSelectedItem().toString();
                         dst_language = spinner_dst_languages.getSelectedItem().toString();
                         src_code = map_src_country.get(src_language);
                         dst_code = map_dst_country.get(dst_language);
-                        runOnUiThread(() -> {
-                            String ldst = "dst_code = " + dst_code;
-                            textview_dst_code.setText(ldst);
-                        });
+                        if (checkbox_debug_mode.isChecked()) {
+                            runOnUiThread(() -> {
+                                String ldst = "dst_code = " + dst_code;
+                                textview_dst_code.setText(ldst);
+                            });
+                        }
+                        else {
+                            textview_dst_code.setVisibility(View.GONE);
+                        }
                     }
                     @Override
                     public void onNothingSelected(AdapterView<?> adapterView) {
@@ -870,13 +882,17 @@ public class MainActivity extends AppCompatActivity {
                         dst_language = spinner_dst_languages.getSelectedItem().toString();
                         src_code = map_src_country.get(src_language);
                         dst_code = map_dst_country.get(dst_language);
-                        runOnUiThread(() -> {
-                            String ldst = "dst_code = " + dst_code;
-                            textview_dst_code.setText(ldst);
-                        });
+                        if (checkbox_debug_mode.isChecked()) {
+                            runOnUiThread(() -> {
+                                String ldst = "dst_code = " + dst_code;
+                                textview_dst_code.setText(ldst);
+                            });
+                        }
+                        else {
+                            textview_dst_code.setVisibility(View.GONE);
+                        }
                     }
                 });
-
             }
             else {
                 textview_text2.setVisibility(View.GONE);
@@ -1051,7 +1067,7 @@ public class MainActivity extends AppCompatActivity {
                                         String t2 = "filesPath.get(" + i + ") = " + filesPath.get(i);
                                         textview_filePath.append(t2 + "\n");
                                     } else {
-                                        String t2 = "File path [" + i + "] = " + filesPath.get(i);
+                                        String t2 = filesPath.get(i);
                                         textview_filePath.append(t2 + "\n");
                                     }
                                     String t3 = "filesDisplayName.get(" + i + ") = " + filesDisplayName.get(i);
@@ -1125,8 +1141,7 @@ public class MainActivity extends AppCompatActivity {
                             subtitleFilesPath.add(subtitleFilePath);
                             String translatedSubtitleFilePath = StringUtils.substring(subtitleFilePath, 0, subtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
                             translatedSubtitleFilesPath.add(translatedSubtitleFilePath);
-                            saveSubtitleFileToDocumentsDir(subtitleFilePath);
-                            //saveSubtitleFileToDocumentsDir(translatedSubtitleFilePath);
+                            saveSubtitleFileToDocumentsDir(filesDisplayName.get(i), subtitleFilePath);
                         }
                         runOnUiThread(() -> textview_currentFilePathProceed.setText(""));
                         if (!canceled && filesURI != null) {
@@ -1382,7 +1397,7 @@ public class MainActivity extends AppCompatActivity {
         return file.exists();
     }
 
-    private void saveSubtitleFileToDocumentsDir(String subtitleFilePath) {
+    private void saveSubtitleFileToDocumentsDir(String fileDisplayName, String subtitleFilePath) {
         OutputStream outputStream;
         String subtitleFileDisplayName = subtitleFilePath.substring(subtitleFilePath.lastIndexOf("/")+1);
         String subtitleFolder = StringUtils.substring(subtitleFileDisplayName,0,subtitleFileDisplayName.length()-4);
@@ -1500,12 +1515,21 @@ public class MainActivity extends AppCompatActivity {
                 throw new RuntimeException(e);
             }
         }
+        String s = "Saved subtitle files for " + fileDisplayName + " : \n";
+        runOnUiThread(() -> textview_final_results.append(s));
         String savedFolderPath = getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder;
         String sf = savedFolderPath + File.separator + subtitleFileDisplayName + "\n";
-        runOnUiThread(() -> textview_final_results.append(sf));
+        runOnUiThread(() -> {
+            textview_final_results.setGravity(Gravity.BOTTOM);
+            textview_final_results.setMovementMethod(new ScrollingMovementMethod());
+            textview_final_results.append(sf);
+        });
         if (!Objects.equals(src_code, dst_code)) {
-            String tsf = savedFolderPath + File.separator + translatedSubtitleFileDisplayName + "\n";
-            runOnUiThread(() -> textview_final_results.append(tsf));
+            String tsf = savedFolderPath + File.separator + translatedSubtitleFileDisplayName + "\n\n";
+            runOnUiThread(() -> {
+                textview_final_results.setMovementMethod(new ScrollingMovementMethod());
+                textview_final_results.append(tsf);
+            });
         }
         int colorCode = 0;
         if (textview_final_results.getBackground() instanceof ColorDrawable) {
@@ -1516,7 +1540,10 @@ public class MainActivity extends AppCompatActivity {
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             Spannable spannable = Spannable.Factory.getInstance().newSpannable(textview_final_results.getText());
             spannable.setSpan(new BackgroundColorSpan(finalColorCode), 0, textview_final_results.getText().length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-            textview_final_results.setText(spannable);
+            runOnUiThread(() -> {
+                textview_final_results.setMovementMethod(new ScrollingMovementMethod());
+                textview_final_results.setText(spannable);
+            });
         }, 1000);
     }
 

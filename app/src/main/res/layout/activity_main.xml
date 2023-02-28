@@ -376,7 +376,7 @@
             android:id="@+id/textview_final_results"
             android:hint="Saved subtitle files"
             android:padding="5dp"
-            android:gravity="left"
+            android:gravity="start"
             android:textAlignment="gravity"
             android:textSize="12sp"
             android:textIsSelectable="true"
