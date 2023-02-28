@@ -2,10 +2,8 @@ package com.android.autosrt;
 
 import static android.os.Environment.DIRECTORY_DOCUMENTS;
 import static android.os.Environment.getExternalStorageDirectory;
-import static java.lang.Math.round;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ContentResolver;
@@ -14,20 +12,16 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
-import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.Handler;
 import android.os.Looper;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
-import android.text.Spannable;
 import android.text.method.ScrollingMovementMethod;
-import android.text.style.BackgroundColorSpan;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -786,7 +780,6 @@ public class MainActivity extends AppCompatActivity {
             else {
                 textview_filePath.setHint("filePath");
             }
-
         }
         else {
             textview_src_code.setVisibility(View.GONE);
@@ -859,7 +852,7 @@ public class MainActivity extends AppCompatActivity {
                     textview_dst_code.setVisibility(View.GONE);
                 }
 
-                    spinner_dst_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                spinner_dst_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
                     @Override
                     public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
                         src_language = spinner_src_languages.getSelectedItem().toString();
@@ -996,7 +989,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -1097,18 +1089,6 @@ public class MainActivity extends AppCompatActivity {
         return name;
     }
 
-    /*public byte[] getBytes(InputStream inputStream) throws IOException {
-        ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
-        int bufferSize = 1024;
-        byte[] buffer = new byte[bufferSize];
-
-        int len;
-        while ((len = inputStream.read(buffer)) != -1) {
-            byteBuffer.write(buffer, 0, len);
-        }
-        return byteBuffer.toByteArray();
-    }*/
-
     private void transcribe() {
         threadTranscriber = null;
         threadTranscriber = new Thread(() -> {
@@ -1164,7 +1144,6 @@ public class MainActivity extends AppCompatActivity {
                         e.printStackTrace();
                     }
                 }
-
                 else {
                     if (threadTranscriber != null) {
                         threadTranscriber.interrupt();
@@ -1190,125 +1169,6 @@ public class MainActivity extends AppCompatActivity {
         });
         threadTranscriber.start();
     }
-
-    /*SimpleDateFormat tf = new SimpleDateFormat("HH:mm:ss");
-    Date startTime=null, nowTime=null;
-    String str_nowTime, str_startTime, str_remainingTime;
-    long long_elapsedTime, long_remainingTime;*/
-    @SuppressLint({"SetTextI18n", "SimpleDateFormat"})
-    private String copyFileToExternalFilesDir(Uri uri, String newDirName, String prefix) {
-        File output = null;
-        int nameIndex;
-        int sizeIndex;
-        @SuppressLint("Recycle") Cursor returnCursor = getApplicationContext().getContentResolver().query(uri, new String[]{
-                OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE
-        }, null, null, null);
-        //*
-        //* Get the column indexes of the data in the Cursor,
-        //*     * move to the first row in the Cursor, get the data,
-        //*     * and display it.
-        //*
-        if (canceled) {
-            if (threadTranscriber != null) {
-                threadTranscriber.interrupt();
-                threadTranscriber = null;
-            }
-            isTranscribing = false;
-        } else {
-            nameIndex = returnCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-            sizeIndex = returnCursor.getColumnIndex(OpenableColumns.SIZE);
-            returnCursor.moveToFirst();
-            String name = (returnCursor.getString(nameIndex));
-            String size = (Long.toString(returnCursor.getLong(sizeIndex)));
-
-            if (!newDirName.equals("")) {
-                File dir = new File(getApplicationContext().getExternalFilesDir(null) + "/" + newDirName);
-                if (!dir.exists() && dir.mkdir()) {
-                    Log.d(dir.toString(), "created");
-                }
-                output = new File(getApplicationContext().getExternalFilesDir(null) + "/" + newDirName + "/" + name);
-            } else {
-                output = new File(getApplicationContext().getExternalFilesDir(null) + "/" + name);
-            }
-            try {
-                InputStream inputStream = getApplicationContext().getContentResolver().openInputStream(uri);
-                FileOutputStream outputStream = new FileOutputStream(output);
-                long length = Long.parseLong(size);
-                long counter = 0;
-                int read;
-                int bufferSize = 1024;
-                final byte[] buffers = new byte[bufferSize];
-
-                //if (counter == 0) {
-                //    startTime = new java.util.Date(System.currentTimeMillis());
-                //    str_startTime = new SimpleDateFormat("HH:mm:ss").format(startTime);
-                //    try {
-                //        startTime = tf.parse(str_startTime);
-                //    } catch (ParseException e) {
-                //        throw new RuntimeException(e);
-                //    }
-                //}
-
-                while ((read = inputStream.read(buffers)) != -1) {
-                    if (canceled) {
-                        if (threadTranscriber != null) {
-                            threadTranscriber.interrupt();
-                            threadTranscriber = null;
-                        }
-                        isTranscribing = false;
-                    } else {
-                        counter += read;
-                        outputStream.write(buffers, 0, read);
-                        //pBar(counter, length, prefix);
-
-                        //nowTime = new java.util.Date(System.currentTimeMillis());
-                        //str_nowTime = new SimpleDateFormat("HH:mm:ss").format(nowTime);
-                        //try {
-                        //    nowTime = tf.parse(str_nowTime);
-                        //} catch (ParseException e) {
-                        //    throw new RuntimeException(e);
-                        //}
-                        //long_elapsedTime = Objects.requireNonNull(nowTime).getTime() - Objects.requireNonNull(startTime).getTime();
-                        //long_remainingTime = long_elapsedTime * (long) (length / counter);
-                        //str_remainingTime = millisecondToDate(long_remainingTime);
-
-                        int bar_length = 10;
-                        float percentage = round(100.0 * counter / (float) (length));
-                        String pounds = StringUtils.repeat('#', round(bar_length * counter / (float) (length)));
-                        String equals = StringUtils.repeat('=', (bar_length - round(bar_length * counter / (float) (length))));
-                        String bar = pounds + equals;
-                        if ((int)(percentage) % 10 == 0){
-                            runOnUiThread(() -> {
-                                textview_output_messages.setText(prefix + " [" + bar + "] " + percentage + '%');
-                                //textview_output_messages.setText(prefix + " [" + bar + "] " + percentage + "% " + str_remainingTime);
-                            });
-                        }
-                    }
-                }
-                inputStream.close();
-                outputStream.close();
-                runOnUiThread(() -> textview_output_messages.append("\n"));
-
-            } catch (Exception e) {
-                Log.e("Exception", Objects.requireNonNull(e.getMessage()));
-            }
-        }
-        return Objects.requireNonNull(output).getPath();
-    }
-
-    /*public static String millisecondToDate(long t) {
-        long i = t;
-        i /= 1000;  //from www.java2s.com
-        long minute = i / 60;
-        long hour = minute / 60;
-        long second = i % 60;
-        minute %= 60;
-        if (hour <= 0) {
-            return String.format(Locale.getDefault(), "%02d:%02d", minute, second);
-        } else {
-            return String.format(Locale.getDefault(), "%02d:%02d:%02d", hour, minute, second);
-        }
-    }*/
 
     public String Uri2Path(Context context, Uri uri) {
         if (uri == null) {
@@ -1521,30 +1381,12 @@ public class MainActivity extends AppCompatActivity {
         String sf = savedFolderPath + File.separator + subtitleFileDisplayName + "\n";
         runOnUiThread(() -> {
             textview_final_results.setGravity(Gravity.BOTTOM);
-            textview_final_results.setMovementMethod(new ScrollingMovementMethod());
             textview_final_results.append(sf);
         });
         if (!Objects.equals(src_code, dst_code)) {
             String tsf = savedFolderPath + File.separator + translatedSubtitleFileDisplayName + "\n\n";
-            runOnUiThread(() -> {
-                textview_final_results.setMovementMethod(new ScrollingMovementMethod());
-                textview_final_results.append(tsf);
-            });
+            runOnUiThread(() -> textview_final_results.append(tsf));
         }
-        int colorCode = 0;
-        if (textview_final_results.getBackground() instanceof ColorDrawable) {
-            ColorDrawable cd = (ColorDrawable) textview_final_results.getBackground();
-            colorCode = cd.getColor();
-        }
-        int finalColorCode = colorCode;
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            Spannable spannable = Spannable.Factory.getInstance().newSpannable(textview_final_results.getText());
-            spannable.setSpan(new BackgroundColorSpan(finalColorCode), 0, textview_final_results.getText().length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-            runOnUiThread(() -> {
-                textview_final_results.setMovementMethod(new ScrollingMovementMethod());
-                textview_final_results.setText(spannable);
-            });
-        }, 1000);
     }
 
     private void showConfirmationDialogue() {
@@ -1552,51 +1394,49 @@ public class MainActivity extends AppCompatActivity {
         builder.setTitle("Confirm");
         builder.setMessage("Are you sure?");
 
-        builder.setPositiveButton("YES", (dialog, which) -> {
-            runOnUiThread(() -> {
-                canceled = true;
-                String ts = "isTranscribing = " + isTranscribing;
-                textview_isTranscribing.setText(ts);
-                String t = "Start Transcribe";
-                button_start.setText(t);
+        builder.setPositiveButton("YES", (dialog, which) -> runOnUiThread(() -> {
+            canceled = true;
+            String ts = "isTranscribing = " + isTranscribing;
+            textview_isTranscribing.setText(ts);
+            String t = "Start Transcribe";
+            button_start.setText(t);
 
-                File fc = new File(cancelFile);
-                try {
-                    FileWriter out = new FileWriter(fc);
-                    out.write("");
-                    out.close();
-                } catch (IOException e) {
-                    Log.e("Error: ", Objects.requireNonNull(e.getMessage()));
-                    e.printStackTrace();
-                }
+            File fc = new File(cancelFile);
+            try {
+                FileWriter out = new FileWriter(fc);
+                out.write("");
+                out.close();
+            } catch (IOException e) {
+                Log.e("Error: ", Objects.requireNonNull(e.getMessage()));
+                e.printStackTrace();
+            }
 
-                if (subtitleFilesPath != null) {
-                    for (int i=0; i<subtitleFilesPath.size(); i++) {
-                        File sf = new File(subtitleFilesPath.get(i)).getAbsoluteFile();
-                        if (sf.exists() && sf.delete()) {
-                            System.out.println(new File(subtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
-                        }
+            if (subtitleFilesPath != null) {
+                for (int i=0; i<subtitleFilesPath.size(); i++) {
+                    File sf = new File(subtitleFilesPath.get(i)).getAbsoluteFile();
+                    if (sf.exists() && sf.delete()) {
+                        System.out.println(new File(subtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
                     }
                 }
-                if (translatedSubtitleFilesPath != null) {
-                    for (int i=0; i<translatedSubtitleFilesPath.size(); i++) {
-                        File stf = new File(translatedSubtitleFilesPath.get(i)).getAbsoluteFile();
-                        if (stf.exists() && stf.delete()) {
-                            System.out.println(new File(translatedSubtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
-                        }
+            }
+            if (translatedSubtitleFilesPath != null) {
+                for (int i=0; i<translatedSubtitleFilesPath.size(); i++) {
+                    File stf = new File(translatedSubtitleFilesPath.get(i)).getAbsoluteFile();
+                    if (stf.exists() && stf.delete()) {
+                        System.out.println(new File(translatedSubtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
                     }
                 }
+            }
 
-                if (threadTranscriber != null) {
-                    threadTranscriber.interrupt();
-                    threadTranscriber = null;
-                }
-                isTranscribing = false;
-                dialog.dismiss();
-                String m = "Process has been canceled\n";
-                textview_output_messages.setText(m);
-            });
-        });
+            if (threadTranscriber != null) {
+                threadTranscriber.interrupt();
+                threadTranscriber = null;
+            }
+            isTranscribing = false;
+            dialog.dismiss();
+            String m = "Process has been canceled\n";
+            textview_output_messages.setText(m);
+        }));
 
         builder.setNegativeButton("NO", (dialog, which) -> {
             // Do nothing
@@ -1607,17 +1447,4 @@ public class MainActivity extends AppCompatActivity {
         alert.show();
     }
 
-    /*@SuppressLint("SetTextI18n")
-    public void pBar(long counter, long total, String prefix) {
-        int bar_length = 10;
-        int rounded = round(bar_length * counter/(float)(total));
-        int filled_up_Length = (int)(rounded);
-        float percentage = round(100.0 * counter /(float)(total));
-        String pounds = StringUtils.repeat('#', filled_up_Length);
-        String equals = StringUtils.repeat('=', (bar_length - filled_up_Length));
-        String bar = pounds + equals;
-        textview_output_messages.setText(prefix + " [" + bar + "] " + percentage + '%');
-    }*/
-
 }
-
