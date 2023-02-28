@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">autosrt</string>
+    <string name="textview_voice_language_hints">Voice language</string>
+    <string name="voice_language_hints">Voice language</string>
+    <string name="textview_translation_language_hints">Translation language</string>
+    <string name="translation_language_hints">Translation language</string>
+    <string name="fileURI">fileURI</string>
+    <string name="filePath">filePath</string>
+    <string name="browse">Browse</string>
+    <string name="start">Start Transcribe</string>
+    <string name="output_messages">Output messages</string>
+    <string name="voice_language">Voice language</string>
+    <string name="transcribe_status">isTranscribing</string>
+    <string name="filepath">filePath</string>
+    <string name="fileuri">fileURI</string>
+    <string name="subtitle_format">Subtitle format</string>
+</resources>
