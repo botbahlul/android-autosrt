@@ -5,7 +5,7 @@ https://user-images.githubusercontent.com/88623122/215234356-5f85a823-1447-45da-
 
 This app is ANDROID GUI VERSION of AUTOSRT PYHTON SCRIPT https://github.com/botbahlul/autosrt
 
-UPDATES NOTES : SINCE VERSION 1.5.0 YOU CAN SELECT MULTIPLE VIDEO/AUDIO FILES
+UPDATES NOTES : SINCE VERSION 1.5.2 YOU CAN SELECT MULTIPLE VIDEO/AUDIO FILES
 
 It's developed to running on ANDROID with the help of CHAQUOPY https://chaquo.com/chaquopy/
 
