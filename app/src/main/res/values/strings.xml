@@ -14,4 +14,14 @@
     <string name="filepath">filePath</string>
     <string name="fileuri">fileURI</string>
     <string name="subtitle_format">Subtitle format</string>
+    <string name="subtitleFormat">subtitleFormat</string>
+    <string name="debug_mode">Debug mode</string>
+    <string name="src_code">src_code</string>
+    <string name="create_translation">Create Translation</string>
+    <string name="translation_language">Translation language</string>
+    <string name="dst_code">dst_code</string>
+    <string name="subtitleformat">subtitleFormat</string>
+    <string name="filedisplayname">fileDisplayName</string>
+    <string name="current_file_proceed">Current file proceed</string>
+    <string name="saved_subtitle_files">Saved subtitle files</string>
 </resources>

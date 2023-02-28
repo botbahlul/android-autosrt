@@ -6,6 +6,7 @@ import static android.os.Environment.getExternalStorageDirectory;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -966,6 +967,8 @@ public class MainActivity extends AppCompatActivity {
             if (canceled) {
                 String m = "Process has been canceled\n";
                 textview_output_messages.setText(m);
+                textview_currentFilePathProceed.setText("");
+                textview_final_results.setText("");
             }
 
         });
@@ -1042,7 +1045,37 @@ public class MainActivity extends AppCompatActivity {
                 public void onActivityResult(ActivityResult result) {
                     if (result.getResultCode() == Activity.RESULT_OK) {
                         Intent intent = result.getData();
-                        if (intent != null && intent.getClipData() != null) {
+                        ClipData cd = null;
+                        if (intent != null) {
+                            cd = intent.getClipData();
+                        }
+                        if (cd == null) {
+                            Uri fileURI = intent.getData();
+                            filesURI.add(fileURI);
+                            String filePath = Uri2Path(getApplicationContext(), fileURI);
+                            filesPath.add(filePath);
+                            String fileDisplayName = queryName(getApplicationContext(), fileURI);
+                            filesDisplayName.add(fileDisplayName);
+                            runOnUiThread(() -> {
+                                textview_fileURI.setText("");
+                                textview_filePath.setText("");
+                                textview_fileDisplayName.setText("");
+                                for (int i = 0; i < filesURI.size(); i++) {
+                                    String t1 = "filesURI.get(" + i + ") = " + filesURI.get(i);
+                                    textview_fileURI.append(t1 + "\n");
+                                    if (checkbox_debug_mode.isChecked()) {
+                                        String t2 = "filesPath.get(" + i + ") = " + filesPath.get(i);
+                                        textview_filePath.append(t2 + "\n");
+                                    } else {
+                                        String t2 = filesPath.get(i);
+                                        textview_filePath.append(t2 + "\n");
+                                    }
+                                    String t3 = "filesDisplayName.get(" + i + ") = " + filesDisplayName.get(i);
+                                    textview_fileDisplayName.append(t3 + "\n");
+                                }
+                            });
+                        }
+                        else if (intent != null && cd != null) {
                             for (int i = 0; i < intent.getClipData().getItemCount(); i++) {
                                 Uri fileURI = intent.getClipData().getItemAt(i).getUri();
                                 filesURI.add(fileURI);
@@ -1052,7 +1085,10 @@ public class MainActivity extends AppCompatActivity {
                                 filesDisplayName.add(fileDisplayName);
                             }
                             runOnUiThread(() -> {
-                                for (int i = 0; i < intent.getClipData().getItemCount(); i++) {
+                                textview_fileURI.setText("");
+                                textview_filePath.setText("");
+                                textview_fileDisplayName.setText("");
+                                for (int i = 0; i < filesURI.size(); i++) {
                                     String t1 = "filesURI.get(" + i + ") = " + filesURI.get(i);
                                     textview_fileURI.append(t1 + "\n");
                                     if (checkbox_debug_mode.isChecked()) {

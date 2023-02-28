@@ -4,7 +4,7 @@ import audioop
 import math
 import multiprocessing
 import threading
-import io, sys, os, time, signal
+import io, sys, os, time, signal, shutil
 import tempfile
 import wave
 import json
@@ -757,7 +757,7 @@ def transcribe(src, dest, filename, file_display_name, subtitle_format, activity
 
             transcription_translator = TranscriptionTranslator(src=src, dest=dest)
             translated_transcriptions = []
-            time.sleep(2)
+            time.sleep(1)
             print("Translating subtitles")
             for i, translated_transcription in enumerate(pool.imap(transcription_translator, created_subtitles)):
 
@@ -774,9 +774,9 @@ def transcribe(src, dest, filename, file_display_name, subtitle_format, activity
                     return
 
                 translated_transcriptions.append(translated_transcription)
-                pBar(i, len(transcriptions), "Translating subtitles from %s to %s: " %(src, dest), activity, textview_debug)
-            time.sleep(1)
-            pBar(len(transcriptions), len(transcriptions), "Translating subtitles from %s to %s: " %(src, dest), activity, textview_debug)
+                pBar(i, len(transcriptions), "Translating subtitles : " , activity, textview_debug)
+            time.sleep(2)
+            pBar(len(transcriptions), len(transcriptions), "Translating subtitles : ", activity, textview_debug)
 
             if os.path.isfile(cancel_file):
                 os.remove(cancel_file)
@@ -850,6 +850,14 @@ def transcribe(src, dest, filename, file_display_name, subtitle_format, activity
     pool.join()
     pool = None
     os.remove(wav_filename)
+    tmpdir = os.path.split(wav_filename)[0]
+    for file in os.listdir(tmpdir):
+        file_path = os.path.join(tmpdir, file)
+        if os.path.isfile(file_path) or os.path.islink(file_path):
+            os.unlink(file_path)
+        else:
+            shutil.rmtree(file_path)
+
     return subtitle_file
 
 
@@ -857,11 +865,14 @@ def pBar(count_value, total, prefix, activity, textview_debug):
     bar_length = 10
     filled_up_Length = int(round(bar_length*count_value/(total)))
     percentage = round(100.0 * count_value/(total),1)
-    bar = '#' * filled_up_Length + '=' * (bar_length - filled_up_Length)
-    # dynamic_proxy will make app crash if repeatly called to fast that's why we made a barrier 'if (int(percentage) % 10 == 0):'
+    bar = '#' * filled_up_Length + ' ' * (bar_length - filled_up_Length)
+    #bar = '█' * filled_up_Length + ' ' * (bar_length - filled_up_Length)
+    # dynamic_proxy will make app crash if repeatly called to fast that's why we made a BARRIER 'if (int(percentage) % 10 == 0):'
+    # and time.sleep(seconds)
     if (int(percentage) % 10 == 0):
         time.sleep(1)
         class R(dynamic_proxy(Runnable)):
             def run(self):
-                textview_debug.setText('%s [%s] %s%s\r' %(prefix, bar, int(percentage), '%'))
+                textview_debug.setText('%s[%10s]%3s%s\r' %(prefix, bar, int(percentage), '%'))
+                #textview_debug.setText('%s|%10s|%3s%s\r' %(prefix, bar, int(percentage), '%'))
         activity.runOnUiThread(R())
