@@ -1383,11 +1383,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void saveSubtitleFileToDocumentsDir(String subtitleFilePath) {
-        //MainActivity.this.getActivityResultRegistry().register("key", new ActivityResultContracts.OpenDocument(), result -> MainActivity.this.getApplicationContext().getContentResolver().takePersistableUriPermission(result, Intent.FLAG_GRANT_READ_URI_PERMISSION));
         OutputStream outputStream;
         String subtitleFileDisplayName = subtitleFilePath.substring(subtitleFilePath.lastIndexOf("/")+1);
         String subtitleFolder = StringUtils.substring(subtitleFileDisplayName,0,subtitleFileDisplayName.length()-4);
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
+            MainActivity.this.getActivityResultRegistry().register("key", new ActivityResultContracts.OpenDocument(), result -> MainActivity.this.getApplicationContext().getContentResolver().takePersistableUriPermission(result, Intent.FLAG_GRANT_READ_URI_PERMISSION));
             ContentValues values = new ContentValues();
             values.put(MediaStore.MediaColumns.DISPLAY_NAME, subtitleFileDisplayName); // file name subtitleFileDisplayName required to contain extension file mime
             values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
