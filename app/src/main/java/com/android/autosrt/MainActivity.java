@@ -35,7 +35,6 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
-import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.TextView;
 
@@ -105,21 +104,16 @@ public class MainActivity extends AppCompatActivity {
     Python py;
     PyObject pyObjSubtitleFilePath;
 
-    public static boolean isTranscribing = false;
-    public static boolean canceled = true;
-    public static Thread threadTranscriber;
-    public static String cancelFile;
-    public static Uri fileURI;
-    public static ArrayList<Uri> filesURI;
-    public static String filePath;
-    public static ArrayList<String> filesPath;
-    public static String fileDisplayName;
-    public static ArrayList<String> filesDisplayName;
-    public static String subtitleFormat;
-    public static String subtitleFilePath;
-    public static ArrayList<String> subtitleFilesPath;
-    public static String subtitleTranslatedFilePath;
-    public static ArrayList<String> subtitleTranslatedFilesPath;
+    boolean isTranscribing = false;
+    boolean canceled = true;
+    Thread threadTranscriber;
+    String cancelFile;
+    ArrayList<Uri> filesURI;
+    ArrayList<String> filesPath;
+    ArrayList<String> filesDisplayName;
+    String subtitleFormat;
+    ArrayList<String> subtitleFilesPath;
+    ArrayList<String> translatedSubtitleFilesPath;
     int STORAGE_PERMISSION_CODE = 101;
 
     @Override
@@ -912,21 +906,16 @@ public class MainActivity extends AppCompatActivity {
 
         button_browse.setOnClickListener(view -> {
             textview_output_messages.setText("");
-            fileURI = null;
             filesURI = null;
             filesURI = new ArrayList<>();
-            filePath = null;
             filesPath = null;
             filesPath = new ArrayList<>();
-            fileDisplayName = null;
             filesDisplayName = null;
             filesDisplayName = new ArrayList<>();
-            subtitleFilePath = null;
             subtitleFilesPath = null;
             subtitleFilesPath = new ArrayList<>();
-            subtitleTranslatedFilePath = null;
-            subtitleTranslatedFilesPath = null;
-            subtitleTranslatedFilesPath = new ArrayList<>();
+            translatedSubtitleFilesPath = null;
+            translatedSubtitleFilesPath = new ArrayList<>();
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
@@ -946,11 +935,6 @@ public class MainActivity extends AppCompatActivity {
             if (new File(cancelFile).exists() && new File(cancelFile).delete()) {
                 Log.d(cancelFile, "deleted");
             }
-
-            /*if (filesURI == null) {
-                String msg = "Please select at least 1 video/audio file";
-                textview_output_messages.setText(msg);
-            }*/
 
             isTranscribing = !isTranscribing;
             if (filesURI != null) {
@@ -1052,11 +1036,11 @@ public class MainActivity extends AppCompatActivity {
                         Intent intent = result.getData();
                         if (intent != null && intent.getClipData() != null) {
                             for (int i = 0; i < intent.getClipData().getItemCount(); i++) {
-                                fileURI = intent.getClipData().getItemAt(i).getUri();
+                                Uri fileURI = intent.getClipData().getItemAt(i).getUri();
                                 filesURI.add(fileURI);
-                                filePath = Uri2Path(getApplicationContext(), fileURI);
+                                String filePath = Uri2Path(getApplicationContext(), fileURI);
                                 filesPath.add(filePath);
-                                fileDisplayName = queryName(getApplicationContext(), fileURI);
+                                String fileDisplayName = queryName(getApplicationContext(), fileURI);
                                 filesDisplayName.add(fileDisplayName);
                             }
                             runOnUiThread(() -> {
@@ -1130,19 +1114,21 @@ public class MainActivity extends AppCompatActivity {
                             threadTranscriber = null;
                             transcribe();
                         }
-                        textview_final_results.setText("");
-                        //String msg = "Saved subtitle files :\n";
-                        //runOnUiThread(() -> textview_final_results.setText(msg));
+                        runOnUiThread(() -> textview_final_results.setText(""));
                         for (int i = 0; i < filesURI.size(); i++) {
                             String cfp = "Processing file : " + filesDisplayName.get(i);
                             runOnUiThread(() -> textview_currentFilePathProceed.setText(cfp));
                             pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                     "transcribe",
                                     src_code, dst_code, filesPath.get(i), filesDisplayName.get(i), subtitleFormat, MainActivity.this, textview_output_messages);
-                            saveSubtitleFileToDocumentsDir(pyObjSubtitleFilePath.toString());
+                            String subtitleFilePath = pyObjSubtitleFilePath.toString();
+                            subtitleFilesPath.add(subtitleFilePath);
+                            String translatedSubtitleFilePath = StringUtils.substring(subtitleFilePath, 0, subtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
+                            translatedSubtitleFilesPath.add(translatedSubtitleFilePath);
+                            saveSubtitleFileToDocumentsDir(subtitleFilePath);
+                            //saveSubtitleFileToDocumentsDir(translatedSubtitleFilePath);
                         }
-                        textview_currentFilePathProceed.setText("");
-
+                        runOnUiThread(() -> textview_currentFilePathProceed.setText(""));
                         if (!canceled && filesURI != null) {
                             if (threadTranscriber != null) {
                                 threadTranscriber.interrupt();
@@ -1326,7 +1312,7 @@ public class MainActivity extends AppCompatActivity {
             if(authority.startsWith("com.android.externalstorage")) {
                 String docId = DocumentsContract.getDocumentId(uri);
                 String[] split = docId.split(":");
-                String type = split[0];
+                //String type = split[0];
                 String fullPath = getPathFromExtSD(split);
                 if (!fullPath.equals("")) {
                     System.out.println("fullPath = " + fullPath);
@@ -1400,10 +1386,10 @@ public class MainActivity extends AppCompatActivity {
         OutputStream outputStream;
         String subtitleFileDisplayName = subtitleFilePath.substring(subtitleFilePath.lastIndexOf("/")+1);
         String subtitleFolder = StringUtils.substring(subtitleFileDisplayName,0,subtitleFileDisplayName.length()-4);
-        String savedSubtitleFilePath = StringUtils.substring(subtitleFileDisplayName,0,subtitleFileDisplayName.length()-4) + "." + subtitleFormat;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
+            MainActivity.this.getActivityResultRegistry().register("key", new ActivityResultContracts.OpenDocument(), result -> MainActivity.this.getApplicationContext().getContentResolver().takePersistableUriPermission(result, Intent.FLAG_GRANT_READ_URI_PERMISSION));
             ContentValues values = new ContentValues();
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, savedSubtitleFilePath); // file name savedSubtitleFilePath required to contain extension file mime
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, subtitleFileDisplayName); // file name subtitleFileDisplayName required to contain extension file mime
             values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
             values.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
             Uri extVolumeUri = MediaStore.Files.getContentUri("external");
@@ -1411,6 +1397,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 outputStream = getApplicationContext().getContentResolver().openOutputStream(fileUri);
             } catch (FileNotFoundException e) {
+                e.printStackTrace();
                 throw new RuntimeException(e);
             }
         }
@@ -1419,7 +1406,7 @@ public class MainActivity extends AppCompatActivity {
             if (!root.exists() && root.mkdirs()) {
                 Log.d(root.toString(), "created");
             }
-            File file = new File(root, savedSubtitleFilePath );
+            File file = new File(root, subtitleFileDisplayName);
             Log.d("saveSubtitleFileToDocumentsDir", "saveFile: file path - " + file.getAbsolutePath());
             try {
                 outputStream = new FileOutputStream(file);
@@ -1455,12 +1442,12 @@ public class MainActivity extends AppCompatActivity {
             throw new RuntimeException(e);
         }
 
-        String savedTanslatedsubtitleFilePath = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - 4) + ".translated." + subtitleFormat;
+        String translatedSubtitleFileDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - 4) + ".translated." + subtitleFormat;
         if (!Objects.equals(src_code, dst_code)) {
             OutputStream outputStreamTranslated;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
                 ContentValues values = new ContentValues();
-                values.put(MediaStore.MediaColumns.DISPLAY_NAME, savedTanslatedsubtitleFilePath); // file name avedTanslatedsubtitleFilePath required to contain extension file mime
+                values.put(MediaStore.MediaColumns.DISPLAY_NAME, translatedSubtitleFileDisplayName); // file name avedTanslatedsubtitleFilePath required to contain extension file mime
                 values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
                 values.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
                 Uri extVolumeUri = MediaStore.Files.getContentUri("external");
@@ -1475,7 +1462,7 @@ public class MainActivity extends AppCompatActivity {
                 if (!root.exists() && root.mkdirs()) {
                     Log.d(root.toString(), "created");
                 }
-                File file = new File(root, savedTanslatedsubtitleFilePath);
+                File file = new File(root, translatedSubtitleFileDisplayName);
                 Log.d("saveSubtitleFileToDocumentsDir", "saveFile: file path - " + file.getAbsolutePath());
                 try {
                     outputStreamTranslated = new FileOutputStream(file);
@@ -1483,7 +1470,6 @@ public class MainActivity extends AppCompatActivity {
                     throw new RuntimeException(e);
                 }
             }
-
             String translatedSubtitleFilePath = StringUtils.substring(subtitleFilePath, 0, subtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
             Uri uriTranslated = Uri.fromFile(new File(translatedSubtitleFilePath));
             InputStream inputStreamTranslated;
@@ -1515,11 +1501,11 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         String savedFolderPath = getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder;
-        String sf = savedFolderPath + File.separator + savedSubtitleFilePath + "\n";
-        textview_final_results.append(sf);
+        String sf = savedFolderPath + File.separator + subtitleFileDisplayName + "\n";
+        runOnUiThread(() -> textview_final_results.append(sf));
         if (!Objects.equals(src_code, dst_code)) {
-            String tsf = savedFolderPath + File.separator + savedTanslatedsubtitleFilePath + "\n";
-            textview_final_results.append(tsf);
+            String tsf = savedFolderPath + File.separator + translatedSubtitleFileDisplayName + "\n";
+            runOnUiThread(() -> textview_final_results.append(tsf));
         }
         int colorCode = 0;
         if (textview_final_results.getBackground() instanceof ColorDrawable) {
@@ -1557,16 +1543,20 @@ public class MainActivity extends AppCompatActivity {
                     e.printStackTrace();
                 }
 
-                if (subtitleFilePath != null) {
-                    File sf = new File(subtitleFilePath).getAbsoluteFile();
-                    if(sf.exists() && sf.delete()){
-                        System.out.println(new File(subtitleFilePath).getAbsoluteFile() + " deleted");
+                if (subtitleFilesPath != null) {
+                    for (int i=0; i<subtitleFilesPath.size(); i++) {
+                        File sf = new File(subtitleFilesPath.get(i)).getAbsoluteFile();
+                        if (sf.exists() && sf.delete()) {
+                            System.out.println(new File(subtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
+                        }
                     }
                 }
-                if (subtitleFilePath != null) {
-                    File stf = new File(subtitleFilePath).getAbsoluteFile();
-                    if(stf.exists() && stf.delete()){
-                        System.out.println(new File(subtitleFilePath).getAbsoluteFile() + " deleted");
+                if (translatedSubtitleFilesPath != null) {
+                    for (int i=0; i<translatedSubtitleFilesPath.size(); i++) {
+                        File stf = new File(translatedSubtitleFilesPath.get(i)).getAbsoluteFile();
+                        if (stf.exists() && stf.delete()) {
+                            System.out.println(new File(translatedSubtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
+                        }
                     }
                 }
 
