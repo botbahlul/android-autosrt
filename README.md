@@ -9,7 +9,7 @@ UPDATES NOTES : SINCE VERSION 1.5.3 YOU CAN SELECT MULTIPLE VIDEO/AUDIO FILES
 
 It's developed to running on ANDROID with the help of CHAQUOPY https://chaquo.com/chaquopy/
 
-Tested on Pixel 2 API 25 emulator, Nexus 5X API 29 emulator, and Xiaomi Redmi Note 7 Pro API 29
+Tested on Pixel 2 API 25 emulator, Nexus 5X API 30 emulator, and Xiaomi Redmi Note 7 Pro API 29
 
 You can try android-autosrt-v2 which is using 2 activities
 
