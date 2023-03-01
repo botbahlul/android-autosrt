@@ -865,14 +865,14 @@ def pBar(count_value, total, prefix, activity, textview_debug):
     bar_length = 10
     filled_up_Length = int(round(bar_length*count_value/(total)))
     percentage = round(100.0 * count_value/(total),1)
-    bar = '#' * filled_up_Length + ' ' * (bar_length - filled_up_Length)
-    #bar = '█' * filled_up_Length + ' ' * (bar_length - filled_up_Length)
+    #bar = '#' * filled_up_Length + ' ' * (bar_length - filled_up_Length)
+    bar = '█' * filled_up_Length + '-' * (bar_length - filled_up_Length)
     # dynamic_proxy will make app crash if repeatly called to fast that's why we made a BARRIER 'if (int(percentage) % 10 == 0):'
     # and time.sleep(seconds)
     if (int(percentage) % 10 == 0):
         time.sleep(1)
         class R(dynamic_proxy(Runnable)):
             def run(self):
-                textview_debug.setText('%s[%10s]%3s%s\r' %(prefix, bar, int(percentage), '%'))
-                #textview_debug.setText('%s|%10s|%3s%s\r' %(prefix, bar, int(percentage), '%'))
+                #textview_debug.setText('%s[%10s]%3s%s\r' %(prefix, bar, int(percentage), '%'))
+                textview_debug.setText('%s|%10s|%3s%s\r' %(prefix, bar, int(percentage), '%'))
         activity.runOnUiThread(R())
