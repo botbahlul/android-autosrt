@@ -973,11 +973,24 @@ public class MainActivity extends AppCompatActivity {
 
         });
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !Environment.isExternalStorageLegacy()) {
-            Uri uri = Uri.parse("package:" + MainActivity.this.getPackageName());
-            startActivity(new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, uri));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                    intent.addCategory("android.intent.category.DEFAULT");
+                    intent.setData(Uri.parse(String.format("package:%s", getApplicationContext().getPackageName())));
+                    startActivity(intent);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    Intent intent = new Intent();
+                    intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                    startActivity(intent);
+                }
+            }
         } else {
-            checkPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, STORAGE_PERMISSION_CODE);
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
+            }
         }
 
     }
@@ -1005,12 +1018,6 @@ public class MainActivity extends AppCompatActivity {
                 String m = "Storage permission denied";
                 textview_output_messages.setText(m);
             }
-        }
-    }
-
-    public void checkPermission(String permission, int requestCode) {
-        if (ContextCompat.checkSelfPermission(MainActivity.this, permission) == PackageManager.PERMISSION_DENIED) {
-            ActivityCompat.requestPermissions(MainActivity.this, new String[] { permission }, requestCode);
         }
     }
 
@@ -1045,17 +1052,19 @@ public class MainActivity extends AppCompatActivity {
                 public void onActivityResult(ActivityResult result) {
                     if (result.getResultCode() == Activity.RESULT_OK) {
                         Intent intent = result.getData();
-                        ClipData cd = null;
-                        if (intent != null) {
+                        ClipData cd;
+                        if (intent != null && intent.getClipData() != null) {
                             cd = intent.getClipData();
-                        }
-                        if (cd == null) {
-                            Uri fileURI = intent.getData();
-                            filesURI.add(fileURI);
-                            String filePath = Uri2Path(getApplicationContext(), fileURI);
-                            filesPath.add(filePath);
-                            String fileDisplayName = queryName(getApplicationContext(), fileURI);
-                            filesDisplayName.add(fileDisplayName);
+                            for (int i = 0; i < cd.getItemCount(); i++) {
+                                Uri fileURI = cd.getItemAt(i).getUri();
+                                filesURI.add(fileURI);
+                                String filePath = Uri2Path(getApplicationContext(), fileURI);
+                                filesPath.add(filePath);
+                                String fileDisplayName = queryName(getApplicationContext(), fileURI);
+                                //String fileDisplayName = uri.getLastPathSegment();
+                                //String filename = FilenameUtils.getName(subtitleFilePath);
+                                filesDisplayName.add(fileDisplayName);
+                            }
                             runOnUiThread(() -> {
                                 textview_fileURI.setText("");
                                 textview_filePath.setText("");
@@ -1075,15 +1084,13 @@ public class MainActivity extends AppCompatActivity {
                                 }
                             });
                         }
-                        else if (intent != null && cd != null) {
-                            for (int i = 0; i < intent.getClipData().getItemCount(); i++) {
-                                Uri fileURI = intent.getClipData().getItemAt(i).getUri();
-                                filesURI.add(fileURI);
-                                String filePath = Uri2Path(getApplicationContext(), fileURI);
-                                filesPath.add(filePath);
-                                String fileDisplayName = queryName(getApplicationContext(), fileURI);
-                                filesDisplayName.add(fileDisplayName);
-                            }
+                        if (intent !=null && intent.getClipData() == null ) {
+                            Uri fileURI = intent.getData();
+                            filesURI.add(fileURI);
+                            String filePath = Uri2Path(getApplicationContext(), fileURI);
+                            filesPath.add(filePath);
+                            String fileDisplayName = queryName(getApplicationContext(), fileURI);
+                            filesDisplayName.add(fileDisplayName);
                             runOnUiThread(() -> {
                                 textview_fileURI.setText("");
                                 textview_filePath.setText("");
@@ -1328,8 +1335,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         Uri uri = Uri.fromFile(new File(subtitleFilePath));
-		//String fileDisplayName = uri.getLastPathSegment();
-		//String filename = FilenameUtils.getName(subtitleFilePath);
         InputStream inputStream;
         try {
             inputStream = getApplicationContext().getContentResolver().openInputStream(uri);
@@ -1486,5 +1491,11 @@ public class MainActivity extends AppCompatActivity {
         AlertDialog alert = builder.create();
         alert.show();
     }
+
+    /*public void checkPermission(String permission, int requestCode) {
+        if (ContextCompat.checkSelfPermission(MainActivity.this, permission) == PackageManager.PERMISSION_DENIED) {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[] { permission }, requestCode);
+        }
+    }*/
 
 }
