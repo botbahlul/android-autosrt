@@ -317,6 +317,7 @@ map_language_of_code = dict(zip(arraylist_language_code, arraylist_language))
 
 LANGUAGE_CODES = map_language_of_code
 
+
 def srt_formatter(subtitles, padding_before=0, padding_after=0):
     """
     Serialize a list of subtitles according to the SRT format, with optional time padding.
@@ -489,7 +490,7 @@ def extract_audio(filePath, channels=1, rate=16000):
     if not os.path.isfile(filePath):
         print("The given file does not exist: {0}".format(filePath))
         raise Exception("Invalid filepath: {0}".format(filePath))
-    FFmpeg.execute("-y -i " + "\"" + filePath + "\"" + " -ac " + str(channels) + " -ar " + str(rate) + " " + "\"" + temp.name + "\"" )
+    FFmpeg.execute("-y -i " + "\"" + filePath + "\"" + " -ac " + str(channels) + " -ar " + str(rate) + " " + "\"" + temp.name + "\"")
     return temp.name, rate
 
 
@@ -535,7 +536,7 @@ def find_speech_regions(wav_file, frame_width=4096, min_region_size=0.3, max_reg
     return regions
 
 
-def transcribe(src, dest, filename, file_display_name, subtitle_format, activity, textview_debug):
+def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_format, activity, textview_debug):
     multiprocessing.freeze_support()
     if os.path.isfile(cancel_file):
         os.remove(cancel_file)
@@ -547,7 +548,6 @@ def transcribe(src, dest, filename, file_display_name, subtitle_format, activity
         activity.runOnUiThread(R())
         return
 
-    wav_filename = None
     subtitle_file = None
     translated_subtitle_file = None
 
@@ -563,21 +563,29 @@ def transcribe(src, dest, filename, file_display_name, subtitle_format, activity
 
     pool = multiprocessing.pool.ThreadPool(10)
 
-    print("Converting {} to a temporary WAV file".format(file_display_name))
+    #print("Converting to a temporary WAV file")
+    #class R(dynamic_proxy(Runnable)):
+        #def run(self):
+            #textview_debug.setText("Running python script...\n\n");
+            #textview_debug.append("Converting to a temporary WAV file...\n\n")
+    #activity.runOnUiThread(R())
+    #time.sleep(1)
+    #wav_filename, audio_rate = extract_audio(filename)
+    #print("Converted WAV file is : {}".format(wav_filename))
+    #if wav_filename:
+        #class R(dynamic_proxy(Runnable)):
+            #def run(self):
+                #textview_debug.append("Converted WAV file is :\n" + wav_filename)
+        #activity.runOnUiThread(R())
+        #time.sleep(2)
+
     class R(dynamic_proxy(Runnable)):
         def run(self):
             textview_debug.setText("Running python script...\n");
-            textview_debug.append("Converting {} to a temporary WAV file...\n".format(file_display_name))
     activity.runOnUiThread(R())
     time.sleep(1)
-    wav_filename, audio_rate = extract_audio(filename)
-    print("{} converted WAV file is : {}".format(file_display_name, wav_filename))
-    if wav_filename:
-        class R(dynamic_proxy(Runnable)):
-            def run(self):
-                textview_debug.append("{} converted WAV file is :\n".format(file_display_name) + wav_filename)
-        activity.runOnUiThread(R())
-        time.sleep(2)
+
+    audio_rate = 16000
 
     if os.path.isfile(cancel_file):
         os.remove(cancel_file)
@@ -604,7 +612,7 @@ def transcribe(src, dest, filename, file_display_name, subtitle_format, activity
             textview_debug.append("Speech regions found = " + str(num) + "\n")
     activity.runOnUiThread(R())
     print("Speech regions found = {}".format(str(num)))
-    time.sleep(3)
+    time.sleep(1)
 
     if os.path.isfile(cancel_file):
         os.remove(cancel_file)
@@ -635,7 +643,7 @@ def transcribe(src, dest, filename, file_display_name, subtitle_format, activity
         return
 
     if regions:
-        time.sleep(2)
+        time.sleep(1)
         print("Converting speech regions to FLAC files")
         extracted_regions = []
         for i, extracted_region in enumerate(pool.imap(converter, regions)):
@@ -855,8 +863,8 @@ def transcribe(src, dest, filename, file_display_name, subtitle_format, activity
         file_path = os.path.join(tmpdir, file)
         if os.path.isfile(file_path) or os.path.islink(file_path):
             os.unlink(file_path)
-        else:
-            shutil.rmtree(file_path)
+        #else:
+            #shutil.rmtree(file_path)
 
     return subtitle_file
 
