@@ -605,6 +605,10 @@ def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_fo
             textview_debug.setText("Finding speech regions of WAV file...\n")
     activity.runOnUiThread(R())
     regions = find_speech_regions(wav_filename)
+    i=0
+    for region in regions:
+        print("{} {}".format(i, region))
+        i+=1
     num = len(regions)
     time.sleep(1)
     class R(dynamic_proxy(Runnable)):
@@ -711,6 +715,12 @@ def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_fo
             return
 
         timed_subtitles = [(r, t) for r, t in zip(regions, transcriptions) if t]
+
+        i=0
+        for ts in timed_subtitles:
+            print("{} {}".format(i, ts))
+            i+=1
+
         formatter = FORMATTERS.get(subtitle_format)
         formatted_subtitles = formatter(timed_subtitles)
 
@@ -879,8 +889,15 @@ def pBar(count_value, total, prefix, activity, textview_debug):
     # and time.sleep(seconds)
     if (int(percentage) % 10 == 0):
         time.sleep(1)
+
         class R(dynamic_proxy(Runnable)):
             def run(self):
-                #textview_debug.setText('%s[%10s]%3s%s\r' %(prefix, bar, int(percentage), '%'))
+                textview_debug.setText('%s[%10s]%3s%s\r' %(prefix, bar, int(percentage), '%'))
                 textview_debug.setText('%s|%10s|%3s%s\r' %(prefix, bar, int(percentage), '%'))
+
+        #class R(static_proxy(None, Runnable):
+            #@Override(jvoid, [])
+            #def run(self):
+                #textview_debug.setText('%s|%10s|%3s%s\r' %(prefix, bar, int(percentage), '%'))
+        
         activity.runOnUiThread(R())
