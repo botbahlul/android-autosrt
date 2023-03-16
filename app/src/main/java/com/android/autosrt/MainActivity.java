@@ -1192,13 +1192,14 @@ public class MainActivity extends AppCompatActivity {
                                 pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
                                         "transcribe",
                                         src_code, dst_code, filesPath.get(i), filesDisplayName.get(i), tmpWavFile[i].toString(), subtitleFormat, MainActivity.this, textview_output_messages);
-                                String subtitleFilePath = pyObjSubtitleFilePath.toString();
-                                subtitleFilesPath.add(subtitleFilePath);
-                                String translatedSubtitleFilePath = StringUtils.substring(subtitleFilePath, 0, subtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
-                                translatedSubtitleFilesPath.add(translatedSubtitleFilePath);
-                                saveSubtitleFileToDocumentsDir(filesDisplayName.get(i), subtitleFilePath);
+                                if (pyObjSubtitleFilePath != null) {
+                                    String subtitleFilePath = pyObjSubtitleFilePath.toString();
+                                    subtitleFilesPath.add(subtitleFilePath);
+                                    String translatedSubtitleFilePath = StringUtils.substring(subtitleFilePath, 0, subtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
+                                    translatedSubtitleFilesPath.add(translatedSubtitleFilePath);
+                                    saveSubtitleFileToDocumentsDir(filesDisplayName.get(i), subtitleFilePath);
+                                }
                             }
-
                         }
                         runOnUiThread(() -> textview_currentFilePathProceed.setText(""));
 

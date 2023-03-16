@@ -21,8 +21,12 @@ from com.arthenica.mobileffmpeg import FFmpeg
 from os.path import dirname, join
 from com.chaquo.python import Python
 
-from java import dynamic_proxy, static_proxy
+from java import dynamic_proxy, static_proxy, jvoid, Override, method, constructor
 from java.lang import Runnable
+from android.os import Bundle
+from com.android.autosrt import R
+from androidx.appcompat.widget import AppCompatTextView
+from androidx.appcompat.app import AppCompatActivity
 
 context = Python.getPlatform().getApplication()
 files_dir = str(context.getExternalFilesDir(None))
@@ -538,14 +542,10 @@ def find_speech_regions(wav_file, frame_width=4096, min_region_size=0.3, max_reg
 
 def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_format, activity, textview_debug):
     multiprocessing.freeze_support()
+
     if os.path.isfile(cancel_file):
         os.remove(cancel_file)
-        class R(dynamic_proxy(Runnable)):
-            def run(self):
-                time.sleep(1)
-                textview_debug.setText("")
-                textview_debug.setText("Process has been canceled")
-        activity.runOnUiThread(R())
+        activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
         return
 
     subtitle_file = None
@@ -553,81 +553,49 @@ def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_fo
 
     if os.path.isfile(cancel_file):
         os.remove(cancel_file)
-        class R(dynamic_proxy(Runnable)):
-            def run(self):
-                time.sleep(1)
-                textview_debug.setText("")
-                textview_debug.setText("Process has been canceled")
-        activity.runOnUiThread(R())
+        activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
         return
 
     pool = multiprocessing.pool.ThreadPool(10)
 
     #print("Converting to a temporary WAV file")
-    #class R(dynamic_proxy(Runnable)):
-        #def run(self):
-            #textview_debug.setText("Running python script...\n\n");
-            #textview_debug.append("Converting to a temporary WAV file...\n\n")
-    #activity.runOnUiThread(R())
+    #activity.runOnUiThread(setText(textview_debug, "Running python script...\n\n"))
+    #activity.runOnUiThread(appendText(textview_debug, "Converting to a temporary WAV file...\n\n"))
     #time.sleep(1)
     #wav_filename, audio_rate = extract_audio(filename)
     #print("Converted WAV file is : {}".format(wav_filename))
     #if wav_filename:
-        #class R(dynamic_proxy(Runnable)):
-            #def run(self):
-                #textview_debug.append("Converted WAV file is :\n" + wav_filename)
-        #activity.runOnUiThread(R())
+        #activity.runOnUiThread(appendText(textview_debug, "Converted WAV file is :\n" + wav_filename))
         #time.sleep(2)
 
-    class R(dynamic_proxy(Runnable)):
-        def run(self):
-            textview_debug.setText("Running python script...\n");
-    activity.runOnUiThread(R())
+    activity.runOnUiThread(setText(textview_debug, "Running python script...\n"))
     time.sleep(1)
 
     audio_rate = 16000
 
     if os.path.isfile(cancel_file):
         os.remove(cancel_file)
-        pool.terminate()
-        pool.close()
-        class R(dynamic_proxy(Runnable)):
-            def run(self):
-                time.sleep(1)
-                textview_debug.setText("")
-                textview_debug.setText("Process has been canceled")
-        activity.runOnUiThread(R())
+        activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
         return
 
     print("Finding speech regions of WAV file")
-    class R(dynamic_proxy(Runnable)):
-        def run(self):
-            textview_debug.setText("Finding speech regions of WAV file...\n")
-    activity.runOnUiThread(R())
+    activity.runOnUiThread(setText(textview_debug, "Finding speech regions of WAV file...\n"))
+
     regions = find_speech_regions(wav_filename)
-    i=0
-    for region in regions:
-        print("{} {}".format(i, region))
-        i+=1
+    #i=0
+    #for region in regions:
+        #print("{} {}".format(i, region))
+        #i+=1
     num = len(regions)
     time.sleep(1)
-    class R(dynamic_proxy(Runnable)):
-        def run(self):
-            textview_debug.append("Speech regions found = " + str(num) + "\n")
-    activity.runOnUiThread(R())
-    print("Speech regions found = {}".format(str(num)))
+
+    activity.runOnUiThread(appendText(textview_debug, "Speech regions found = " + str(num) + "\n"))
     time.sleep(1)
+    print("Speech regions found = {}".format(str(num)))
 
     if os.path.isfile(cancel_file):
         os.remove(cancel_file)
-        pool.terminate()
-        pool.close()
-        class R(dynamic_proxy(Runnable)):
-            def run(self):
-                time.sleep(1)
-                textview_debug.setText("")
-                textview_debug.setText("Process has been canceled")
-        activity.runOnUiThread(R())
+        activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
         return
 
     converter = FLACConverter(source_path=wav_filename)
@@ -638,16 +606,10 @@ def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_fo
         os.remove(cancel_file)
         pool.terminate()
         pool.close()
-        class R(dynamic_proxy(Runnable)):
-            def run(self):
-                time.sleep(1)
-                textview_debug.setText("")
-                textview_debug.setText("Process has been canceled")
-        activity.runOnUiThread(R())
+        activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
         return
 
     if regions:
-        time.sleep(1)
         print("Converting speech regions to FLAC files")
         extracted_regions = []
         for i, extracted_region in enumerate(pool.imap(converter, regions)):
@@ -656,32 +618,20 @@ def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_fo
                 os.remove(cancel_file)
                 pool.terminate()
                 pool.close()
-                class R(dynamic_proxy(Runnable)):
-                    def run(self):
-                        time.sleep(1)
-                        textview_debug.setText("")
-                        textview_debug.setText("Process has been canceled")
-                activity.runOnUiThread(R())
+                activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
                 return
 
             extracted_regions.append(extracted_region)
             pBar(i, len(regions), "Converting speech regions to FLAC : ", activity, textview_debug)
-        time.sleep(1)
         pBar(len(regions), len(regions), "Converting speech regions to FLAC : ", activity, textview_debug)
 
         if os.path.isfile(cancel_file):
             os.remove(cancel_file)
             pool.terminate()
             pool.close()
-            class R(dynamic_proxy(Runnable)):
-                def run(self):
-                    time.sleep(1)
-                    textview_debug.setText("")
-                    textview_debug.setText("Process has been canceled")
-            activity.runOnUiThread(R())
+            activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
             return
 
-        time.sleep(2)
         print("Creating subtitles")
         for i, transcription in enumerate(pool.imap(recognizer, extracted_regions)):
 
@@ -689,37 +639,26 @@ def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_fo
                 os.remove(cancel_file)
                 pool.terminate()
                 pool.close()
-                class R(dynamic_proxy(Runnable)):
-                    def run(self):
-                        time.sleep(1)
-                        textview_debug.setText("")
-                        textview_debug.setText("Process has been canceled")
-                activity.runOnUiThread(R())
+                activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
                 return
 
             transcriptions.append(transcription)
             pBar(i, len(regions), "Creating subtitles : ", activity, textview_debug)
-        time.sleep(1)
         pBar(len(regions), len(regions), "Creating subtitles : ", activity, textview_debug)
 
         if os.path.isfile(cancel_file):
             os.remove(cancel_file)
             pool.terminate()
             pool.close()
-            class R(dynamic_proxy(Runnable)):
-                def run(self):
-                    time.sleep(1)
-                    textview_debug.setText("")
-                    textview_debug.setText("Process has been canceled")
-            activity.runOnUiThread(R())
+            activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
             return
 
         timed_subtitles = [(r, t) for r, t in zip(regions, transcriptions) if t]
 
-        i=0
-        for ts in timed_subtitles:
-            print("{} {}".format(i, ts))
-            i+=1
+        #i=0
+        #for ts in timed_subtitles:
+            #print("{} {}".format(i, ts))
+            #i+=1
 
         formatter = FORMATTERS.get(subtitle_format)
         formatted_subtitles = formatter(timed_subtitles)
@@ -734,12 +673,7 @@ def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_fo
             os.remove(cancel_file)
             pool.terminate()
             pool.close()
-            class R(dynamic_proxy(Runnable)):
-                def run(self):
-                    time.sleep(1)
-                    textview_debug.setText("")
-                    textview_debug.setText("Process has been canceled")
-            activity.runOnUiThread(R())
+            activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
             return
 
         with open(subtitle_file, 'wb') as f:
@@ -757,12 +691,7 @@ def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_fo
                 os.remove(cancel_file)
                 pool.terminate()
                 pool.close()
-                class R(dynamic_proxy(Runnable)):
-                    def run(self):
-                        time.sleep(1)
-                        textview_debug.setText("")
-                        textview_debug.setText("Process has been canceled")
-                activity.runOnUiThread(R())
+                activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
                 return
 
             translated_subtitle_file = subtitle_file[ :-4] + '.translated.' + subtitle_format
@@ -775,7 +704,7 @@ def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_fo
 
             transcription_translator = TranscriptionTranslator(src=src, dest=dest)
             translated_transcriptions = []
-            time.sleep(1)
+
             print("Translating subtitles")
             for i, translated_transcription in enumerate(pool.imap(transcription_translator, created_subtitles)):
 
@@ -783,29 +712,18 @@ def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_fo
                     os.remove(cancel_file)
                     pool.terminate()
                     pool.close()
-                    class R(dynamic_proxy(Runnable)):
-                        def run(self):
-                            time.sleep(1)
-                            textview_debug.setText("")
-                            textview_debug.setText("Process has been canceled")
-                    activity.runOnUiThread(R())
+                    activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
                     return
 
                 translated_transcriptions.append(translated_transcription)
                 pBar(i, len(transcriptions), "Translating subtitles : " , activity, textview_debug)
-            time.sleep(2)
             pBar(len(transcriptions), len(transcriptions), "Translating subtitles : ", activity, textview_debug)
 
             if os.path.isfile(cancel_file):
                 os.remove(cancel_file)
                 pool.terminate()
                 pool.close()
-                class R(dynamic_proxy(Runnable)):
-                    def run(self):
-                        time.sleep(1)
-                        textview_debug.setText("")
-                        textview_debug.setText("Process has been canceled")
-                activity.runOnUiThread(R())
+                activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
                 return
 
             timed_translated_subtitles = [(r, t) for r, t in zip(created_regions, translated_transcriptions) if t]
@@ -821,48 +739,29 @@ def transcribe(src, dest, filename, file_display_name, wav_filename, subtitle_fo
                 os.remove(cancel_file)
                 pool.terminate()
                 pool.close()
-                class R(dynamic_proxy(Runnable)):
-                    def run(self):
-                        time.sleep(1)
-                        textview_debug.setText("")
-                        textview_debug.setText("Process has been canceled")
-                activity.runOnUiThread(R())
+                activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
                 return
 
             print('Temporary subtitles file created at            : {}'.format(subtitle_file))
             print('Temporary translated subtitles file created at : {}'.format(translated_subtitle_file))
 
-            class R(dynamic_proxy(Runnable)):
-                def run(self):
-                    time.sleep(2)
-                    textview_debug.append("\nTemporary subtitles file created at :\n")
-                    textview_debug.append(subtitle_file + "\n")
-                    textview_debug.append("Temporary translated subtitles file created at:\n")
-                    textview_debug.append(translated_subtitle_file + "\n")
-            activity.runOnUiThread(R())
-            time.sleep(3)
+            activity.runOnUiThread(appendText(textview_debug, "\nTemporary subtitles file created at :\n"))
+            activity.runOnUiThread(appendText(textview_debug, subtitle_file + "\n"))
+            activity.runOnUiThread(appendText(textview_debug, "Temporary translated subtitles file created at:\n"))
+            activity.runOnUiThread(appendText(textview_debug, translated_subtitle_file + "\n"))
+            time.sleep(1)
 
             if os.path.isfile(cancel_file):
                 os.remove(cancel_file)
                 pool.terminate()
                 pool.close()
-                class R(dynamic_proxy(Runnable)):
-                    def run(self):
-                        time.sleep(1)
-                        textview_debug.setText("")
-                        textview_debug.setText("Process has been canceled")
-                activity.runOnUiThread(R())
+                activity.runOnUiThread(setText(textview_debug, "Process has been canceled"))
                 return
 
         elif (is_same_language(src, dest)) and (os.path.isfile(subtitle_file)) and (not os.path.isfile(cancel_file)):
             print("Temporary subtitles file created at      : {}".format(subtitle_file))
-            class R(dynamic_proxy(Runnable)):
-                def run(self):
-                    time.sleep(1)
-                    textview_debug.append("\nTemporary subtitles file created at :\n")
-                    textview_debug.append(subtitle_file + "\n")
-            activity.runOnUiThread(R())
-            time.sleep(2)
+            activity.runOnUiThread(appendText(textview_debug, "\nTemporary subtitles file created at :\n"))
+            activity.runOnUiThread(appendText(textview_debug, subtitle_file + "\n"))
 
     pool.close()
     pool.join()
@@ -885,19 +784,27 @@ def pBar(count_value, total, prefix, activity, textview_debug):
     percentage = round(100.0 * count_value/(total),1)
     #bar = '#' * filled_up_Length + ' ' * (bar_length - filled_up_Length)
     bar = '█' * filled_up_Length + '-' * (bar_length - filled_up_Length)
-    # dynamic_proxy will make app crash if repeatly called to fast that's why we made a BARRIER 'if (int(percentage) % 10 == 0):'
-    # and time.sleep(seconds)
-    if (int(percentage) % 10 == 0):
-        time.sleep(1)
+    strings = ('%s|%10s|%3s%s\r' %(prefix, bar, int(percentage), '%'))
+    activity.runOnUiThread(setText(textview_debug, strings))
 
-        class R(dynamic_proxy(Runnable)):
-            def run(self):
-                textview_debug.setText('%s[%10s]%3s%s\r' %(prefix, bar, int(percentage), '%'))
-                textview_debug.setText('%s|%10s|%3s%s\r' %(prefix, bar, int(percentage), '%'))
 
-        #class R(static_proxy(None, Runnable):
-            #@Override(jvoid, [])
-            #def run(self):
-                #textview_debug.setText('%s|%10s|%3s%s\r' %(prefix, bar, int(percentage), '%'))
-        
-        activity.runOnUiThread(R())
+class setText(static_proxy(None, Runnable)):
+    def __init__(self, textview_debug, strings):
+        super(setText, self).__init__()
+        self.textview_debug = textview_debug
+        self.strings = strings
+
+    @Override(jvoid, [])
+    def run(self):
+        self.textview_debug.setText(self.strings)
+
+class appendText(static_proxy(None, Runnable)):
+    def __init__(self, textview_debug, strings):
+        super(appendText, self).__init__()
+        self.textview_debug = textview_debug
+        self.strings = strings
+
+    @Override(jvoid, [])
+    def run(self):
+        self.textview_debug.append(self.strings)
+
