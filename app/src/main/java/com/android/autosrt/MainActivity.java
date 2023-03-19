@@ -1279,12 +1279,10 @@ public class MainActivity extends AppCompatActivity {
                 if(authority.equals("media")) {
                     idStr = uri.toString().substring(uri.toString().lastIndexOf('/') + 1);
                     System.out.println("media idStr = " + idStr);
-                    return idStr;
                 }
                 else if(authority.startsWith("com.android.providers")) {
                     idStr = DocumentsContract.getDocumentId(uri).split(":")[1];
                     System.out.println("providers idStr = " + idStr);
-                    return idStr;
                 }
 
                 ContentResolver contentResolver = context.getContentResolver();
@@ -1293,7 +1291,7 @@ public class MainActivity extends AppCompatActivity {
                         "_id=?",
                         new String[]{idStr}, null);
                 if (cursor != null && cursor.getCount()>0 && cursor.moveToFirst()) {
-                    //cursor.moveToFirst();
+                    cursor.moveToFirst();
                     try {
                         int idx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
                         System.out.println("cursor.getString(idx) = " + cursor.getString(idx));
