@@ -865,7 +865,7 @@ class appendText(static_proxy(None, Runnable)):
         lineHeight = self.textview_output_messages.getLineHeight()
         lines = self.textview_output_messages.getLineCount()
         maxLinesOfOutputMessages = height/lineHeight
-        if lines >= maxLinesOfOutputMessages-1:
+        if lines >= maxLinesOfOutputMessages:
             self.textview_output_messages.setGravity(Gravity.BOTTOM)
         self.textview_output_messages.append(self.strings)
 

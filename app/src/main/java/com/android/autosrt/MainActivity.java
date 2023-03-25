@@ -115,6 +115,7 @@ public class MainActivity extends AppCompatActivity {
     boolean isTranscribing = false;
     Thread threadTranscriber;
     String cancelFilePath;
+
     ArrayList<Uri> selectedFilesUri;
     ArrayList<String> selectedFilesPath;
     ArrayList<String> selectedFilesDisplayName;
@@ -129,6 +130,8 @@ public class MainActivity extends AppCompatActivity {
 
     int heightOfOutputMessages;
     int maxLinesOfOutputMessages;
+    int maxChars = 0;
+    String equals;
 
     int STORAGE_PERMISSION_CODE = 101;
 
@@ -996,6 +999,16 @@ public class MainActivity extends AppCompatActivity {
 
         adjustOutputMessagesHeight();
 
+        textview_output_messages.post(() -> {
+            equals = StringUtils.repeat('=', 80);
+            maxChars = (calculateMaxCharsInTextView(equals, textview_output_messages.getWidth(), (int) textview_output_messages.getTextSize()));
+            Log.d("onCreate", "textview_output_messages_2.getWidth() = " + textview_output_messages.getWidth());
+            Log.d("onCreate", "textview_output_messages_2.getTextSize() = " + textview_output_messages.getTextSize());
+            Log.d("onCreate", "maxChars = " + maxChars);
+            equals = StringUtils.repeat('=', maxChars - 2);
+        });
+
+
     }
 
 
@@ -1527,16 +1540,13 @@ public class MainActivity extends AppCompatActivity {
                         for (int i=0; i<selectedFilesUri.size(); i++) {
                             if (!isTranscribing) return;
 
-                            String equals = StringUtils.repeat('=', 80);
-                            int nChars = calculateMaxCharsInTextView(equals, textview_output_messages.getWidth(), (int) textview_output_messages.getTextSize());
-                            Log.d("transcribe", "textview_output_messages.getWidth() = " + textview_output_messages.getWidth());
-                            Log.d("transcribe", "textview_output_messages.getTextSize() = " + textview_output_messages.getTextSize());
-                            Log.d("transcribe", "nChars = " + nChars);
-                            equals = StringUtils.repeat('=', nChars-1);
                             setText(textview_currentFilePathProceed, "Processing file : " + selectedFilesDisplayName.get(i));
-                            appendText(textview_output_messages, equals + "\n");
-                            appendText(textview_output_messages, "Processing file : " + selectedFilesDisplayName.get(i) + "\n");
-                            appendText(textview_output_messages, equals + "\n");
+                            int finalI = i;
+                            textview_output_messages.post(() -> {
+                                appendText(textview_output_messages, equals + "\n");
+                                appendText(textview_output_messages, "Processing file : " + selectedFilesDisplayName.get(finalI) + "\n");
+                                appendText(textview_output_messages, equals + "\n");
+                            });
 
                             if (!Python.isStarted()) {
                                 Python.start(new AndroidPlatform(MainActivity.this));
@@ -2599,7 +2609,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void appendText(final TextView tv, final String text){
-        runOnUiThread(() -> tv.append(text));
+        runOnUiThread(() -> {
+            int lines = textview_output_messages.getLineCount();
+            if (lines >= maxLinesOfOutputMessages) textview_output_messages.setGravity(Gravity.BOTTOM);
+            tv.append(text);
+        });
     }
 
 }
