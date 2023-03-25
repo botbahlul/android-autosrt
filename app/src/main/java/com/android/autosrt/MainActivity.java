@@ -2,9 +2,8 @@ package com.android.autosrt;
 
 import static android.os.Environment.DIRECTORY_DOCUMENTS;
 import static android.os.Environment.getExternalStorageDirectory;
-import static com.arthenica.mobileffmpeg.Config.RETURN_CODE_CANCEL;
-import static com.arthenica.mobileffmpeg.Config.RETURN_CODE_SUCCESS;
-import static java.lang.Math.round;
+import static android.provider.DocumentsContract.EXTRA_INITIAL_URI;
+import static android.provider.Settings.AUTHORITY;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -12,22 +11,28 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ContentResolver;
+import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
-import android.media.MediaPlayer;
+import android.graphics.Paint;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
+import android.os.storage.StorageManager;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.text.method.ScrollingMovementMethod;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -36,6 +41,8 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
+import android.widget.ProgressBar;
+import android.widget.RelativeLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 
@@ -48,9 +55,7 @@ import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-
-import com.arthenica.mobileffmpeg.Config;
-import com.arthenica.mobileffmpeg.FFmpeg;
+import androidx.documentfile.provider.DocumentFile;
 
 import com.chaquo.python.PyObject;
 import com.chaquo.python.Python;
@@ -65,12 +70,14 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class MainActivity extends AppCompatActivity {
     ArrayList<String> arraylist_src_code = new ArrayList<>();
@@ -79,46 +86,49 @@ public class MainActivity extends AppCompatActivity {
     ArrayList<String> arraylist_dst_languages = new ArrayList<>();
     Map<String, String> map_src_country = new HashMap<>();
     Map<String, String> map_dst_country = new HashMap<>();
-    public static String src_language, dst_language, src_code, dst_code;
+    String src_language, dst_language, src_code, dst_code;
     ArrayList<String> arraylist_subtitle_format = new ArrayList<>();
 
-    CheckBox checkbox_debug_mode;
-
     Spinner spinner_src_languages;
-    TextView textview_src_code;
-
     CheckBox checkbox_create_translation;
-
     TextView textview_text2;
     Spinner spinner_dst_languages;
-    TextView textview_dst_code;
-
     Spinner spinner_subtitle_format;
-    TextView textview_subtitle_format;
-
-    TextView textview_fileURI;
     TextView textview_filePath;
-    TextView textview_fileDisplayName;
-    TextView textview_isTranscribing;
-    Button button_browse, button_start;
+    Button button_browse;
+    Button button_grant_storage_permission;
+    TextView textview_grant_storage_permission_notes;
+    Button button_grant_manage_app_all_files_access_permission;
+    TextView textview_grant_manage_app_all_files_access_permission_notes;
+    Button button_grant_persisted_tree_uri_permission;
+    TextView textview_grant_persisted_tree_uri_permission_notes;
+    Button button_start;
     TextView textview_currentFilePathProceed;
+    TextView textview_progress;
+    ProgressBar progressBar;
+    TextView textview_percentage;
     TextView textview_output_messages;
-    TextView textview_final_results;
 
     Python py;
-    PyObject pyObjSubtitleFilePath;
+    PyObject pyObjTmpSubtitleFilePath;
 
     boolean isTranscribing = false;
-    boolean canceled = true;
     Thread threadTranscriber;
-    String cancelFile;
-    ArrayList<Uri> filesURI;
-    ArrayList<String> filesPath;
-    ArrayList<String> filesDisplayName;
+    String cancelFilePath;
+    ArrayList<Uri> selectedFilesUri;
+    ArrayList<String> selectedFilesPath;
+    ArrayList<String> selectedFilesDisplayName;
     String subtitleFormat;
-    ArrayList<String> subtitleFilesPath;
-    ArrayList<String> translatedSubtitleFilesPath;
-    //ArrayList<Integer> wavFileSize;
+    ArrayList<String> tmpSubtitleFilesPath;
+    ArrayList<String> tmpTranslatedSubtitleFilesPath;
+    File[] savedSubtitleFile;
+
+    String selectedFolderPath;
+    Uri selectedFolderUri;
+    ArrayList<Uri> savedTreesUri;
+
+    int heightOfOutputMessages;
+    int maxLinesOfOutputMessages;
 
     int STORAGE_PERMISSION_CODE = 101;
 
@@ -673,161 +683,82 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_main);
 
-        checkbox_debug_mode = findViewById(R.id.checkbox_debug_mode);
         spinner_src_languages = findViewById(R.id.spinner_src_languages);
         setup_src_spinner(arraylist_src_languages);
-        textview_src_code = findViewById(R.id.textview_src_code);
 
         checkbox_create_translation = findViewById(R.id.checkbox_create_translation);
 
         textview_text2 = findViewById(R.id.textview_text2);
         spinner_dst_languages = findViewById(R.id.spinner_dst_languages);
         setup_dst_spinner(arraylist_dst_languages);
-        textview_dst_code = findViewById(R.id.textview_dst_code);
 
         spinner_subtitle_format = findViewById(R.id.spinner_subtitle_format);
         setup_subtitle_format(arraylist_subtitle_format);
-        textview_subtitle_format = findViewById(R.id.textview_subtitle_format);
 
-        textview_fileURI = findViewById(R.id.textview_fileURI);
         textview_filePath = findViewById(R.id.textview_filePath);
-        textview_fileDisplayName = findViewById(R.id.textview_fileDisplayName);
-
         button_browse = findViewById(R.id.button_browse);
+
+        button_grant_storage_permission = findViewById(R.id.button_grant_storage_permission);
+        textview_grant_storage_permission_notes = findViewById(R.id.textview_grant_storage_permission_notes);
+        button_grant_manage_app_all_files_access_permission = findViewById(R.id.button_grant_manage_app_all_files_access_permission);
+        textview_grant_manage_app_all_files_access_permission_notes = findViewById(R.id.textview_grant_manage_app_all_files_access_permission_notes);
+        button_grant_persisted_tree_uri_permission = findViewById(R.id.button_grant_persisted_tree_uri_permission);
+        textview_grant_persisted_tree_uri_permission_notes = findViewById(R.id.textview_grant_persisted_tree_uri_permission_notes);
+
         button_start = findViewById(R.id.button_start);
-        textview_isTranscribing = findViewById(R.id.textview_isTranscribing);
         textview_currentFilePathProceed = findViewById(R.id.textview_currentFilePathProceed);
+        textview_progress = findViewById(R.id.textview_progress);
+        progressBar = findViewById(R.id.progressBar);
+        textview_percentage = findViewById(R.id.textview_percentage);
         textview_output_messages = findViewById(R.id.textview_output_messages);
-        textview_final_results = findViewById(R.id.textview_final_results);
-
-        textview_fileURI.setTextIsSelectable(true);
         textview_filePath.setTextIsSelectable(true);
-        textview_fileDisplayName.setTextIsSelectable(true);
         textview_output_messages.setTextIsSelectable(true);
-        textview_final_results.setTextIsSelectable(true);
 
-        textview_fileURI.setSelected(true);
         textview_filePath.setSelected(true);
-        textview_fileDisplayName.setSelected(true);
         textview_output_messages.setSelected(true);
-        textview_final_results.setSelected(true);
+
+        textview_filePath.setMovementMethod(new ScrollingMovementMethod());
+        textview_output_messages.setMovementMethod(new ScrollingMovementMethod());
 
         spinner_src_languages.setFocusable(true);
         spinner_src_languages.requestFocus();
 
-        textview_fileURI.setMovementMethod(new ScrollingMovementMethod());
-        textview_filePath.setMovementMethod(new ScrollingMovementMethod());
-        textview_fileDisplayName.setMovementMethod(new ScrollingMovementMethod());
-        textview_output_messages.setMovementMethod(new ScrollingMovementMethod());
-        textview_final_results.setMovementMethod(new ScrollingMovementMethod());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
+            textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
+            adjustOutputMessagesHeight();
+        }
+        else {
+            button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
+            textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
+            adjustOutputMessagesHeight();
+        }
 
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM);
             getSupportActionBar().setCustomView(R.layout.actionbar_layout);
         }
 
-        cancelFile = getApplicationContext().getExternalFilesDir(null) + File.separator + "cancel.txt";
-        File f = new File(cancelFile);
+        cancelFilePath = getApplicationContext().getExternalFilesDir(null) + File.separator + "cancel.txt";
+        File f = new File(cancelFilePath);
         if (f.exists() && f.delete()) {
             Log.d(f.toString(), "deleted");
         }
 
-        String t1 = "isTranscribing = " + isTranscribing;
-        textview_isTranscribing.setText(t1);
-
-        checkbox_debug_mode.setOnClickListener(view -> {
-            if(((CompoundButton) view).isChecked()){
-                textview_src_code.setVisibility(View.VISIBLE);
-                textview_dst_code.setVisibility(View.VISIBLE);
-                textview_subtitle_format.setVisibility(View.VISIBLE);
-                textview_fileURI.setVisibility(View.VISIBLE);
-                textview_fileDisplayName.setVisibility(View.VISIBLE);
-                textview_isTranscribing.setVisibility(View.VISIBLE);
-                if (filesPath != null) {
-                    textview_filePath.setText("");
-                    for (int i=0; i< filesPath.size(); i++) {
-                        String fp = "filesPath.get(" + i + ") = " + filesPath.get(i) + "\n";
-                        textview_filePath.append(fp);
-                    }
-                }
-                else {
-                    textview_filePath.setHint("filePath");
-                }
-            }
-            else {
-                textview_src_code.setVisibility(View.GONE);
-                textview_dst_code.setVisibility(View.GONE);
-                textview_subtitle_format.setVisibility(View.GONE);
-                textview_fileURI.setVisibility(View.GONE);
-                textview_fileDisplayName.setVisibility(View.GONE);
-                textview_isTranscribing.setVisibility(View.GONE);
-                if (filesPath != null) {
-                    textview_filePath.setText("");
-                    for (int i=0; i< filesPath.size(); i++) {
-                        String fp = filesPath.get(i) + "\n";
-                        textview_filePath.append(fp);
-                    }
-                }
-                else {
-                    textview_filePath.setHint("File path");
-                }
-            }
-        });
-
-        if(checkbox_debug_mode.isChecked()){
-            textview_src_code.setVisibility(View.VISIBLE);
-            textview_dst_code.setVisibility(View.VISIBLE);
-            textview_subtitle_format.setVisibility(View.VISIBLE);
-            textview_fileURI.setVisibility(View.VISIBLE);
-            textview_fileDisplayName.setVisibility(View.VISIBLE);
-            textview_isTranscribing.setVisibility(View.VISIBLE);
-            if (filesPath != null) {
-                textview_filePath.setText("");
-                for (int i=0; i< filesPath.size(); i++) {
-                    String fp = "filesPath.get(" + i + ") = " + filesPath.get(i) + "\n";
-                    textview_filePath.append(fp);
-                }
-            }
-            else {
-                textview_filePath.setHint("filePath");
-            }
-        }
-        else {
-            textview_src_code.setVisibility(View.GONE);
-            textview_dst_code.setVisibility(View.GONE);
-            textview_subtitle_format.setVisibility(View.GONE);
-            textview_fileURI.setVisibility(View.GONE);
-            textview_fileDisplayName.setVisibility(View.GONE);
-            textview_isTranscribing.setVisibility(View.GONE);
-            if (filesPath != null) {
-                textview_filePath.setText("");
-                for (int i=0; i< filesPath.size(); i++) {
-                    String fp = filesPath.get(i) + "\n";
-                    textview_filePath.append(fp);
-                }
-            }
-            else {
-                textview_filePath.setHint("File path");
-            }
-        }
+        textview_currentFilePathProceed.setHint("");
+        textview_progress.setHint("");
+        textview_percentage.setHint("");
+        hideProgressBar();
 
         spinner_src_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
                 src_language = spinner_src_languages.getSelectedItem().toString();
                 src_code = map_src_country.get(src_language);
-                runOnUiThread(() -> {
-                    String lsrc = "src_code = " + src_code;
-                    textview_src_code.setText(lsrc);
-                });
             }
             @Override
             public void onNothingSelected(AdapterView<?> adapterView) {
                 src_language = spinner_src_languages.getSelectedItem().toString();
                 src_code = map_src_country.get(src_language);
-                runOnUiThread(() -> {
-                    String lsrc = "src_code = " + src_code;
-                    textview_src_code.setText(lsrc);
-                });
             }
         });
 
@@ -835,19 +766,11 @@ public class MainActivity extends AppCompatActivity {
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
                 dst_language = spinner_dst_languages.getSelectedItem().toString();
                 dst_code = map_dst_country.get(dst_language);
-                runOnUiThread(() -> {
-                    String ldst = "dst_code = " + dst_code;
-                    textview_dst_code.setText(ldst);
-                });
             }
             @Override
             public void onNothingSelected(AdapterView<?> adapterView) {
                 dst_language = spinner_dst_languages.getSelectedItem().toString();
                 dst_code = map_dst_country.get(dst_language);
-                runOnUiThread(() -> {
-                    String ldst = "dst_code = " + dst_code;
-                    textview_dst_code.setText(ldst);
-                });
             }
         });
 
@@ -855,14 +778,6 @@ public class MainActivity extends AppCompatActivity {
             if(((CompoundButton) view).isChecked()){
                 textview_text2.setVisibility(View.VISIBLE);
                 spinner_dst_languages.setVisibility(View.VISIBLE);
-
-                if (checkbox_debug_mode.isChecked()) {
-                    textview_dst_code.setVisibility(View.VISIBLE);
-                }
-                else {
-                    textview_dst_code.setVisibility(View.GONE);
-                }
-
                 spinner_dst_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
                     @Override
                     public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
@@ -870,15 +785,6 @@ public class MainActivity extends AppCompatActivity {
                         dst_language = spinner_dst_languages.getSelectedItem().toString();
                         src_code = map_src_country.get(src_language);
                         dst_code = map_dst_country.get(dst_language);
-                        if (checkbox_debug_mode.isChecked()) {
-                            runOnUiThread(() -> {
-                                String ldst = "dst_code = " + dst_code;
-                                textview_dst_code.setText(ldst);
-                            });
-                        }
-                        else {
-                            textview_dst_code.setVisibility(View.GONE);
-                        }
                     }
                     @Override
                     public void onNothingSelected(AdapterView<?> adapterView) {
@@ -886,22 +792,13 @@ public class MainActivity extends AppCompatActivity {
                         dst_language = spinner_dst_languages.getSelectedItem().toString();
                         src_code = map_src_country.get(src_language);
                         dst_code = map_dst_country.get(dst_language);
-                        if (checkbox_debug_mode.isChecked()) {
-                            runOnUiThread(() -> {
-                                String ldst = "dst_code = " + dst_code;
-                                textview_dst_code.setText(ldst);
-                            });
-                        }
-                        else {
-                            textview_dst_code.setVisibility(View.GONE);
-                        }
                     }
                 });
             }
             else {
                 textview_text2.setVisibility(View.GONE);
                 spinner_dst_languages.setVisibility(View.GONE);
-                textview_dst_code.setVisibility(View.GONE);
+                adjustOutputMessagesHeight();
 
                 dst_language = src_language;
                 spinner_dst_languages.setSelection(arraylist_dst_languages.indexOf(dst_language));
@@ -913,98 +810,193 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
                 subtitleFormat = spinner_subtitle_format.getSelectedItem().toString();
-                String sf = "subtitleFormat = " + subtitleFormat;
-                textview_subtitle_format.setText(sf);
             }
             @Override
             public void onNothingSelected(AdapterView<?> adapterView) {
                 subtitleFormat = spinner_subtitle_format.getSelectedItem().toString();
-                String sf = "subtitleFormat = " + subtitleFormat;
-                textview_subtitle_format.setText(sf);
             }
         });
 
         button_browse.setOnClickListener(view -> {
-            textview_output_messages.setText("");
-            filesURI = null;
-            filesURI = new ArrayList<>();
-            filesPath = null;
-            filesPath = new ArrayList<>();
-            filesDisplayName = null;
-            filesDisplayName = new ArrayList<>();
-            subtitleFilesPath = null;
-            subtitleFilesPath = new ArrayList<>();
-            translatedSubtitleFilesPath = null;
-            translatedSubtitleFilesPath = new ArrayList<>();
-            //wavFileSize = new ArrayList<>();
+            setText(textview_output_messages, "");
+            runOnUiThread(() -> {
+                textview_output_messages.setGravity(Gravity.START);
+                textview_output_messages.scrollTo(0,0);
+            });
+            selectedFilesUri = null;
+            selectedFilesUri = new ArrayList<>();
+            selectedFilesPath = null;
+            selectedFilesPath = new ArrayList<>();
+            selectedFilesDisplayName = null;
+            selectedFilesDisplayName = new ArrayList<>();
+            tmpSubtitleFilesPath = null;
+            tmpSubtitleFilesPath = new ArrayList<>();
+            tmpTranslatedSubtitleFilesPath = null;
+            tmpTranslatedSubtitleFilesPath = new ArrayList<>();
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
             String[] mimeTypes = {"video/*", "audio/*"};
             intent.setType("*/*");
             intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-            mStartForActivity.launch(intent);
+            intent.addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                            | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                            | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+            startForBrowseFileActivity.launch(intent);
+        });
+
+        button_grant_storage_permission.setOnClickListener(view -> {
+            if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
+            }
+        });
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            button_grant_manage_app_all_files_access_permission.setOnClickListener(view -> {
+                if (!Environment.isExternalStorageManager()) {
+                    try {
+                        Uri uri = Uri.parse("package:${BuildConfig.LIBRARY_PACKAGE_NAME}");
+                        Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri);
+                        //Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION, uri);
+                        intent.addCategory("android.intent.category.DEFAULT");
+                        intent.setData(Uri.parse(String.format("package:%s", getApplicationContext().getPackageName())));
+                        //startActivity(intent);
+                        startForRequestManageAppAllFileAccessPermissionActivity.launch(intent);
+                    } catch (Exception e) {
+                        Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
+                        e.printStackTrace();
+                        Intent intent = new Intent();
+                        intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                        startActivity(intent);
+                    }
+                }
+            });
+        }
+
+        button_grant_persisted_tree_uri_permission.setOnClickListener(view -> {
+            savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+            Log.d("onCreated", "savedTreesUri.size() = " + savedTreesUri.size());
+            for (int i=0; i<savedTreesUri.size(); i++) {
+                Log.d("onCreated", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
+            }
+            if (savedTreesUri.size() == 0) {
+                requestTreeUriPermissions();
+            }
         });
 
         button_start.setOnClickListener(view -> {
-            textview_output_messages.setText("");
             if (threadTranscriber != null) {
                 threadTranscriber.interrupt();
                 threadTranscriber = null;
             }
-            cancelFile = getApplicationContext().getExternalFilesDir(null) + File.separator + "cancel.txt";
-            if (new File(cancelFile).exists() && new File(cancelFile).delete()) {
-                Log.d(cancelFile, "deleted");
+
+            cancelFilePath = getApplicationContext().getExternalFilesDir(null) + File.separator + "cancel.txt";
+            if (new File(cancelFilePath).exists() && new File(cancelFilePath).delete()) {
+                Log.d(cancelFilePath, "deleted");
             }
 
-            isTranscribing = !isTranscribing;
-            if (filesURI != null) {
-                canceled = !canceled;
-            }
+            if (selectedFilesUri != null) isTranscribing = !isTranscribing;
 
             if (isTranscribing) {
                 runOnUiThread(() -> {
-                    String ts = "isTranscribing = " + isTranscribing;
-                    textview_isTranscribing.setText(ts);
                     String t = "Cancel";
                     button_start.setText(t);
-                    transcribe();
+                    if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                        transcribe();
+                    }
+                    else {
+                        if (threadTranscriber != null) {
+                            threadTranscriber.interrupt();
+                            threadTranscriber = null;
+                        }
+                        isTranscribing = false;
+                        runOnUiThread(() -> {
+                            String t1 = "Start Transcribe";
+                            button_start.setText(t1);
+                            setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                        });
+                    }
                 });
             }
             else {
                 showConfirmationDialogue();
             }
 
-            if (canceled) {
-                String m = "Process has been canceled\n";
-                textview_output_messages.setText(m);
-                textview_currentFilePathProceed.setText("");
-                textview_final_results.setText("");
-            }
-
         });
+
+
+        // ASK WRITE PERMISSION
+        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
+        }
+
+        savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+        Log.d("onCreated", "savedTreesUri.size() = " + savedTreesUri.size());
+        for (int i=0; i<savedTreesUri.size(); i++) {
+            Log.d("onCreated", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
+        }
+        if (savedTreesUri.size() == 0) {
+            requestTreeUriPermissions();
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
                 try {
-                    Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                    Uri uri = Uri.parse("package:${BuildConfig.LIBRARY_PACKAGE_NAME}");
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri);
                     intent.addCategory("android.intent.category.DEFAULT");
                     intent.setData(Uri.parse(String.format("package:%s", getApplicationContext().getPackageName())));
-                    startActivity(intent);
+                    startForRequestManageAppAllFileAccessPermissionActivity.launch(intent);
                 } catch (Exception e) {
+                    Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
                     e.printStackTrace();
                     Intent intent = new Intent();
                     intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
                     startActivity(intent);
                 }
             }
-        } else {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
-            }
         }
 
+
+        // REMOVE BUTTONS IF PERMISSIONS HAVE ALREADY GRANTED BECAUSE THERE'S NO ANY WAY TO REVOKE PERMISSION PROGRAMMATICALLY
+        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+            button_grant_storage_permission.setVisibility(View.GONE);
+            textview_grant_storage_permission_notes.setVisibility(View.GONE);
+            adjustOutputMessagesHeight();
+        }
+        else {
+            button_grant_storage_permission.setVisibility(View.VISIBLE);
+            textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
+            adjustOutputMessagesHeight();
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (Environment.isExternalStorageManager()) {
+                button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
+                textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
+                adjustOutputMessagesHeight();
+            }
+            else {
+                button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
+                textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
+                adjustOutputMessagesHeight();
+            }
+        }
+        savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+        Log.d("onCreated", "savedTreesUri.size() = " + savedTreesUri.size());
+        for (int i=0; i<savedTreesUri.size(); i++) {
+            Log.d("onCreated", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
+        }
+
+        if (!isInternetAvailable()) {
+            setText(textview_output_messages, "It seems that you're not connected to internet, this app won't work without internet connection.");
+        }
+
+        adjustOutputMessagesHeight();
+
     }
+
 
     @Override
     public void onBackPressed() {
@@ -1016,21 +1008,75 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == STORAGE_PERMISSION_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                //Toast.makeText(MainActivity.this, "Storage Permission Granted", Toast.LENGTH_SHORT).show();
-                String m = "Storage permission granted";
-                textview_output_messages.setText(m);
-            } else {
-                //Toast.makeText(MainActivity.this, "Storage Permission Denied", Toast.LENGTH_SHORT).show();
-                String m = "Storage permission denied";
-                textview_output_messages.setText(m);
+                Log.v("onRequestPermissionsResult","Permission: " + permissions[0] + " was "+ grantResults[0]);
+
+                button_grant_storage_permission.setVisibility(View.GONE);
+                textview_grant_storage_permission_notes.setVisibility(View.GONE);
+                adjustOutputMessagesHeight();
+                setText(textview_output_messages, "Storage permission is granted\n");
+
+                savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+                Log.d("onRequestPermissionsResult", "savedTreesUri.size() = " + savedTreesUri.size());
+                if (savedTreesUri.size() > 0) {
+                    appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
+                    for (int i=0; i<savedTreesUri.size(); i++) {
+                        appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
+                        Log.d("onRequestPermissionsResult", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
+                    }
+                    if (selectedFilesPath != null && selectedFilesPath.size()>0) {
+                        if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
+                            setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                            appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                        }
+                        else {
+                            setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                            appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                        }
+                    }
+                    else {
+                        appendText(textview_output_messages, "All subtitle files will be saved into your selected folder.");
+                    }
+                }
+                else {
+                    appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders\n");
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        if (Environment.isExternalStorageManager()) {
+                            button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
+                            textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
+                            adjustOutputMessagesHeight();
+                            appendText(textview_output_messages, "Manage app all files access permission is granted.\n");
+                            appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
+                        }
+                        else {
+                            button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
+                            textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
+                            appendText(textview_output_messages, "Manage app all files access permission is not granted.\n");
+                            appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
+                        }
+                    }
+                    else {
+                        button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
+                        textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
+                        adjustOutputMessagesHeight();
+                        appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
+                    }
+                }
             }
+            else {
+                button_grant_storage_permission.setVisibility(View.VISIBLE);
+                textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
+                setText(textview_output_messages, "Storage permission is not granted, this app won't work.");
+            }
+            //Toast.makeText(MainActivity.this, m1 + m2 + m3, Toast.LENGTH_SHORT).show();
         }
     }
+
 
     public void setup_src_spinner(ArrayList<String> supported_languages) {
         Collections.sort(supported_languages);
@@ -1040,6 +1086,7 @@ public class MainActivity extends AppCompatActivity {
         spinner_src_languages.setSelection(supported_languages.indexOf("English"));
     }
 
+
     public void setup_dst_spinner(ArrayList<String> supported_languages) {
         Collections.sort(supported_languages);
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, R.layout.spinner_textview_align, supported_languages);
@@ -1047,6 +1094,7 @@ public class MainActivity extends AppCompatActivity {
         spinner_dst_languages.setAdapter(adapter);
         spinner_dst_languages.setSelection(supported_languages.indexOf("Indonesian"));
     }
+
 
     public void setup_subtitle_format(ArrayList<String> supported_formats) {
         Collections.sort(supported_formats);
@@ -1056,7 +1104,181 @@ public class MainActivity extends AppCompatActivity {
         spinner_subtitle_format.setSelection(supported_formats.indexOf("srt"));
     }
 
-    ActivityResultLauncher<Intent> mStartForActivity = registerForActivityResult(
+
+    ActivityResultLauncher<Intent> startForRequestManageAppAllFileAccessPermissionActivity = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            new ActivityResultCallback<ActivityResult>() {
+                @Override
+                public void onActivityResult(ActivityResult result) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        if (Environment.isExternalStorageManager()) {
+                            button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
+                            textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
+                            adjustOutputMessagesHeight();
+                            setText(textview_output_messages, "Manage app all files access permission is granted.\n");
+
+                            if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                                button_grant_storage_permission.setVisibility(View.GONE);
+                                textview_grant_storage_permission_notes.setVisibility(View.GONE);
+                                adjustOutputMessagesHeight();
+                                appendText(textview_output_messages, "Storage permission is granted.\n");
+
+                                savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+                                Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "savedTreesUri.size() = " + savedTreesUri.size());
+                                if (savedTreesUri.size() > 0) {
+                                    appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
+                                    for (int i=0; i<savedTreesUri.size(); i++) {
+                                        appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
+                                        Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
+                                    }
+                                    if (selectedFilesPath.size()>0) {
+                                        if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
+                                            setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                            appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        }
+                                        else {
+                                            setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                            appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                        }
+                                    }
+                                    else {
+                                        appendText(textview_output_messages, "All subtitle files will be saved into your selected folder.");
+                                    }
+
+                                }
+                                else {
+                                    appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folder");
+                                    appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                }
+                            }
+                            else {
+                                button_grant_storage_permission.setVisibility(View.VISIBLE);
+                                textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
+                                setText(textview_output_messages, "Storage permission is not granted, this app won't work.");
+                            }
+                        }
+                        else {
+                            button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
+                            textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
+                            setText(textview_output_messages, "Manage all files permission is not granted.\n");
+
+                            if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                                button_grant_storage_permission.setVisibility(View.GONE);
+                                textview_grant_storage_permission_notes.setVisibility(View.GONE);
+                                adjustOutputMessagesHeight();
+                                appendText(textview_output_messages, "Storage permission is granted.\n");
+
+                                savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+                                Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "savedTreesUri.size() = " + savedTreesUri.size());
+                                if (savedTreesUri.size() > 0) {
+                                    appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
+                                    for (int i=0; i<savedTreesUri.size(); i++) {
+                                        appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
+                                        Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
+                                    }
+                                    if (selectedFilesPath != null && selectedFilesPath.size()>0) {
+                                        if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
+                                            setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                            appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        }
+                                        else {
+                                            setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                            appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                        }
+                                    }
+                                    else {
+                                        appendText(textview_output_messages, "All subtitle files will be saved into your selected folder.");
+                                    }
+                                }
+                                else {
+                                    appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folder");
+                                    appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
+                                }
+                            }
+                            else {
+                                button_grant_storage_permission.setVisibility(View.VISIBLE);
+                                textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
+                                setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                            }
+                        }
+                    }
+                }
+            });
+
+
+    ActivityResultLauncher<Intent> startForRequestPersistedTreeUriPermissionActivity = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            new ActivityResultCallback<ActivityResult>() {
+                @Override
+                public void onActivityResult(ActivityResult result) {
+                    if (result.getResultCode() == Activity.RESULT_OK) {
+                        Uri treeUri;
+                        Intent intent = result.getData();
+                        if (intent != null) {
+                            treeUri = intent.getData();
+
+                            if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                                button_grant_storage_permission.setVisibility(View.GONE);
+                                textview_grant_storage_permission_notes.setVisibility(View.GONE);
+                                adjustOutputMessagesHeight();
+                                setText(textview_output_messages, "Storage permission is granted.\n");
+
+                                appendText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + TreeUri2Path(treeUri) + "\n");
+                                DocumentFile dfSelectedDir = DocumentFile.fromTreeUri(MainActivity.this, treeUri);
+                                DocumentFile dfFile;
+                                if (dfSelectedDir != null) {
+                                    dfFile = dfSelectedDir.createFile("*/*", "test.txt");
+                                    if (dfFile != null && dfFile.canWrite()) {
+                                        Uri uriFile = dfFile.getUri();
+                                        Log.d("startForRequestPersistedTreeUriPermissionActivity", "uriFile = " + uriFile);
+                                        try {
+                                            testWrite(uriFile);
+                                            if (dfFile.exists() && dfFile.delete()) {
+                                                appendText(textview_output_messages, "Write test succeed\n");
+                                                appendText(textview_output_messages, "All subtitle files will be saved into :\n" + TreeUri2Path(treeUri));
+                                            }
+                                        } catch (FileNotFoundException e) {
+                                            throw new RuntimeException(e);
+                                        }
+                                    } else {
+                                        Log.d("startForRequestPersistedTreeUriPermissionActivity", "File is not exist or cannot write dfFile");
+                                        setText(textview_output_messages, "Write test error!");
+                                    }
+                                }
+
+                                savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+                                boolean alreadySaved = false;
+                                for (int i = 0; i < savedTreesUri.size(); i++) {
+                                    Log.d("startForRequestPersistedTreeUriPermissionActivity", "savedTreesUri.get(i) = " + savedTreesUri.get(i));
+                                    if (savedTreesUri.get(i) == treeUri) {
+                                        alreadySaved = true;
+                                        Log.d("startForRequestPersistedTreeUriPermissionActivity", "alreadySaved = true");
+                                    }
+                                }
+                                if (!alreadySaved) {
+                                    int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                                    getContentResolver().takePersistableUriPermission(treeUri, takeFlags);
+                                    savedTreesUri.add(treeUri);
+                                    Log.d("startForRequestPersistedTreeUriPermissionActivity", "alreadySaved = false -> saveTreeUrisToSharedPreference");
+                                    saveTreeUrisToSharedPreference(savedTreesUri);
+                                }
+                            }
+                            else {
+                                button_grant_storage_permission.setVisibility(View.VISIBLE);
+                                textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
+                                setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
+                            }
+                        }
+                    }
+                    else {
+                        Log.d("startForRequestPersistedTreeUriPermissionActivity", "result.getResultCode() != Activity.RESULT_OK");
+                    }
+                }
+            });
+
+
+    ActivityResultLauncher<Intent> startForBrowseFileActivity = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             new ActivityResultCallback<ActivityResult>() {
                 @Override
@@ -1064,60 +1286,197 @@ public class MainActivity extends AppCompatActivity {
                     if (result.getResultCode() == Activity.RESULT_OK) {
                         Intent intent = result.getData();
                         ClipData cd;
+                        selectedFilesUri.clear();
+                        selectedFilesPath.clear();
+                        selectedFilesDisplayName.clear();
+                        selectedFolderPath = null;
+                        selectedFolderUri = null;
+
+                        // USER SELECT MULTIPLE FILES
                         if (intent != null && intent.getClipData() != null) {
+                            Log.d("startForBrowseFileActivity", "intent != null && intent.getClipData() != null");
                             cd = intent.getClipData();
-                            for (int i = 0; i < cd.getItemCount(); i++) {
-                                Uri fileURI = cd.getItemAt(i).getUri();
-                                filesURI.add(fileURI);
-                                String filePath = Uri2Path(getApplicationContext(), fileURI);
-                                filesPath.add(filePath);
-                                String fileDisplayName = queryName(getApplicationContext(), fileURI);
-                                //String fileDisplayName = uri.getLastPathSegment();
-                                //String filename = FilenameUtils.getName(subtitleFilePath);
-                                filesDisplayName.add(fileDisplayName);
-                            }
-                            runOnUiThread(() -> {
-                                textview_fileURI.setText("");
-                                textview_filePath.setText("");
-                                textview_fileDisplayName.setText("");
-                                for (int i = 0; i < filesURI.size(); i++) {
-                                    String t1 = "filesURI.get(" + i + ") = " + filesURI.get(i);
-                                    textview_fileURI.append(t1 + "\n");
-                                    if (checkbox_debug_mode.isChecked()) {
-                                        String t2 = "filesPath.get(" + i + ") = " + filesPath.get(i);
-                                        textview_filePath.append(t2 + "\n");
-                                    } else {
-                                        String t2 = filesPath.get(i);
-                                        textview_filePath.append(t2 + "\n");
+
+                            for (int i=0; i<cd.getItemCount(); i++) {
+                                Uri fileUri = cd.getItemAt(i).getUri();
+                                selectedFilesUri.add(fileUri);
+                                String filePath = Uri2Path(getApplicationContext(), fileUri);
+                                selectedFilesPath.add(filePath);
+                                String fileDisplayName = queryName(getApplicationContext(), fileUri);
+                                //String fileDisplayName = FilenameUtils.getName(tmpSubtitleFilePath);
+                                selectedFilesDisplayName.add(fileDisplayName);
+                                selectedFolderPath = new File(selectedFilesPath.get(i)).getParent();
+
+                                boolean alreadySaved = isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(i));
+                                if (!alreadySaved) {
+                                    Log.d("startForBrowseFileActivity", "alreadySaved = false -> requestTreeUriPermissions()");
+                                    button_grant_persisted_tree_uri_permission.setVisibility(View.VISIBLE);
+                                    setText(textview_output_messages, "Folder " + selectedFolderPath + " has not been granted yet for persisted tree uri permission.\n");
+                                    if (i==0) requestTreeUriPermissions();
+                                }
+                                else {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                        if (Environment.isExternalStorageManager()) {
+                                            button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
+                                            textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
+                                            adjustOutputMessagesHeight();
+                                            appendText(textview_output_messages, "Manage app all files access permission is granted.\n");
+
+                                            if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                                                button_grant_storage_permission.setVisibility(View.GONE);
+                                                textview_grant_storage_permission_notes.setVisibility(View.GONE);
+                                                adjustOutputMessagesHeight();
+                                                setText(textview_output_messages, "Storage permission is granted.\n");
+
+                                                if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
+                                                    setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                    appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                } else {
+                                                    setText(textview_output_messages, "Persisted tree uri permission request has not been granted yet for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                    appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                                }
+                                            } else {
+                                                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
+                                                requestTreeUriPermissions();
+                                                setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                                            }
+                                        }
+                                        else {
+                                            button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
+                                            textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
+                                            appendText(textview_output_messages, "Manage app all files access permission is not granted.\n");
+
+                                            if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                                                button_grant_storage_permission.setVisibility(View.GONE);
+                                                textview_grant_storage_permission_notes.setVisibility(View.GONE);
+                                                adjustOutputMessagesHeight();
+                                                setText(textview_output_messages, "Storage permission is granted.\n");
+
+                                                if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
+                                                    setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                    appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                } else {
+                                                    setText(textview_output_messages, "Persisted tree uri permission request has not been granted yet for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                    appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
+                                                }
+                                            } else {
+                                                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
+                                                if (i==0) requestTreeUriPermissions();
+                                                setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                                            }
+                                        }
                                     }
-                                    String t3 = "filesDisplayName.get(" + i + ") = " + filesDisplayName.get(i);
-                                    textview_fileDisplayName.append(t3 + "\n");
+                                    else {
+                                        if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                                            button_grant_storage_permission.setVisibility(View.GONE);
+                                            textview_grant_storage_permission_notes.setVisibility(View.GONE);
+                                            adjustOutputMessagesHeight();
+                                            setText(textview_output_messages, "Storage permission is granted.\n");
+                                            if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
+                                                setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                            } else {
+                                                setText(textview_output_messages, "Persisted tree uri permission request has not been granted yet for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                            }
+                                        } else {
+                                            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
+                                            if (i==0) requestTreeUriPermissions();
+                                            setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                                        }
+                                    }
+                                }
+                            }
+
+                            runOnUiThread(() -> {
+                                textview_filePath.setText("");
+                                for (int i = 0; i < selectedFilesUri.size(); i++) {
+                                    String t2 = selectedFilesPath.get(i);
+                                    textview_filePath.append(t2 + "\n");
                                 }
                             });
+
                         }
-                        if (intent !=null && intent.getClipData() == null ) {
-                            Uri fileURI = intent.getData();
-                            filesURI.add(fileURI);
-                            String filePath = Uri2Path(getApplicationContext(), fileURI);
-                            filesPath.add(filePath);
-                            String fileDisplayName = queryName(getApplicationContext(), fileURI);
-                            filesDisplayName.add(fileDisplayName);
-                            runOnUiThread(() -> {
-                                textview_fileURI.setText("");
-                                textview_filePath.setText("");
-                                textview_fileDisplayName.setText("");
-                                for (int i = 0; i < filesURI.size(); i++) {
-                                    String t1 = "filesURI.get(" + i + ") = " + filesURI.get(i);
-                                    textview_fileURI.append(t1 + "\n");
-                                    if (checkbox_debug_mode.isChecked()) {
-                                        String t2 = "filesPath.get(" + i + ") = " + filesPath.get(i);
-                                        textview_filePath.append(t2 + "\n");
-                                    } else {
-                                        String t2 = filesPath.get(i);
-                                        textview_filePath.append(t2 + "\n");
+
+                        // USER SELECTS ONLY 1 SINGLE FILE
+                        if (intent !=null && intent.getClipData() == null) {
+                            Log.d("startForBrowseFileActivity", "intent !=null && intent.getClipData() == null");
+                            Uri fileUri = intent.getData();
+                            selectedFilesUri.add(fileUri);
+                            String selectedFilePath = Uri2Path(getApplicationContext(), fileUri);
+                            selectedFilesPath.add(selectedFilePath);
+                            String fileDisplayName = queryName(getApplicationContext(), fileUri);
+                            selectedFilesDisplayName.add(fileDisplayName);
+                            selectedFolderPath = new File(selectedFilePath).getParent();
+
+                            boolean alreadySaved = isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilePath);
+                            if (!alreadySaved) {
+                                Log.d("startForBrowseFileActivity", "alreadySaved = false -> requestTreeUriPermissions()");
+                                requestTreeUriPermissions();
+                            }
+
+                            else {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                    if (Environment.isExternalStorageManager()) {
+                                        button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
+                                        textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
+                                        adjustOutputMessagesHeight();
+                                        appendText(textview_output_messages, "Manage app all files access permission is granted.\n");
+                                        if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                                            if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
+                                                setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                            } else {
+                                                setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                            }
+                                        }
+                                        else {
+                                            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
+                                            requestTreeUriPermissions();
+                                            setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                                        }
                                     }
-                                    String t3 = "filesDisplayName.get(" + i + ") = " + filesDisplayName.get(i);
-                                    textview_fileDisplayName.append(t3 + "\n");
+                                    else {
+                                        if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                                            if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
+                                                setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                appendText(textview_output_messages, "All subtitle files will always be saved as new files into " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                            } else {
+                                                setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                            }
+                                        }
+                                        else {
+                                            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
+                                            requestTreeUriPermissions();
+                                            setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                                        }
+                                    }
+                                }
+                                else {
+                                    if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                                        if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
+                                            setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                            appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        } else {
+                                            setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                            appendText(textview_output_messages, "All subtitle files will be saved into :\n" + Environment.getExternalStoragePublicDirectory(DIRECTORY_DOCUMENTS).toString() + ".");
+                                        }
+                                    }
+                                    else {
+                                        ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
+                                        requestTreeUriPermissions();
+                                        setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                                    }
+                                }
+                            }
+
+                            runOnUiThread(() -> {
+                                textview_filePath.setText("");
+                                for (int i = 0; i < selectedFilesUri.size(); i++) {
+                                    String t2 = selectedFilesPath.get(i);
+                                    textview_filePath.append(t2 + "\n");
                                 }
                             });
                         }
@@ -1128,30 +1487,26 @@ public class MainActivity extends AppCompatActivity {
                             });
                         }
                     }
-
                 }
             });
 
 
-    private static String queryName(Context context, Uri uri) {
-        Cursor returnCursor = context.getContentResolver().query(uri, null, null, null, null);
-        assert returnCursor != null;
-        int nameIndex = returnCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-        returnCursor.moveToFirst();
-        String name = returnCursor.getString(nameIndex);
-        returnCursor.close();
-        return name;
-    }
-
     private void transcribe() {
+        setText(textview_output_messages, "");
+        runOnUiThread(() -> {
+            textview_output_messages.setGravity(Gravity.START);
+            textview_output_messages.scrollTo(0,0);
+        });
+
+        if (threadTranscriber != null && threadTranscriber.isAlive()) threadTranscriber.interrupt();
         threadTranscriber = null;
         threadTranscriber = new Thread(() -> {
             if (Looper.myLooper() == null) {
                 Looper.prepare();
             }
 
-            if (filesURI != null) {
-                if (!canceled) {
+            if (selectedFilesUri != null) {
+                if (isTranscribing) {
                     Log.d("transcribe", "Running");
                     try {
                         if (!Python.isStarted()) {
@@ -1159,69 +1514,168 @@ public class MainActivity extends AppCompatActivity {
                             py = Python.getInstance();
                         }
 
-                        if (filesPath == null) {
+                        if (selectedFilesPath == null) {
                             threadTranscriber.interrupt();
                             threadTranscriber = null;
+                            setText(textview_output_messages, "");
                             transcribe();
                         }
-                        runOnUiThread(() -> textview_final_results.setText(""));
 
-                        File wavDir = getApplicationContext().getCacheDir();
-                        File[] tmpWavFile = new File[filesURI.size()];
-                        int[] wavFileSize = new int[filesURI.size()];
+                        savedSubtitleFile = new File[selectedFilesUri.size()];
 
-                        for (int i = 0; i < filesURI.size(); i++) {
-                            String cfp = "Processing file : " + filesDisplayName.get(i);
-                            runOnUiThread(() -> textview_currentFilePathProceed.setText(cfp));
+                        for (int i=0; i<selectedFilesUri.size(); i++) {
+                            if (!isTranscribing) return;
 
-                            tmpWavFile[i] = null;
-                            try {
-                                tmpWavFile[i] = File.createTempFile("temp", ".wav", wavDir);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
+                            String equals = StringUtils.repeat('=', 80);
+                            int nChars = calculateMaxCharsInTextView(equals, textview_output_messages.getWidth(), (int) textview_output_messages.getTextSize());
+                            Log.d("transcribe", "textview_output_messages.getWidth() = " + textview_output_messages.getWidth());
+                            Log.d("transcribe", "textview_output_messages.getTextSize() = " + textview_output_messages.getTextSize());
+                            Log.d("transcribe", "nChars = " + nChars);
+                            equals = StringUtils.repeat('=', nChars-1);
+                            setText(textview_currentFilePathProceed, "Processing file : " + selectedFilesDisplayName.get(i));
+                            appendText(textview_output_messages, equals + "\n");
+                            appendText(textview_output_messages, "Processing file : " + selectedFilesDisplayName.get(i) + "\n");
+                            appendText(textview_output_messages, equals + "\n");
+
+                            if (!Python.isStarted()) {
+                                Python.start(new AndroidPlatform(MainActivity.this));
+                                py = Python.getInstance();
                             }
 
-                            wavFileSize[i] = 0;
-                            int channels = 1;
-                            int rate = 16000;
-                            Config.enableRedirection();
-                            wavFileSize[i] = convertToWav(filesPath.get(i), tmpWavFile[i], channels, rate);
-                            Config.disableRedirection();
+                            String tmpSubtitleFilePath;
+                            String tmpTranslatedSubtitleFilePath;
 
-                            if (wavFileSize[i] != 0) {
-                                pyObjSubtitleFilePath = py.getModule("autosrt").callAttr(
-                                        "transcribe",
-                                        src_code, dst_code, filesPath.get(i), filesDisplayName.get(i), tmpWavFile[i].toString(), subtitleFormat, MainActivity.this, textview_output_messages);
-                                if (pyObjSubtitleFilePath != null) {
-                                    String subtitleFilePath = pyObjSubtitleFilePath.toString();
-                                    subtitleFilesPath.add(subtitleFilePath);
-                                    String translatedSubtitleFilePath = StringUtils.substring(subtitleFilePath, 0, subtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
-                                    translatedSubtitleFilesPath.add(translatedSubtitleFilePath);
-                                    saveSubtitleFileToDocumentsDir(filesDisplayName.get(i), subtitleFilePath);
+                            pyObjTmpSubtitleFilePath = py.getModule("autosrt").callAttr(
+                                    "transcribe",
+                                    src_code,
+                                    dst_code,
+                                    selectedFilesPath.get(i),
+                                    selectedFilesDisplayName.get(i),
+                                    subtitleFormat,
+                                    MainActivity.this,
+                                    textview_output_messages,
+                                    textview_progress,
+                                    progressBar,
+                                    textview_percentage
+                            );
+
+                            if (pyObjTmpSubtitleFilePath != null) {
+                                tmpSubtitleFilePath = pyObjTmpSubtitleFilePath.toString();
+                                tmpSubtitleFilesPath.add(tmpSubtitleFilePath);
+                                tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
+                                tmpTranslatedSubtitleFilesPath.add(tmpTranslatedSubtitleFilePath);
+
+                                if (new File(tmpSubtitleFilePath).exists() && new File(tmpSubtitleFilePath).length() > 1) {
+                                    savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+                                    if (savedTreesUri.size() == 0) {
+
+                                        Log.d("transcribe", "Saving subtitle file using saveSubtitleFileToDocumentsDir()");
+                                        savedSubtitleFile[i] = saveSubtitleFileToDocumentsDir(tmpSubtitleFilePath);
+                                        Log.d("transcribe", "savedSubtitleFile[" + i + "] = " + savedSubtitleFile[i]);
+
+                                        if (savedSubtitleFile[i].exists() && savedSubtitleFile[i].length() > 1) {
+                                            Log.d("transcribe", savedSubtitleFile[i] + " created");
+                                            appendText(textview_output_messages, equals + "\n");
+                                            appendText(textview_output_messages, "Saved subtitle files for " + selectedFilesDisplayName.get(i) + " : \n");
+                                            appendText(textview_output_messages, savedSubtitleFile[i] + "\n");
+
+                                            if (!Objects.equals(src_code, dst_code)) {
+                                                String savedTranslatedSubtitleFilePath = StringUtils.replace(savedSubtitleFile[i].toString(), ".srt", ".translated.srt");
+                                                Log.d("transcribe", "savedTranslatedSubtitleFilePath = " + savedTranslatedSubtitleFilePath);
+                                                if (new File(savedTranslatedSubtitleFilePath).exists() && new File(savedTranslatedSubtitleFilePath).length() > 1) {
+                                                    appendText(textview_output_messages, savedTranslatedSubtitleFilePath + "\n");
+                                                }
+                                            }
+                                            appendText(textview_output_messages, equals + "\n");
+                                        }
+
+                                    }
+                                    else {
+                                        Log.d("transcribe", "savedTreesUri.size() = " + savedTreesUri.size());
+                                        Uri dirUri = getFolderUri(selectedFolderPath);
+                                        Log.d("transcribe", "dirUri = " + dirUri);
+
+                                        int j=0;
+                                        for (Uri savedTreeUri : savedTreesUri) {
+                                            Log.d("transcribe", "savedTreeUri[" + j + "] = " + savedTreeUri);
+                                            if (dirUri.getLastPathSegment().contains(savedTreeUri.getLastPathSegment())) {
+                                                selectedFolderUri = savedTreeUri;
+                                                Log.d("transcribe", "selectedFolderUri = " + selectedFolderUri);
+                                            }
+                                            j+=1;
+                                        }
+
+                                        boolean alreadySaved = isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(i));
+                                        if (alreadySaved) {
+
+                                            Log.d("transcribe", "Saving subtitle file using saveSubtitleFileToSelectedDir()");
+                                            Log.d("transcribe", "selectedFolderUri = " + selectedFolderUri);
+                                            savedSubtitleFile[i] = saveSubtitleFileToSelectedDir(tmpSubtitleFilePath, selectedFolderUri);
+
+                                            if (savedSubtitleFile[i].exists() && savedSubtitleFile[i].length() > 1) {
+                                                Log.d("transcribe", savedSubtitleFile[i].toString() + " created");
+                                                appendText(textview_output_messages, equals + "\n");
+                                                appendText(textview_output_messages, "Saved subtitle files for " + selectedFilesDisplayName.get(i) + " : \n");
+                                                appendText(textview_output_messages, savedSubtitleFile[i].toString() + "\n");
+
+                                                if (!Objects.equals(src_code, dst_code)) {
+                                                    String savedTranslatedSubtitleFilePath = StringUtils.replace(savedSubtitleFile[i].toString(), ".srt", ".translated.srt");
+                                                    Log.d("transcribe", "savedTranslatedSubtitleFilePath = " + savedTranslatedSubtitleFilePath);
+                                                    if (new File(savedTranslatedSubtitleFilePath).exists() && new File(savedTranslatedSubtitleFilePath).length() > 1) {
+                                                        appendText(textview_output_messages, savedTranslatedSubtitleFilePath + "\n");
+                                                    }
+                                                }
+                                                appendText(textview_output_messages, equals + "\n");
+                                            }
+
+                                        }
+                                        else {
+
+                                            Log.d("transcribe", "Saving subtitle file using saveSubtitleFileToDocumentsDir()");
+                                            savedSubtitleFile[i] = saveSubtitleFileToDocumentsDir(tmpSubtitleFilePath);
+                                            Log.d("transcribe", "savedSubtitleFile[" + i + "] = " + savedSubtitleFile[i]);
+
+                                            if (new File(savedSubtitleFile[i].toString()).exists() && new File(savedSubtitleFile[i].toString()).length() > 1) {
+                                                Log.d("transcribe", savedSubtitleFile[i] + " created");
+                                                appendText(textview_output_messages, equals + "\n");
+                                                appendText(textview_output_messages, "Saved subtitle files for " + selectedFilesDisplayName.get(i) + " : \n");
+                                                appendText(textview_output_messages, savedSubtitleFile[i] + "\n");
+
+                                                if (!Objects.equals(src_code, dst_code)) {
+                                                    String savedTranslatedSubtitleFilePath = StringUtils.replace(savedSubtitleFile[i].toString(), ".srt", ".translated.srt");
+                                                    Log.d("transcribe", "savedTranslatedSubtitleFilePath = " + savedTranslatedSubtitleFilePath);
+                                                    if (new File(savedTranslatedSubtitleFilePath).exists() && new File(savedTranslatedSubtitleFilePath).length() > 1) {
+                                                        appendText(textview_output_messages, savedTranslatedSubtitleFilePath + "\n");
+                                                    }
+                                                }
+                                                appendText(textview_output_messages, equals + "\n");
+                                            }
+
+                                        }
+                                    }
                                 }
                             }
                         }
-                        runOnUiThread(() -> textview_currentFilePathProceed.setText(""));
+                        setText(textview_currentFilePathProceed, "");
 
-                        if (!canceled && filesURI != null) {
+                        if (isTranscribing && selectedFilesUri != null) {
                             if (threadTranscriber != null) {
                                 threadTranscriber.interrupt();
                                 threadTranscriber = null;
                             }
                             isTranscribing = false;
-                            canceled = true;
                             runOnUiThread(() -> {
-                                String ts = "isTranscribing = " + isTranscribing;
-                                textview_isTranscribing.setText(ts);
                                 String t1 = "Start Transcribe";
                                 button_start.setText(t1);
                             });
                         }
+
                     }
                     catch (Exception e) {
                         Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
                         e.printStackTrace();
                     }
+
                 }
                 else {
                     if (threadTranscriber != null) {
@@ -1245,22 +1699,68 @@ public class MainActivity extends AppCompatActivity {
                     textview_output_messages.setText(m);
                 });
             }
+
         });
         threadTranscriber.start();
     }
 
-    public String Uri2Path(Context context, Uri uri) {
+
+    private static String queryName(Context context, Uri uri) {
+        Cursor returnCursor = context.getContentResolver().query(uri, null, null, null, null);
+        assert returnCursor != null;
+        int nameIndex = returnCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+        returnCursor.moveToFirst();
+        String name = returnCursor.getString(nameIndex);
+        returnCursor.close();
+        return name;
+    }
+
+
+    public static Uri getFolderUri(String folderPath) {
+        File folder = new File(folderPath);
+        Uri uri;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            uri = DocumentsContract.buildDocumentUri(
+                    "com.android.externalstorage.documents",
+                    folder.getAbsolutePath().substring(1));
+        } else {
+            uri = Uri.fromFile(folder);
+        }
+        return uri;
+    }
+
+
+    private String TreeUri2Path(Uri uri) {
+        if (uri == null) {
+            return null;
+        }
+        String docId = DocumentsContract.getTreeDocumentId(uri);
+        Log.d("TreeUri2Path", "docId = " + docId);
+        String[] split = docId.split(":");
+        Log.d("TreeUri2Path", "split = " + Arrays.toString(split));
+        String fullPath = getPathFromExtSD(split);
+        if (!fullPath.equals("")) {
+            Log.d("TreeUri2Path", "fullPath = " + fullPath);
+            return fullPath;
+        } else {
+            return null;
+        }
+    }
+
+
+    private String Uri2Path(Context context, Uri uri) {
         if (uri == null) {
             return null;
         }
 
         if(ContentResolver.SCHEME_FILE.equals(uri.getScheme())) {
-            System.out.println("uri.getPath() = " + uri.getPath());
+            Log.d("Uri2Path", "uri.getPath() = " + uri.getPath());
             return uri.getPath();
         }
 
         else if(ContentResolver.SCHEME_CONTENT.equals(uri.getScheme())) {
             String authority = uri.getAuthority();
+            Log.d("Uri2Path", "authority = " + authority);
             String idStr = "";
 
             if(authority.startsWith("com.android.externalstorage")) {
@@ -1268,7 +1768,7 @@ public class MainActivity extends AppCompatActivity {
                 String[] split = docId.split(":");
                 String fullPath = getPathFromExtSD(split);
                 if (!fullPath.equals("")) {
-                    System.out.println("fullPath = " + fullPath);
+                    Log.d("Uri2Path", "fullPath = " + fullPath);
                     return fullPath;
                 } else {
                     return null;
@@ -1278,11 +1778,11 @@ public class MainActivity extends AppCompatActivity {
             else {
                 if(authority.equals("media")) {
                     idStr = uri.toString().substring(uri.toString().lastIndexOf('/') + 1);
-                    System.out.println("media idStr = " + idStr);
+                    Log.d("Uri2Path", "media idStr = " + idStr);
                 }
                 else if(authority.startsWith("com.android.providers")) {
                     idStr = DocumentsContract.getDocumentId(uri).split(":")[1];
-                    System.out.println("providers idStr = " + idStr);
+                    Log.d("Uri2Path", "providers idStr = " + idStr);
                 }
 
                 ContentResolver contentResolver = context.getContentResolver();
@@ -1294,7 +1794,7 @@ public class MainActivity extends AppCompatActivity {
                     cursor.moveToFirst();
                     try {
                         int idx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
-                        System.out.println("cursor.getString(idx) = " + cursor.getString(idx));
+                        Log.d("Uri2Path", "cursor.getString(idx) = " + cursor.getString(idx));
                         return cursor.getString(idx);
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -1307,165 +1807,419 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
+
     private String getPathFromExtSD(String[] pathData) {
         final String type = pathData[0];
         final String relativePath = File.separator + pathData[1];
-        String fullPath;
+        String fullPath = null;
 
         if ("primary".equalsIgnoreCase(type)) {
-            System.out.println("PRIMARY");
-            System.out.println("type = " + type);
-            fullPath = Environment.getExternalStorageDirectory() + relativePath;
-            if (fileExists(fullPath)) {
-                return fullPath;
+            Log.d("getPathFromExtSD", "PRIMARY");
+            Log.d("getPathFromExtSD", "type = " + type);
+            if (new File(Environment.getExternalStorageDirectory() + relativePath).exists()) {
+                fullPath = Environment.getExternalStorageDirectory() + relativePath;
             }
         }
         // CHECK SECONDARY STORAGE
         else {
-            fullPath = "/storage/" + type + relativePath;
-            if (fileExists(fullPath)) {
-                return fullPath;
+            if (new File("/storage/" + type + relativePath).exists()) {
+                fullPath = "/storage/" + type + relativePath;
             }
         }
+        Log.d("getPathFromExtSD", "fullPath = " + fullPath);
         return fullPath;
     }
 
-    private static boolean fileExists(String filePath) {
-        File file = new File(filePath);
-        return file.exists();
-    }
 
-    private void saveSubtitleFileToDocumentsDir(String fileDisplayName, String subtitleFilePath) {
-        OutputStream outputStream;
-        String subtitleFileDisplayName = subtitleFilePath.substring(subtitleFilePath.lastIndexOf("/")+1);
-        String subtitleFolder = StringUtils.substring(subtitleFileDisplayName,0,subtitleFileDisplayName.length()-4);
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
+    @SuppressLint("Recycle")
+    private File saveSubtitleFileToDocumentsDir(String tmpSubtitleFilePath) {
+        InputStream tmpSubtitleInputStream;
+        Uri tmpSubtitleUri = Uri.fromFile(new File(tmpSubtitleFilePath));
+        try {
+            tmpSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpSubtitleUri);
+        } catch (FileNotFoundException e) {
+            Log.e("FileNotFoundException: ", e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+
+        String subtitleFileDisplayName = tmpSubtitleFilePath.substring(tmpSubtitleFilePath.lastIndexOf("/") + 1);
+        Log.d("saveSubtitleFileToDocumentsDir", "subtitleFileDisplayName = " + subtitleFileDisplayName);
+        String subtitleFolderDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - 4);
+        String savedFolderPath = getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName;
+        OutputStream savedSubtitleFileOutputStream;
+        Uri savedSubtitleUri = null;
+        Uri savedTranslatedSubtitleUri = null;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             MainActivity.this.getActivityResultRegistry().register("key", new ActivityResultContracts.OpenDocument(), result -> MainActivity.this.getApplicationContext().getContentResolver().takePersistableUriPermission(result, Intent.FLAG_GRANT_READ_URI_PERMISSION));
             ContentValues values = new ContentValues();
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, subtitleFileDisplayName); // file name subtitleFileDisplayName required to contain extension file mime
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, subtitleFileDisplayName); // savedFile name subtitleFileDisplayName required to contain extension savedFile mime
             values.put(MediaStore.MediaColumns.MIME_TYPE, "*/*");
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName);
             Uri extVolumeUri = MediaStore.Files.getContentUri("external");
-            Uri fileUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);
+            Log.d("saveSubtitleFileToDocumentsDir", "extVolumeUri = " + extVolumeUri);
+
+            if (Environment.isExternalStorageManager()) {
+                String selection = MediaStore.MediaColumns.RELATIVE_PATH + "=?";
+                String[] selectionArgs = new String[]{DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName + File.separator};    //must include "/" in front and end
+                Cursor cursor = getApplicationContext().getContentResolver().query(extVolumeUri, null, selection, selectionArgs, null);
+
+                Log.d("saveSubtitleFileToDocumentsDir", "cursor.getCount() = " + cursor.getCount());
+                if (cursor.getCount() == 0) {
+                    savedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);
+                } else {
+                    while (cursor.moveToNext()) {
+                        String fileName = cursor.getString(cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME));
+                        Log.d("saveSubtitleFileToDocumentsDir", "fileName = " + fileName);
+                        if (fileName.equals(subtitleFileDisplayName)) {
+                            long id = cursor.getLong(cursor.getColumnIndex(MediaStore.MediaColumns._ID));
+                            savedSubtitleUri = ContentUris.withAppendedId(extVolumeUri, id);
+                            break;
+                        }
+                    }
+                    if (savedSubtitleUri == null) {
+                        savedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);
+                    }
+                }
+            }
+            else {
+                savedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);                
+            }
             try {
-                outputStream = getApplicationContext().getContentResolver().openOutputStream(fileUri);
+                savedSubtitleFileOutputStream = getApplicationContext().getContentResolver().openOutputStream(savedSubtitleUri);
             } catch (FileNotFoundException e) {
+                Log.e("FileNotFoundException: ", e.getMessage());
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+
+        }
+        else {
+            File root = new File(getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName);
+            if (!root.exists() && root.mkdirs()) {
+                Log.d("saveSubtitleFileToDocumentsDir", root + " created");
+            }
+            File savedSubtitleFile = new File(root, subtitleFileDisplayName);
+            Log.d("saveSubtitleFileToDocumentsDir", "savedSubtitleFile.getAbsolutePath() = " + savedSubtitleFile.getAbsolutePath());
+            try {
+                savedSubtitleFileOutputStream = new FileOutputStream(savedSubtitleFile);
+            } catch (FileNotFoundException e) {
+                Log.e("FileNotFoundException: ", e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException(e);
             }
         }
-        else {
-            File root = new File(Environment.getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
-            if (!root.exists() && root.mkdirs()) {
-                Log.d(root.toString(), "created");
-            }
-            File file = new File(root, subtitleFileDisplayName);
-            Log.d("saveSubtitleFileToDocumentsDir", "saveFile: file path - " + file.getAbsolutePath());
-            try {
-                outputStream = new FileOutputStream(file);
-            } catch (FileNotFoundException e) {
-                throw new RuntimeException(e);
-            }
-        }
-        Uri uri = Uri.fromFile(new File(subtitleFilePath));
-        InputStream inputStream;
-        try {
-            inputStream = getApplicationContext().getContentResolver().openInputStream(uri);
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        }
+
         byte[] bytes = new byte[1024];
         int length;
         while (true) {
             try {
-                if (!((length = inputStream.read(bytes)) > 0)) break;
+                if (!((length = tmpSubtitleInputStream.read(bytes)) > 0)) break;
             } catch (IOException e) {
+                Log.e("IOException: ", e.getMessage());
+                e.printStackTrace();
                 throw new RuntimeException(e);
             }
             try {
-                outputStream.write(bytes, 0, length);
+                savedSubtitleFileOutputStream.write(bytes, 0, length);
             } catch (IOException e) {
+                Log.e("IOException: ", e.getMessage());
+                e.printStackTrace();
                 throw new RuntimeException(e);
             }
         }
         try {
-            outputStream.close();
-            inputStream.close();
+            savedSubtitleFileOutputStream.close();
+            tmpSubtitleInputStream.close();
         } catch (IOException e) {
+            Log.e("IOException: ", e.getMessage());
+            e.printStackTrace();
             throw new RuntimeException(e);
         }
 
-        String translatedSubtitleFileDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - 4) + ".translated." + subtitleFormat;
+
         if (!Objects.equals(src_code, dst_code)) {
-            OutputStream outputStreamTranslated;
-            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
-                ContentValues values = new ContentValues();
-                values.put(MediaStore.MediaColumns.DISPLAY_NAME, translatedSubtitleFileDisplayName); // file name avedTanslatedsubtitleFilePath required to contain extension file mime
-                values.put(MediaStore.MediaColumns.MIME_TYPE, "*/*");
-                values.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
+            InputStream tmpTranslatedSubtitleInputStream;
+            String translatedSubtitleFileDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - 4) + ".translated." + subtitleFormat;
+            String tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
+            Uri tmpTranslatedSubtitleUri = Uri.fromFile(new File(tmpTranslatedSubtitleFilePath));
+            OutputStream savedTranslatedSubtitleFileOutputStream;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                ContentValues savedTranslatedSubtitleValues = new ContentValues();
+                savedTranslatedSubtitleValues.put(MediaStore.MediaColumns.DISPLAY_NAME, translatedSubtitleFileDisplayName); // savedFile name translatedSubtitleFileDisplayName required to contain extension savedFile mime
+                savedTranslatedSubtitleValues.put(MediaStore.MediaColumns.MIME_TYPE, "*/*");
+                savedTranslatedSubtitleValues.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName);
                 Uri extVolumeUri = MediaStore.Files.getContentUri("external");
-                Uri fileUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);
+
+                if (Environment.isExternalStorageManager()) {
+                    String selection = MediaStore.MediaColumns.RELATIVE_PATH + "=?";
+                    String[] selectionArgs = new String[]{DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName + File.separator};
+                    @SuppressLint("Recycle") Cursor cursor = getContentResolver().query(extVolumeUri, null, selection, selectionArgs, null);
+
+                    if (cursor.getCount() == 0) {
+                        savedTranslatedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedTranslatedSubtitleValues);
+                    } else {
+                        while (cursor.moveToNext()) {
+                            String fileName = cursor.getString(cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME));
+                            if (fileName.equals(translatedSubtitleFileDisplayName)) {
+                                long id = cursor.getLong(cursor.getColumnIndex(MediaStore.MediaColumns._ID));
+                                savedTranslatedSubtitleUri = ContentUris.withAppendedId(extVolumeUri, id);
+                                break;
+                            }
+                        }
+                        if (savedTranslatedSubtitleUri == null) {
+                            savedTranslatedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedTranslatedSubtitleValues);
+                        }
+                    }
+                }
+                else {
+                    savedTranslatedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedTranslatedSubtitleValues);
+                }
                 try {
-                    outputStreamTranslated = getApplicationContext().getContentResolver().openOutputStream(fileUri);
+                    savedTranslatedSubtitleFileOutputStream = getApplicationContext().getContentResolver().openOutputStream(savedTranslatedSubtitleUri);
                 } catch (FileNotFoundException e) {
+                    Log.e("FileNotFoundException: ", e.getMessage());
+                    e.printStackTrace();
                     throw new RuntimeException(e);
                 }
+
             } else {
-                File root = new File(Environment.getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder);
+                File root = new File(getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName);
                 if (!root.exists() && root.mkdirs()) {
-                    Log.d(root.toString(), "created");
+                    Log.d("saveSubtitleFileToDocumentsDir", root + " created");
                 }
-                File file = new File(root, translatedSubtitleFileDisplayName);
-                Log.d("saveSubtitleFileToDocumentsDir", "saveFile: file path - " + file.getAbsolutePath());
+                File savedTranslatedSubtitleFile = new File(root, translatedSubtitleFileDisplayName);
+                Log.d("saveSubtitleFileToDocumentsDir", "savedTranslatedSubtitleFile.getAbsolutePath() = " + savedTranslatedSubtitleFile.getAbsolutePath());
                 try {
-                    outputStreamTranslated = new FileOutputStream(file);
+                    savedTranslatedSubtitleFileOutputStream = new FileOutputStream(savedTranslatedSubtitleFile);
                 } catch (FileNotFoundException e) {
+                    Log.e("FileNotFoundException: ", e.getMessage());
+                    e.printStackTrace();
                     throw new RuntimeException(e);
                 }
             }
-            String translatedSubtitleFilePath = StringUtils.substring(subtitleFilePath, 0, subtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
-            Uri uriTranslated = Uri.fromFile(new File(translatedSubtitleFilePath));
-            InputStream inputStreamTranslated;
+
             try {
-                inputStreamTranslated = getApplicationContext().getContentResolver().openInputStream(uriTranslated);
+                tmpTranslatedSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpTranslatedSubtitleUri);
             } catch (FileNotFoundException e) {
+                Log.e("FileNotFoundException: ", e.getMessage());
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+
+            byte[] tmpTranslatedSubtitleBytes = new byte[1024];
+            int tmpTranslatedSubtitleLength;
+            while (true) {
+                try {
+                    if (!((tmpTranslatedSubtitleLength = tmpTranslatedSubtitleInputStream.read(tmpTranslatedSubtitleBytes)) > 0))
+                        break;
+                } catch (IOException e) {
+                    Log.e("IOException: ", e.getMessage());
+                    e.printStackTrace();
+                    throw new RuntimeException(e);
+                }
+                try {
+                    savedTranslatedSubtitleFileOutputStream.write(tmpTranslatedSubtitleBytes, 0, tmpTranslatedSubtitleLength);
+                } catch (IOException e) {
+                    Log.e("IOException: ", e.getMessage());
+                    e.printStackTrace();
+                    throw new RuntimeException(e);
+                }
+            }
+            try {
+                savedTranslatedSubtitleFileOutputStream.close();
+                tmpTranslatedSubtitleInputStream.close();
+            } catch (IOException e) {
+                Log.e("IOException: ", e.getMessage());
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return new File(Uri2Path(getApplicationContext(), savedSubtitleUri));
+        }
+        else {
+            return new File(savedFolderPath + File.separator + subtitleFileDisplayName);
+        }
+    }
+
+
+    @SuppressLint("Recycle")
+    private File saveSubtitleFileToSelectedDir(String tmpSubtitleFilePath, Uri selectedDirUri) {
+        Uri tmpSubtitleUri = Uri.fromFile(new File(tmpSubtitleFilePath));
+        String tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
+        Uri tmpTranslatedSubtitleUri = Uri.fromFile(new File(tmpTranslatedSubtitleFilePath));
+
+        InputStream tmpSubtitleInputStream;
+        InputStream tmpTranslatedSubtitleInputStream;
+
+        OutputStream savedSubtitleOutputStream = null;
+        OutputStream savedTranslatedSubtitleOutputStream = null;
+
+        Uri savedSubtitleUri;
+        Uri savedTranslatedSubtitleUri;
+
+        String subtitleFileDisplayName = tmpSubtitleFilePath.substring(tmpSubtitleFilePath.lastIndexOf("/") + 1);
+        Log.d("saveSubtitleFileToSelectedDir", "subtitleFileDisplayName = " + subtitleFileDisplayName);
+        String translatedSubtitleFileDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - 4) + ".translated." + subtitleFormat;
+        Log.d("saveSubtitleFileToSelectedDir", "translatedSubtitleFileDisplayName = " + translatedSubtitleFileDisplayName);
+
+        DocumentFile selectedDirDocumentFile = DocumentFile.fromTreeUri(MainActivity.this, selectedDirUri);
+        DocumentFile savedSubtitleDocumentFile;
+        DocumentFile savedTranslatedSubtitleDocumentFile;
+
+        String savedSubtitleFilePath = null;
+
+        try {
+            tmpSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpSubtitleUri);
+        } catch (FileNotFoundException e) {
+            Log.e("FileNotFoundException: ", e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+
+        if (selectedDirDocumentFile != null) {
+            if (!selectedDirDocumentFile.exists()) {
+                Log.e("saveSubtitleFileToSelectedDir", selectedDirDocumentFile +  " is not exists");
+                releasePermissions(selectedDirUri);
+                setText(textview_output_messages, selectedDirDocumentFile + " is not exist!");
+                return null;
+            }
+            else {
+                savedSubtitleDocumentFile = selectedDirDocumentFile.findFile(subtitleFileDisplayName);
+                Log.d("saveSubtitleFileToSelectedDir", "savedSubtitleDocumentFile = " + savedSubtitleDocumentFile);
+                if (savedSubtitleDocumentFile == null) savedSubtitleDocumentFile = selectedDirDocumentFile.createFile("*/*", subtitleFileDisplayName);
+                if (savedSubtitleDocumentFile != null && savedSubtitleDocumentFile.canWrite()) {
+                    savedSubtitleUri = savedSubtitleDocumentFile.getUri();
+                    Log.d("saveSubtitleFileToSelectedDir", "subtitleFile.getUri() = " + savedSubtitleDocumentFile.getUri());
+                    savedSubtitleFilePath = Uri2Path(getApplicationContext(), savedSubtitleUri);
+                    Log.d("saveSubtitleFileToSelectedDir", "savedSubtitleFilePath = " + savedSubtitleFilePath);
+                    try {
+                        ParcelFileDescriptor parcelFileDescriptor = getContentResolver().openFileDescriptor(savedSubtitleUri, "w");
+                        savedSubtitleOutputStream = new FileOutputStream(parcelFileDescriptor.getFileDescriptor());
+                    } catch (FileNotFoundException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                else {
+                    Log.d("saveSubtitleFileToSelectedDir", subtitleFileDisplayName + " is not exist or cannot write");
+                    setText(textview_output_messages, "Write error!");
+                }
+            }
+        }
+
+        byte[] bytes = new byte[1024];
+        int length;
+        while (true) {
+            try {
+                if (!((length = tmpSubtitleInputStream.read(bytes)) > 0)) break;
+            } catch (IOException e) {
+                Log.e("IOException: ", e.getMessage());
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+            try {
+                if (savedSubtitleOutputStream != null) {
+                    savedSubtitleOutputStream.write(bytes, 0, length);
+                }
+            } catch (IOException e) {
+                Log.e("IOException: ", e.getMessage());
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+        }
+        try {
+            if (savedSubtitleOutputStream != null) {
+                savedSubtitleOutputStream.close();
+            }
+            tmpSubtitleInputStream.close();
+        } catch (IOException e) {
+            Log.e("IOException: ", e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+
+        if (!Objects.equals(src_code, dst_code)) {
+            if (selectedDirDocumentFile == null || !selectedDirDocumentFile.exists()) {
+                Log.e("saveSubtitleFileToSelectedDir", selectedDirDocumentFile +  " not exists");
+                releasePermissions(selectedDirUri);
+                setText(textview_output_messages, selectedDirDocumentFile + " not exist!");
+                return null;
+            }
+            else {
+                savedTranslatedSubtitleDocumentFile = selectedDirDocumentFile.findFile(translatedSubtitleFileDisplayName);
+                if (savedTranslatedSubtitleDocumentFile == null) savedTranslatedSubtitleDocumentFile = selectedDirDocumentFile.createFile("*/*", translatedSubtitleFileDisplayName);
+                if (savedTranslatedSubtitleDocumentFile != null && savedTranslatedSubtitleDocumentFile.canWrite()) {
+                    savedTranslatedSubtitleUri = savedTranslatedSubtitleDocumentFile.getUri();
+                    Log.d("saveSubtitleFileToSelectedDir", "savedTranslatedSubtitleDocumentFile.getUri() = " + savedTranslatedSubtitleDocumentFile.getUri());
+                    String savedTranslatedSubtitleFile = Uri2Path(getApplicationContext(), savedTranslatedSubtitleUri);
+                    Log.d("saveSubtitleFileToSelectedDir", "savedTranslatedSubtitleFile = " + savedTranslatedSubtitleFile);
+                    try {
+                        ParcelFileDescriptor parcelFileDescriptor = getContentResolver().openFileDescriptor(savedTranslatedSubtitleUri, "w");
+                        savedTranslatedSubtitleOutputStream = new FileOutputStream(parcelFileDescriptor.getFileDescriptor());
+                    } catch (FileNotFoundException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                else {
+                    Log.d("saveSubtitleFileToSelectedDir", subtitleFileDisplayName + " is not exist or cannot write");
+                    setText(textview_output_messages, "Write error!");
+                }
+            }
+
+            try {
+                tmpTranslatedSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpTranslatedSubtitleUri);
+            } catch (FileNotFoundException e) {
+                Log.e("FileNotFoundException: ", e.getMessage());
+                e.printStackTrace();
                 throw new RuntimeException(e);
             }
             byte[] bytesTranslated = new byte[1024];
             int lengthTranslated;
             while (true) {
                 try {
-                    if (!((lengthTranslated = inputStreamTranslated.read(bytesTranslated)) > 0))
+                    if (!((lengthTranslated = tmpTranslatedSubtitleInputStream.read(bytesTranslated)) > 0))
                         break;
                 } catch (IOException e) {
+                    Log.e("IOException: ", e.getMessage());
+                    e.printStackTrace();
                     throw new RuntimeException(e);
                 }
                 try {
-                    outputStreamTranslated.write(bytesTranslated, 0, lengthTranslated);
+                    if (savedTranslatedSubtitleOutputStream != null) {
+                        savedTranslatedSubtitleOutputStream.write(bytesTranslated, 0, lengthTranslated);
+                    }
                 } catch (IOException e) {
+                    Log.e("IOException: ", e.getMessage());
+                    e.printStackTrace();
                     throw new RuntimeException(e);
                 }
             }
             try {
-                outputStreamTranslated.close();
-                inputStreamTranslated.close();
+                if (savedTranslatedSubtitleOutputStream != null) {
+                    savedTranslatedSubtitleOutputStream.close();
+                }
+                tmpTranslatedSubtitleInputStream.close();
             } catch (IOException e) {
+                Log.e("IOException: ", e.getMessage());
+                e.printStackTrace();
                 throw new RuntimeException(e);
             }
         }
-        String s = "Saved subtitle files for " + fileDisplayName + " : \n";
-        runOnUiThread(() -> textview_final_results.append(s));
-        String savedFolderPath = getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolder;
-        String sf = savedFolderPath + File.separator + subtitleFileDisplayName + "\n";
-        runOnUiThread(() -> {
-            textview_final_results.setGravity(Gravity.BOTTOM);
-            textview_final_results.append(sf);
-        });
-        if (!Objects.equals(src_code, dst_code)) {
-            String tsf = savedFolderPath + File.separator + translatedSubtitleFileDisplayName + "\n\n";
-            runOnUiThread(() -> textview_final_results.append(tsf));
+
+        if (savedSubtitleFilePath != null) {
+            Log.d("saveSubtitleFileToSelectedDir", "Succesed! Returned savedSubtitleFilePath = " + savedSubtitleFilePath);
+            return new File(savedSubtitleFilePath);
+        }
+        else {
+            Log.d("saveSubtitleFileToSelectedDir", "Failed! Returned null!");
+            return null;
         }
     }
+
 
     private void showConfirmationDialogue() {
         AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
@@ -1473,35 +2227,41 @@ public class MainActivity extends AppCompatActivity {
         builder.setMessage("Are you sure?");
 
         builder.setPositiveButton("YES", (dialog, which) -> runOnUiThread(() -> {
-            canceled = true;
-            String ts = "isTranscribing = " + isTranscribing;
-            textview_isTranscribing.setText(ts);
+            //isCanceled = true;
             String t = "Start Transcribe";
             button_start.setText(t);
 
-            File fc = new File(cancelFile);
+            File fc = new File(cancelFilePath);
             try {
                 FileWriter out = new FileWriter(fc);
                 out.write("");
+                Log.i("showConfirmationDialogue", "cancelFile created");
                 out.close();
             } catch (IOException e) {
-                Log.e("Error: ", Objects.requireNonNull(e.getMessage()));
+                Log.e("showConfirmationDialogue", e.getMessage());
                 e.printStackTrace();
             }
 
-            if (subtitleFilesPath != null) {
-                for (int i=0; i<subtitleFilesPath.size(); i++) {
-                    File sf = new File(subtitleFilesPath.get(i)).getAbsoluteFile();
+            if (fc.exists()) {
+                Log.i("showConfirmationDialogue", "cancelFile exists");
+            }
+            else {
+                Log.i("showConfirmationDialogue", "cancelFile is not exist");
+            }
+
+            if (tmpSubtitleFilesPath != null) {
+                for (int i=0; i<tmpSubtitleFilesPath.size(); i++) {
+                    File sf = new File(tmpSubtitleFilesPath.get(i)).getAbsoluteFile();
                     if (sf.exists() && sf.delete()) {
-                        System.out.println(new File(subtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
+                        Log.i("showConfirmationDialogue", new File(tmpSubtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
                     }
                 }
             }
-            if (translatedSubtitleFilesPath != null) {
-                for (int i=0; i<translatedSubtitleFilesPath.size(); i++) {
-                    File stf = new File(translatedSubtitleFilesPath.get(i)).getAbsoluteFile();
+            if (tmpTranslatedSubtitleFilesPath != null) {
+                for (int i=0; i<tmpTranslatedSubtitleFilesPath.size(); i++) {
+                    File stf = new File(tmpTranslatedSubtitleFilesPath.get(i)).getAbsoluteFile();
                     if (stf.exists() && stf.delete()) {
-                        System.out.println(new File(translatedSubtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
+                        Log.i("showConfirmationDialogue", new File(tmpTranslatedSubtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
                     }
                 }
             }
@@ -1512,8 +2272,8 @@ public class MainActivity extends AppCompatActivity {
             }
             isTranscribing = false;
             dialog.dismiss();
-            String m = "Process has been canceled\n";
-            textview_output_messages.setText(m);
+            setText(textview_output_messages, "Process has been canceled");
+            hideProgressBar();
         }));
 
         builder.setNegativeButton("NO", (dialog, which) -> {
@@ -1525,43 +2285,320 @@ public class MainActivity extends AppCompatActivity {
         alert.show();
     }
 
-    private int convertToWav(String filePath, File tmpWavFile, int channels, int rate) {
-        AtomicReference<Float> progress = new AtomicReference<>((float) 0);
-        Uri fileURI = Uri.fromFile(new File(filePath));
-        int videoLength = MediaPlayer.create(getApplicationContext(), fileURI).getDuration();
 
-        Config.resetStatistics();
-        Config.enableStatisticsCallback(newStatistics -> {
-            progress.set(Float.parseFloat(String.valueOf(newStatistics.getTime())) / videoLength);
-            int progressFinal = (int) (progress.get() * 100);
-            Log.d(Config.TAG, "Video Length: " + progressFinal);
-            Log.d(Config.TAG, String.format("frame: %d, time: %d", newStatistics.getVideoFrameNumber(), newStatistics.getTime()));
-            Log.d(Config.TAG, String.format("Quality: %f, time: %f", newStatistics.getVideoQuality(), newStatistics.getVideoFps()));
-            runOnUiThread(() -> pBar(100*progress.get(), 100, "Converting to temporary WAV file : "));
-        });
+    private void requestTreeUriPermissions() {
+        // Choose a directory using the system's file picker.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            new AlertDialog.Builder(this)
+                    .setMessage("Please select folder of your audio/video files so this app can write subtitle files on same folder")
+                    .setNegativeButton("Cancel", (dialog, which) -> {
+                        setText(textview_output_messages, "Persisted tree uri permission request is canceled.\n");
 
-        String command = " -y -i " + "\"" + filePath + "\"" + " -ac " + channels + " -ar " + rate + " " + "\"" + tmpWavFile + "\"";
-        int returnCode = FFmpeg.execute(command);
-        if (returnCode == RETURN_CODE_SUCCESS) {
-            Log.i(Config.TAG, "Command execution completed successfully.");
-        } else if (returnCode == RETURN_CODE_CANCEL) {
-            Log.i(Config.TAG, "Async command execution cancelled by user.");
-        } else {
-            Log.i(Config.TAG, String.format("Command execution failed with rc=%d.", returnCode));
+                        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                            button_grant_storage_permission.setVisibility(View.GONE);
+                            textview_grant_storage_permission_notes.setVisibility(View.GONE);
+                            adjustOutputMessagesHeight();
+                            setText(textview_output_messages, "Storage permission is granted.\n");
+
+                            savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+                            Log.d("requestTreeUriPermissions", "savedTreesUri.size() = " + savedTreesUri.size());
+                            if (savedTreesUri.size() > 0) {
+                                appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
+                                for (int i=0; i<savedTreesUri.size(); i++) {
+                                    appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
+                                    Log.d("requestTreeUriPermissions", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
+                                }
+                                if (selectedFilesPath != null && selectedFilesPath.size()>0) {
+                                    if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
+                                        setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                    }
+                                    else {
+                                        setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                    }
+                                }
+                                else {
+                                    appendText(textview_output_messages, "All subtitle files will be saved into your selected folder.");
+                                }
+                            }
+                            else {
+                                appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders\n");
+                                if (Environment.isExternalStorageManager()) {
+                                    button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
+                                    textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
+                                    adjustOutputMessagesHeight();
+                                    appendText(textview_output_messages, "Manage app all files access permission is granted.\n");
+                                    appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                }
+                                else {
+                                    button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
+                                    textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
+                                    appendText(textview_output_messages, "Manage app all files access permission is not granted.\n");
+                                    appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
+                                }
+                            }
+                        }
+
+                        else {
+                            button_grant_storage_permission.setVisibility(View.VISIBLE);
+                            textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
+                            setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                        }
+                    })
+                    .setPositiveButton("Ok", (dialog, which) -> {
+                        StorageManager sm = (StorageManager) getSystemService(Context.STORAGE_SERVICE);
+                        Intent intent = sm.getPrimaryStorageVolume().createOpenDocumentTreeIntent();
+                        String startDir = "Documents";
+                        Uri uri;
+                        if (intent != null) {
+                            uri = intent.getParcelableExtra("android.provider.extra.INITIAL_URI");
+                            String scheme;
+                            if (uri != null) {
+                                scheme = uri.toString().replace("/root/", "/document/");
+                                scheme += "%3A" + startDir;
+                                uri = Uri.parse(scheme);
+                                Uri rootUri = DocumentsContract.buildDocumentUri(AUTHORITY, uri.toString());
+                                sm.getPrimaryStorageVolume().createOpenDocumentTreeIntent().putExtra(EXTRA_INITIAL_URI, rootUri);
+
+                                // Optionally, specify a URI for the directory that should be opened in
+                                // the system file picker when it loads.
+                                Intent intent2 = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                                intent2.addFlags(
+                                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                                                | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+                                intent2.putExtra(EXTRA_INITIAL_URI, rootUri);
+                                //startActivity(intent2);
+                                startForRequestPersistedTreeUriPermissionActivity.launch(intent2);
+                            }
+                        }
+                    })
+                    .setCancelable(false)
+                    .show();
         }
-        return Integer.parseInt(String.valueOf(tmpWavFile.length()));
+        else {
+            new AlertDialog.Builder(this)
+                    .setMessage("Please select folder of your audio/video files so this app can write subtitle files on same folder")
+                    .setNegativeButton("Cancel", (dialog, which) -> {
+                        setText(textview_output_messages, "Persisted tree uri permission request is canceled.\n");
+
+                        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                            button_grant_storage_permission.setVisibility(View.GONE);
+                            textview_grant_storage_permission_notes.setVisibility(View.GONE);
+                            adjustOutputMessagesHeight();
+                            setText(textview_output_messages, "Storage permission is granted.\n");
+
+                            savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+                            Log.d("requestTreeUriPermissions", "savedTreesUri.size() = " + savedTreesUri.size());
+                            if (savedTreesUri.size() > 0) {
+                                appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
+                                for (int i=0; i<savedTreesUri.size(); i++) {
+                                    appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
+                                    Log.d("requestTreeUriPermissions", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
+                                }
+                                if (selectedFilesPath != null && selectedFilesPath.size()>0) {
+                                    if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
+                                        setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                    }
+                                    else {
+                                        setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                    }
+                                }
+                                else {
+                                    appendText(textview_output_messages, "All subtitle files will be saved into your selected folder.");
+                                }
+                            }
+                            else {
+                                appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders\n");
+                                appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                            }
+                        }
+
+                        else {
+                            setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                        }
+                    })
+                    .setPositiveButton("Ok", (dialog, which) -> {
+                        //Intent intent = sm.getPrimaryStorageVolume().createAccessIntent(DIRECTORY_DOCUMENTS);
+                        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                        intent.addFlags(
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                        | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                                        | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+
+                        //startActivity(intent);
+                        startForRequestPersistedTreeUriPermissionActivity.launch(intent);
+                    })
+                    .setCancelable(false)
+                    .show();
+        }
     }
 
-    @SuppressLint("SetTextI18n")
-    public void pBar(float counter, float total, String prefix) {
-        int bar_length = 10;
-        int rounded = round(bar_length * counter/(float)total);
-        int filled_up_Length = (int)(rounded);
-        int percentage = round(100 * counter/(float)total);
-        String pounds = StringUtils.repeat('█', filled_up_Length);
-        String equals = StringUtils.repeat('-', (bar_length - filled_up_Length));
-        String bar = pounds + equals;
-        runOnUiThread(() -> textview_output_messages.setText(prefix + " |" + bar + "| " + percentage + '%'));
+
+    @SuppressLint("Recycle")
+    private void testWrite(Uri uri) throws FileNotFoundException {
+        @SuppressLint("Recycle")
+        ParcelFileDescriptor parcelFileDescriptor;
+        parcelFileDescriptor = getContentResolver().openFileDescriptor(uri, "w");
+        try (FileOutputStream fos = new FileOutputStream(parcelFileDescriptor.getFileDescriptor())) {
+            long currentTimeMillis = System.currentTimeMillis();
+            fos.write(("String written at " + currentTimeMillis + "\n").getBytes());
+            //Log.d("testWrite", "Write test succeed");
+        }
+        catch (IOException e) {
+            Log.e("IOException: ", e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+
+    private void releasePermissions(Uri uri) {
+        int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+        getContentResolver().releasePersistableUriPermission(uri,takeFlags);
+    }
+
+
+    private InetAddress[] checkGoogleHost() {
+        final InetAddress[] ipAddr = new InetAddress[1];
+        Thread netThread = new Thread(() -> {
+            try {
+                ipAddr[0] = InetAddress.getByName("www.google.com");
+            } catch (UnknownHostException e) {
+                throw new RuntimeException(e);
+            }
+            Log.d("isInternetAvailable", "ipAddr = " + ipAddr[0]);
+        });
+        netThread.start();
+        return ipAddr;
+    }
+
+
+    private boolean isInternetAvailable() {
+        try {
+            InetAddress[] ipAddr = checkGoogleHost();
+            return !Arrays.toString(ipAddr).equals("");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+
+    private void saveTreeUrisToSharedPreference(ArrayList<Uri> savedTreesUri) {
+        SharedPreferences sp = getSharedPreferences("com.android.autosubtitle.prefs", 0);
+        SharedPreferences.Editor mEdit1 = sp.edit();
+        mEdit1.putInt("arrayListSize", savedTreesUri.size());
+        for(int i=0;i<savedTreesUri.size();i++) {
+            mEdit1.remove("arrayList_" + i);
+            mEdit1.putString("arrayList_" + i, savedTreesUri.get(i).toString());
+            Log.d("saveTreeUrisToSharedPreference", "arrayList_" + i + " = " + savedTreesUri.get(i).toString());
+        }
+        mEdit1.apply();
+    }
+
+
+    private ArrayList<Uri> loadSavedTreeUrisFromSharedPreference() {
+        ArrayList<Uri> savedTreesUri = new ArrayList<>();
+        SharedPreferences sp = getSharedPreferences("com.android.autosubtitle.prefs", 0);
+        int size = sp.getInt("arrayListSize", 0);
+        for(int i=0;i<size;i++) {
+            Uri uri = Uri.parse(sp.getString("arrayList_" + i, null));
+            savedTreesUri.add(uri);
+        }
+        return savedTreesUri;
+    }
+
+
+    private boolean isTreeUriPermissionGrantedForDirPathOfFilePath(String filePath) {
+        String dirName = Objects.requireNonNull(new File(filePath).getParentFile()).getName();
+        Uri dirUri = getFolderUri(dirName);
+
+        savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+        if (savedTreesUri.size() > 0) {
+            for (int j=0; j<savedTreesUri.size(); j++) {
+                Uri savedTreeUri = Uri.parse(savedTreesUri.get(j).toString());
+
+                Log.d("isTreeUriPermissionGrantedForFilePath", "savedTreeUri = " + savedTreeUri);
+                Log.d("isTreeUriPermissionGrantedForFilePath", "savedTreeUri.getLastPathSegment() = " + savedTreeUri.getLastPathSegment());
+                Log.d("isTreeUriPermissionGrantedForFilePath", "dirUri = " + dirUri);
+                Log.d("isTreeUriPermissionGrantedForFilePath", "dirUri.getLastPathSegment() = " + dirUri.getLastPathSegment());
+
+                if (savedTreeUri.getLastPathSegment().contains(dirUri.getLastPathSegment())) {
+                    selectedFolderUri = savedTreeUri;
+                    Log.d("isTreeUriPermissionGrantedForDirPathOfFilePath", "selectedFolderUri = " + selectedFolderUri);
+                    Log.d("isTreeUriPermissionGrantedForDirPathOfFilePath", "alreadySaved = true");
+                    return true;
+                }
+                else {
+                    Log.d("isTreeUriPermissionGrantedForDirPathOfFilePath", "alreadySaved = false");
+                }
+            }
+        }
+        return false;
+    }
+
+
+    private void hideProgressBar() {
+        runOnUiThread(() -> {
+            textview_progress.setVisibility(View.INVISIBLE);
+            progressBar.setVisibility(View.INVISIBLE);
+            textview_percentage.setVisibility(View.INVISIBLE);
+        });
+    }
+
+
+    public int calculateMaxCharsInTextView(String text, int viewWidth, int textSize) {
+        Paint paint = new Paint();
+        paint.setTextSize(textSize);
+        Rect bounds = new Rect();
+        paint.getTextBounds(text, 0, text.length(), bounds);
+        int textWidth = bounds.width();
+        return (int) Math.floor((double) viewWidth / (double) textWidth * text.length());
+    }
+
+
+    private void adjustOutputMessagesHeight() {
+        textview_output_messages.post(() -> {
+            DisplayMetrics display = new DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getMetrics(display);
+            int displayheightPixels = display.heightPixels;
+            Log.d("adjustOutputMessagesHeight", "displayheightPixels = " + displayheightPixels);
+            int[] location = new int[2];
+            textview_output_messages.getLocationOnScreen(location);
+            int top = location[1];
+            Log.d("adjustOutputMessagesHeight", "top = " + top);
+            int height = textview_output_messages.getHeight();
+            Log.d("adjustOutputMessagesHeight", "height = " + height);
+            int emptySpace = displayheightPixels - (top + height);
+            Log.d("adjustOutputMessagesHeight", "emptySpace = " + emptySpace);
+            int newHeight = height + emptySpace - 24;
+            Log.d("adjustOutputMessagesHeight", "newHeight = " + (height + emptySpace));
+
+            RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) textview_output_messages.getLayoutParams();
+            params.height = newHeight;
+            textview_output_messages.setLayoutParams(params);
+            heightOfOutputMessages = newHeight;
+
+            int lineHeight = textview_output_messages.getLineHeight();
+            maxLinesOfOutputMessages = heightOfOutputMessages / lineHeight;
+            Log.d("adjustOutputMessagesHeight", "maxLinesOfOutputMessages = " + maxLinesOfOutputMessages);
+
+        });
+
+    }
+
+
+    private void setText(final TextView tv, final String text){
+        runOnUiThread(() -> tv.setText(text));
+    }
+
+    private void appendText(final TextView tv, final String text){
+        runOnUiThread(() -> tv.append(text));
     }
 
 }
