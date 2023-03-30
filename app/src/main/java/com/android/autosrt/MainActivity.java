@@ -714,6 +714,7 @@ public class MainActivity extends AppCompatActivity {
         progressBar = findViewById(R.id.progressBar);
         textview_percentage = findViewById(R.id.textview_percentage);
         textview_output_messages = findViewById(R.id.textview_output_messages);
+
         textview_filePath.setTextIsSelectable(true);
         textview_output_messages.setTextIsSelectable(true);
 
@@ -745,7 +746,7 @@ public class MainActivity extends AppCompatActivity {
         cancelFilePath = getApplicationContext().getExternalFilesDir(null) + File.separator + "cancel.txt";
         File f = new File(cancelFilePath);
         if (f.exists() && f.delete()) {
-            Log.d(f.toString(), "deleted");
+            Log.d("onCreate", f + " deleted");
         }
 
         textview_currentFilePathProceed.setHint("");
@@ -898,7 +899,7 @@ public class MainActivity extends AppCompatActivity {
 
             cancelFilePath = getApplicationContext().getExternalFilesDir(null) + File.separator + "cancel.txt";
             if (new File(cancelFilePath).exists() && new File(cancelFilePath).delete()) {
-                Log.d(cancelFilePath, "deleted");
+                Log.d("onCreate", new File(cancelFilePath).getName() + " deleted");
             }
 
             if (selectedFilesUri != null) isTranscribing = !isTranscribing;
@@ -1002,12 +1003,19 @@ public class MainActivity extends AppCompatActivity {
         textview_output_messages.post(() -> {
             equals = StringUtils.repeat('=', 80);
             maxChars = (calculateMaxCharsInTextView(equals, textview_output_messages.getWidth(), (int) textview_output_messages.getTextSize()));
-            Log.d("onCreate", "textview_output_messages_2.getWidth() = " + textview_output_messages.getWidth());
-            Log.d("onCreate", "textview_output_messages_2.getTextSize() = " + textview_output_messages.getTextSize());
+            Log.d("onCreate", "textview_output_messages.getWidth() = " + textview_output_messages.getWidth());
+            Log.d("onCreate", "textview_output_messages.getTextSize() = " + textview_output_messages.getTextSize());
             Log.d("onCreate", "maxChars = " + maxChars);
             equals = StringUtils.repeat('=', maxChars - 2);
         });
 
+        try {
+            Class.forName("dalvik.system.CloseGuard")
+                    .getMethod("setEnabled", boolean.class)
+                    .invoke(null, true);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
 
     }
 
@@ -2084,6 +2092,8 @@ public class MainActivity extends AppCompatActivity {
 
         String savedSubtitleFilePath = null;
 
+        ParcelFileDescriptor subtitleParcelFileDescriptor = null;
+
         try {
             tmpSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpSubtitleUri);
         } catch (FileNotFoundException e) {
@@ -2109,8 +2119,8 @@ public class MainActivity extends AppCompatActivity {
                     savedSubtitleFilePath = Uri2Path(getApplicationContext(), savedSubtitleUri);
                     Log.d("saveSubtitleFileToSelectedDir", "savedSubtitleFilePath = " + savedSubtitleFilePath);
                     try {
-                        ParcelFileDescriptor parcelFileDescriptor = getContentResolver().openFileDescriptor(savedSubtitleUri, "w");
-                        savedSubtitleOutputStream = new FileOutputStream(parcelFileDescriptor.getFileDescriptor());
+                        subtitleParcelFileDescriptor = getContentResolver().openFileDescriptor(savedSubtitleUri, "w");
+                        savedSubtitleOutputStream = new FileOutputStream(subtitleParcelFileDescriptor.getFileDescriptor());
                     } catch (FileNotFoundException e) {
                         throw new RuntimeException(e);
                     }
@@ -2141,7 +2151,9 @@ public class MainActivity extends AppCompatActivity {
                 e.printStackTrace();
                 throw new RuntimeException(e);
             }
+
         }
+
         try {
             if (savedSubtitleOutputStream != null) {
                 savedSubtitleOutputStream.close();
@@ -2152,6 +2164,16 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
             throw new RuntimeException(e);
         }
+
+        try {
+            if (subtitleParcelFileDescriptor != null) {
+                subtitleParcelFileDescriptor.close();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        ParcelFileDescriptor translatedSubtitleParcelFileDescriptor = null;
 
         if (!Objects.equals(src_code, dst_code)) {
             if (selectedDirDocumentFile == null || !selectedDirDocumentFile.exists()) {
@@ -2169,8 +2191,8 @@ public class MainActivity extends AppCompatActivity {
                     String savedTranslatedSubtitleFile = Uri2Path(getApplicationContext(), savedTranslatedSubtitleUri);
                     Log.d("saveSubtitleFileToSelectedDir", "savedTranslatedSubtitleFile = " + savedTranslatedSubtitleFile);
                     try {
-                        ParcelFileDescriptor parcelFileDescriptor = getContentResolver().openFileDescriptor(savedTranslatedSubtitleUri, "w");
-                        savedTranslatedSubtitleOutputStream = new FileOutputStream(parcelFileDescriptor.getFileDescriptor());
+                        translatedSubtitleParcelFileDescriptor = getContentResolver().openFileDescriptor(savedTranslatedSubtitleUri, "w");
+                        savedTranslatedSubtitleOutputStream = new FileOutputStream(translatedSubtitleParcelFileDescriptor.getFileDescriptor());
                     } catch (FileNotFoundException e) {
                         throw new RuntimeException(e);
                     }
@@ -2219,6 +2241,15 @@ public class MainActivity extends AppCompatActivity {
                 e.printStackTrace();
                 throw new RuntimeException(e);
             }
+
+            try {
+                if (translatedSubtitleParcelFileDescriptor != null) {
+                    translatedSubtitleParcelFileDescriptor.close();
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
         }
 
         if (savedSubtitleFilePath != null) {
@@ -2238,7 +2269,6 @@ public class MainActivity extends AppCompatActivity {
         builder.setMessage("Are you sure?");
 
         builder.setPositiveButton("YES", (dialog, which) -> runOnUiThread(() -> {
-            //isCanceled = true;
             String t = "Start Transcribe";
             button_start.setText(t);
 
@@ -2466,6 +2496,11 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
             throw new RuntimeException(e);
         }
+        try {
+            parcelFileDescriptor.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 
@@ -2526,7 +2561,9 @@ public class MainActivity extends AppCompatActivity {
 
 
     private boolean isTreeUriPermissionGrantedForDirPathOfFilePath(String filePath) {
+        Log.d("isTreeUriPermissionGrantedForDirPathOfFilePath", "filePath = " + filePath);
         String dirName = Objects.requireNonNull(new File(filePath).getParentFile()).getName();
+        Log.d("isTreeUriPermissionGrantedForDirPathOfFilePath", "dirName = " + dirName);
         Uri dirUri = getFolderUri(dirName);
 
         savedTreesUri = loadSavedTreeUrisFromSharedPreference();
