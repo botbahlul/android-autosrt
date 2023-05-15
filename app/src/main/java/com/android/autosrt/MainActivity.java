@@ -886,9 +886,7 @@ public class MainActivity extends AppCompatActivity {
             for (int i=0; i<savedTreesUri.size(); i++) {
                 Log.d("onCreated", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
             }
-            if (savedTreesUri.size() == 0) {
-                requestTreeUriPermissions();
-            }
+            requestTreeUriPermissions();
         });
 
         button_start.setOnClickListener(view -> {
