@@ -369,7 +369,7 @@
             />
         <TextView
             android:id="@+id/textview_time"
-            android:hint="ETA  : 00:00:00"
+            android:hint="ETA :00:00:00"
             android:focusable="true"
             android:gravity="right"
             android:longClickable="true"
