@@ -107,6 +107,7 @@ public class MainActivity extends AppCompatActivity {
     TextView textview_progress;
     ProgressBar progressBar;
     TextView textview_percentage;
+    TextView textview_time;
     TextView textview_output_messages;
 
     Python py;
@@ -132,6 +133,10 @@ public class MainActivity extends AppCompatActivity {
     int maxLinesOfOutputMessages;
     int maxChars = 0;
     String equals;
+    long transcribeStartTime;
+    long transcribeElapsedTime;
+    String formattedElapsedTime;
+
 
     int STORAGE_PERMISSION_CODE = 101;
 
@@ -713,6 +718,7 @@ public class MainActivity extends AppCompatActivity {
         textview_progress = findViewById(R.id.textview_progress);
         progressBar = findViewById(R.id.progressBar);
         textview_percentage = findViewById(R.id.textview_percentage);
+        textview_time = findViewById(R.id.textview_time);
         textview_output_messages = findViewById(R.id.textview_output_messages);
 
         textview_filePath.setTextIsSelectable(true);
@@ -752,6 +758,7 @@ public class MainActivity extends AppCompatActivity {
         textview_currentFilePathProceed.setHint("");
         textview_progress.setHint("");
         textview_percentage.setHint("");
+        textview_time.setHint("");
         hideProgressBar();
 
         spinner_src_languages.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -903,6 +910,8 @@ public class MainActivity extends AppCompatActivity {
             if (selectedFilesUri != null) isTranscribing = !isTranscribing;
 
             if (isTranscribing) {
+                transcribeStartTime = System.currentTimeMillis();
+                Log.d("transcribe", "transcribeStartTime = " + transcribeStartTime);
                 runOnUiThread(() -> {
                     String t = "Cancel";
                     button_start.setText(t);
@@ -1511,6 +1520,7 @@ public class MainActivity extends AppCompatActivity {
             });
 
 
+    @SuppressLint("DefaultLocale")
     private void transcribe() {
         setText(textview_output_messages, "");
         runOnUiThread(() -> {
@@ -1573,7 +1583,8 @@ public class MainActivity extends AppCompatActivity {
                                     textview_output_messages,
                                     textview_progress,
                                     progressBar,
-                                    textview_percentage
+                                    textview_percentage,
+                                    textview_time
                             );
 
                             if (pyObjTmpSubtitleFilePath != null) {
@@ -1684,6 +1695,18 @@ public class MainActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 String t1 = "Start Transcribe";
                                 button_start.setText(t1);
+                                Log.d("transcribe", "transcribeStartTime = " + transcribeStartTime);
+                                Log.d("transcribe", "transcribeEndTime = " + System.currentTimeMillis());
+                                transcribeElapsedTime = System.currentTimeMillis() - transcribeStartTime;
+                                Log.d("transcribe", "transcribeElapsedTime = " + transcribeElapsedTime);
+                                long totalSeconds = transcribeElapsedTime / 1000;
+                                Log.d("transcribe", "totalSeconds = " + totalSeconds);
+                                long hours = totalSeconds / 3600;
+                                long minutes = (totalSeconds % 3600) / 60;
+                                long seconds = totalSeconds % 60;
+                                formattedElapsedTime = String.format("%02d:%02d:%02d", hours, minutes, seconds);
+                                appendText(textview_output_messages, "Transcribe total time : " + formattedElapsedTime + "\n");
+                                appendText(textview_output_messages, equals + "\n");
                             });
                         }
 
@@ -2594,6 +2617,7 @@ public class MainActivity extends AppCompatActivity {
             textview_progress.setVisibility(View.INVISIBLE);
             progressBar.setVisibility(View.INVISIBLE);
             textview_percentage.setVisibility(View.INVISIBLE);
+            textview_time.setVisibility(View.INVISIBLE);
         });
     }
 
