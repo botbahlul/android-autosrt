@@ -14,3 +14,5 @@ Tested on Pixel 2 API 25 emulator, Nexus 5X API 30 emulator, and Xiaomi Redmi No
 You can try android-autosrt-v2 which is using 2 activities
 
 https://github.com/botbahlul/android-autosrt-v2
+
+Check my other SPEECH RECOGNITIION + TRANSLATE PROJECTS https://github.com/botbahlul?tab=repositories
