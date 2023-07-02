@@ -1603,7 +1603,7 @@ public class MainActivity extends AppCompatActivity {
                             if (pyObjTmpSubtitleFilePath != null) {
                                 tmpSubtitleFilePath = pyObjTmpSubtitleFilePath.toString();
                                 tmpSubtitleFilesPath.add(tmpSubtitleFilePath);
-                                tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
+                                tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - subtitleFormat.length() - 1) + ".translated." + subtitleFormat;
                                 tmpTranslatedSubtitleFilesPath.add(tmpTranslatedSubtitleFilePath);
 
                                 if (new File(tmpSubtitleFilePath).exists() && new File(tmpSubtitleFilePath).length() > 1) {
@@ -1898,7 +1898,7 @@ public class MainActivity extends AppCompatActivity {
 
         String subtitleFileDisplayName = tmpSubtitleFilePath.substring(tmpSubtitleFilePath.lastIndexOf("/") + 1);
         Log.d("saveSubtitleFileToDocumentsDir", "subtitleFileDisplayName = " + subtitleFileDisplayName);
-        String subtitleFolderDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - 4);
+        String subtitleFolderDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - subtitleFormat.length() - 1);
         String savedFolderPath = getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName;
         OutputStream savedSubtitleFileOutputStream;
         Uri savedSubtitleUri = null;
@@ -1995,8 +1995,8 @@ public class MainActivity extends AppCompatActivity {
 
         if (!Objects.equals(src_code, dst_code)) {
             InputStream tmpTranslatedSubtitleInputStream;
-            String translatedSubtitleFileDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - 4) + ".translated." + subtitleFormat;
-            String tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
+            String translatedSubtitleFileDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - subtitleFormat.length() - 1) + ".translated." + subtitleFormat;
+            String tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - subtitleFormat.length() - 1) + ".translated." + subtitleFormat;
             Uri tmpTranslatedSubtitleUri = Uri.fromFile(new File(tmpTranslatedSubtitleFilePath));
             OutputStream savedTranslatedSubtitleFileOutputStream;
 
@@ -2106,7 +2106,7 @@ public class MainActivity extends AppCompatActivity {
     @SuppressLint("Recycle")
     private File saveSubtitleFileToSelectedDir(String tmpSubtitleFilePath, Uri selectedDirUri) {
         Uri tmpSubtitleUri = Uri.fromFile(new File(tmpSubtitleFilePath));
-        String tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - 4) + ".translated." + subtitleFormat;
+        String tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - subtitleFormat.length() - 1) + ".translated." + subtitleFormat;
         Uri tmpTranslatedSubtitleUri = Uri.fromFile(new File(tmpTranslatedSubtitleFilePath));
 
         InputStream tmpSubtitleInputStream;
@@ -2120,7 +2120,7 @@ public class MainActivity extends AppCompatActivity {
 
         String subtitleFileDisplayName = tmpSubtitleFilePath.substring(tmpSubtitleFilePath.lastIndexOf("/") + 1);
         Log.d("saveSubtitleFileToSelectedDir", "subtitleFileDisplayName = " + subtitleFileDisplayName);
-        String translatedSubtitleFileDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - 4) + ".translated." + subtitleFormat;
+        String translatedSubtitleFileDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - subtitleFormat.length() - 1) + ".translated." + subtitleFormat;
         Log.d("saveSubtitleFileToSelectedDir", "translatedSubtitleFileDisplayName = " + translatedSubtitleFileDisplayName);
 
         DocumentFile selectedDirDocumentFile = DocumentFile.fromTreeUri(MainActivity.this, selectedDirUri);

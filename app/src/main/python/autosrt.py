@@ -5,7 +5,7 @@ import math
 import multiprocessing
 import threading
 import io, sys, os, time, signal, shutil
-from datetime import timedelta
+from datetime import datetime, timedelta
 import tempfile
 import wave
 import json
@@ -714,7 +714,6 @@ def transcribe(src, dst, filename, file_display_name, subtitle_format, activity,
     activity.runOnUiThread(appendText(textview_output_messages, "Converted WAV file created\n"))
     Config.disableRedirection()
     pbar(100, convert_to_wav_start_time, 100, "Converting to WAV file : ", activity, textview_progress, progressBar, textview_percentage, textview_time)
-    time.sleep(1)
     activity.runOnUiThread(setVisibility(textview_progress, progressBar, textview_percentage, textview_time, View.INVISIBLE))
 
     audio_rate = 16000
@@ -826,10 +825,10 @@ def transcribe(src, dst, filename, file_display_name, subtitle_format, activity,
         formatted_subtitles = formatter(timed_subtitles)
 
         files_dir = str(context.getExternalFilesDir(None))
-        subtitle_folder_name = join(files_dir, file_display_name[:-4])
+        subtitle_folder_name = join(files_dir, file_display_name[:-len(subtitle_format)-1])
         if not os.path.isdir(subtitle_folder_name):
             os.mkdir(subtitle_folder_name)
-        subtitle_file = join(subtitle_folder_name, file_display_name[:-4] + "." + subtitle_format)
+        subtitle_file = join(subtitle_folder_name, file_display_name[:-len(subtitle_format)-1] + "." + subtitle_format)
 
         if os.path.isfile(cancel_file):
             os.remove(cancel_file)
@@ -844,11 +843,6 @@ def transcribe(src, dst, filename, file_display_name, subtitle_format, activity,
             f.write(formatted_subtitles.encode("utf-8"))
             f.close()
 
-        with open(subtitle_file, 'a') as f:
-            f.write("\n")
-            f.close()
-
-
         if (not is_same_language(src, dst)) and (os.path.isfile(subtitle_file)) and (not os.path.isfile(cancel_file)):
 
             if os.path.isfile(cancel_file):
@@ -858,7 +852,7 @@ def transcribe(src, dst, filename, file_display_name, subtitle_format, activity,
                 #activity.runOnUiThread(setText(textview_output_messages, "Process has been canceled"))
                 return
 
-            translated_subtitle_file = subtitle_file[ :-4] + '.translated.' + subtitle_format
+            translated_subtitle_file = subtitle_file[:-len(subtitle_format)-1] + '.translated.' + subtitle_format
 
             created_regions = []
             created_subtitles = []
@@ -904,8 +898,6 @@ def transcribe(src, dst, filename, file_display_name, subtitle_format, activity,
 
             with open(translated_subtitle_file, 'wb') as f:
                 f.write(formatted_translated_subtitles.encode("utf-8"))
-            with open(translated_subtitle_file, 'a') as f:
-                f.write("\n")
 
             if os.path.isfile(cancel_file):
                 os.remove(cancel_file)
