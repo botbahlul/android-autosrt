@@ -550,7 +550,7 @@ class SentenceTranslator(object):
                 print(e)
             return
 
-
+'''
 class MyStatisticsCallback(dynamic_proxy(StatisticsCallback)):
     def __init__(self, videoLength, start_time, activity, textview_progress, progress_bar, textview_percentage, textview_time):
         super(MyStatisticsCallback, self).__init__()
@@ -565,7 +565,6 @@ class MyStatisticsCallback(dynamic_proxy(StatisticsCallback)):
         Config.resetStatistics()
 
     def apply(self, newStatistics):
-        print("self.videoLength = {}".format(self.videoLength))
         getTime = newStatistics.getTime()
         print("getTime = {}".format(getTime))
         strGetTime = str(getTime)
@@ -577,22 +576,38 @@ class MyStatisticsCallback(dynamic_proxy(StatisticsCallback)):
         progressFinal = int(self.progress.get()*100)
         print("progressFinal = {}".format(progressFinal))
         pbar(progressFinal, self.start_time, 100, "Converting to WAV file : ", self.activity, self.textview_progress, self.progress_bar, self.textview_percentage, self.textview_time)
-        #if self.videoLength-getTime <= 1:
-        #    pbar(100, self.start_time, 100, "Converting to WAV file : ", self.activity, self.textview_progress, self.progress_bar, self.textview_percentage, self.textview_time)
+'''
 
+class MyStatisticsCallback(dynamic_proxy(StatisticsCallback)):
+    def __init__(self, info, media_duration, start_time, activity, textview_progress, progress_bar, textview_percentage, textview_time):
+        super(MyStatisticsCallback, self).__init__()
+        self.info = info
+        self.media_duration = media_duration
+        self.start_time = start_time
+        self.activity = activity
+        self.textview_progress = textview_progress
+        self.progress_bar = progress_bar
+        self.textview_percentage = textview_percentage
+        self.textview_time = textview_time
+        self.progress = AtomicReference(0.0)
+        Config.resetStatistics()
 
-def get_video_duration(video_path):
-    ffprobe_command = ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', video_path]
-    FFprobe.execute(ffprobe_command)
-    output = Config.getLastCommandOutput()
-    
-    try:
-        duration = int(float(output) * 1000)  # Convert to milliseconds
-    except ValueError as e:
-        duration = 0
-        print("Error parsing video duration:", e)
-    
-    return duration
+    def apply(self, newStatistics):
+        print(f"self.media_duration = {self.media_duration}")
+
+        getTime = newStatistics.getTime()
+        print(f"getTime = {getTime}")
+
+        self.progress.set(getTime/self.media_duration)
+        print(f"self.progress = {self.progress}")
+
+        progressFinal = int(self.progress.get()*100)
+        print(f"progressFinal = {progressFinal}")
+
+        pbar(progressFinal, self.start_time, 100, self.info, self.activity, self.textview_progress, self.progress_bar, self.textview_percentage, self.textview_time)
+
+        if int(getTime/1000) >= int(self.media_duration/1000):
+            pbar(100, self.start_time, 100, self.info, self.activity, self.textview_progress, self.progress_bar, self.textview_percentage, self.textview_time)
 
 
 def convert_to_wav(filePath, start_time, activity, textview_progress, progress_bar, textview_percentage, textview_time):
@@ -606,10 +621,10 @@ def convert_to_wav(filePath, start_time, activity, textview_progress, progress_b
     Config.enableRedirection()
     file = File(filePath)
     fileUri = Uri.fromFile(file)
-    #videoLength = MediaPlayer.create(activity, fileUri).getDuration()
-    videoLength = get_video_duration(filePath)
+    videoLength = MediaPlayer.create(activity, fileUri).getDuration()
     print("videoLength = {}".format(videoLength))
-    Config.enableStatisticsCallback(MyStatisticsCallback(videoLength, start_time, activity, textview_progress, progress_bar, textview_percentage, textview_time))
+    info = "Converting to WAV file : "
+    Config.enableStatisticsCallback(MyStatisticsCallback(info, videoLength, start_time, activity, textview_progress, progress_bar, textview_percentage, textview_time))
 
     FFmpeg.execute("-y -i " + "\"" + filePath + "\"" + " -ac " + str(channels) + " -ar " + str(rate) + " " + "\"" + temp.name + "\"")
     return temp.name, rate
@@ -661,6 +676,10 @@ def transcribe(src, dst, filename, file_display_name, subtitle_format, activity,
 
     multiprocessing.freeze_support()
 
+    Config.disableRedirection()
+    Config.resetStatistics()
+    Config.enableRedirection()
+
     if os.path.isfile(cancel_file):
         os.remove(cancel_file)
         #activity.runOnUiThread(setText(textview_output_messages, "Process has been canceled"))
@@ -687,12 +706,15 @@ def transcribe(src, dst, filename, file_display_name, subtitle_format, activity,
     activity.runOnUiThread(appendText(textview_output_messages, "Converting to WAV file\n"))
     print("filename = {}".format(filename))
     convert_to_wav_start_time = time.time()
+    pbar(0, convert_to_wav_start_time, 100, "Converting to WAV file : ", activity, textview_progress, progressBar, textview_percentage, textview_time)
+
     wav_filename, audio_rate = convert_to_wav(filename, convert_to_wav_start_time, activity, textview_progress, progressBar, textview_percentage, textview_time)
-    pbar(100, convert_to_wav_start_time, 100, "Converting to WAV file : ", activity, textview_progress, progressBar, textview_percentage, textview_time)
-    time.sleep(1)
+
     print("Converted WAV file is : {}".format(wav_filename))
     activity.runOnUiThread(appendText(textview_output_messages, "Converted WAV file created\n"))
     Config.disableRedirection()
+    pbar(100, convert_to_wav_start_time, 100, "Converting to WAV file : ", activity, textview_progress, progressBar, textview_percentage, textview_time)
+    time.sleep(1)
     activity.runOnUiThread(setVisibility(textview_progress, progressBar, textview_percentage, textview_time, View.INVISIBLE))
 
     audio_rate = 16000
@@ -734,11 +756,12 @@ def transcribe(src, dst, filename, file_display_name, subtitle_format, activity,
         return
 
     if regions:
-        print("Converting to FLAC files")
         activity.runOnUiThread(setVisibility(textview_progress, progressBar, textview_percentage, textview_time, View.VISIBLE))
+        activity.runOnUiThread(setText(textview_progress, "Converting to FLAC files : "))
+
+        print("Converting to FLAC files")
         activity.runOnUiThread(appendText(textview_output_messages, "Converting to FLAC files\n"))
         convert_to_flac_start_time = time.time()
-        pbar(0, convert_to_flac_start_time, 100, "Converting to FLAC files : ", activity, textview_progress, progressBar, textview_percentage, textview_time)
         extracted_regions = []
         for i, extracted_region in enumerate(pool.imap(converter, regions)):
 
@@ -972,30 +995,30 @@ class setVisibility(static_proxy(None, Runnable)):
         self.textview_time.setVisibility(self.view)
 
 
-def pbar(progress, start_time, total, prefix, activity, textview_progress, progress_bar, textview_percentage, textview_time):
-    if progress > 0:
+def pbar(count_value, start_time, total, prefix, activity, textview_progress, progress_bar, textview_percentage, textview_time):
+    percentage = count_value
+    if percentage > 0:
         elapsed_time = time.time() - start_time
-        eta_seconds = (elapsed_time / progress) * (total - progress)
+        eta_seconds = (elapsed_time / percentage) * (total - percentage)
     else:
         eta_seconds = 0
     eta_time = timedelta(seconds=int(eta_seconds))
     eta_str = str(eta_time)
     hour, minute, second = eta_str.split(":")
     text_time = "ETA :" + hour.zfill(2) + ":" + minute + ":" + second
-    if progress == total:
-        progress = 100
+    if count_value == total:
         elapsed_time = time.time() - start_time
         elapsed_time_seconds = timedelta(seconds=int(elapsed_time))
         elapsed_time_str = str(elapsed_time_seconds)
         hour, minute, second = elapsed_time_str.split(":")
         text_time = "Time:" + hour.zfill(2) + ":" + minute + ":" + second 
-    activity.runOnUiThread(mProgressBar(textview_progress, progress_bar, textview_percentage, textview_time, progress, text_time, 100, prefix))
+    activity.runOnUiThread(mProgressBar(textview_progress, progress_bar, textview_percentage, textview_time, int(percentage), text_time, 100, prefix))
 
 
 class mProgressBar(static_proxy(None, Runnable)):
-    def __init__(self, textview_progress, progress_bar, textview_percentage, textview_time, progress, text_time, total, prefix):
+    def __init__(self, textview_progress, progress_bar, textview_percentage, textview_time, count_value, text_time, total, prefix):
         super(mProgressBar, self).__init__()
-        self.progress = progress
+        self.count_value = count_value
         self.text_time = text_time
         self.total = total
         self.prefix = prefix
@@ -1008,6 +1031,6 @@ class mProgressBar(static_proxy(None, Runnable)):
     @Override(jvoid, [])
     def run(self):
         self.textview_progress.setText(self.prefix)
-        self.progress_bar.setProgress(self.progress)
-        self.textview_percentage.setText(str(self.progress) + "%")
+        self.progress_bar.setProgress(self.count_value)
+        self.textview_percentage.setText(str(self.count_value) + "%")
         self.textview_time.setText(self.text_time)

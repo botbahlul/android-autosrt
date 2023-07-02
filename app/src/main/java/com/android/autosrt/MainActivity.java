@@ -909,7 +909,7 @@ public class MainActivity extends AppCompatActivity {
 
             if (selectedFilesUri != null) isTranscribing = !isTranscribing;
 
-            if (isTranscribing) {
+            if (isTranscribing && selectedFilesUri != null) {
                 transcribeStartTime = System.currentTimeMillis();
                 Log.d("transcribe", "transcribeStartTime = " + transcribeStartTime);
                 runOnUiThread(() -> {
@@ -932,8 +932,21 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
             }
-            else {
+            else if (!isTranscribing && selectedFilesUri != null) {
                 showConfirmationDialogue();
+            }
+            else if (!isTranscribing && selectedFilesUri == null) {
+                if (threadTranscriber != null) {
+                    threadTranscriber.interrupt();
+                    threadTranscriber = null;
+                }
+                isTranscribing = false;
+                runOnUiThread(() -> {
+                    String t1 = "Start Transcribe";
+                    button_start.setText(t1);
+                    String m = "Please select at least 1 video/audio file\n";
+                    textview_output_messages.setText(m);
+                });
             }
 
         });
@@ -1922,6 +1935,7 @@ public class MainActivity extends AppCompatActivity {
                         savedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);
                     }
                 }
+                cursor.close();
             }
             else {
                 savedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);                
@@ -1996,7 +2010,8 @@ public class MainActivity extends AppCompatActivity {
                 if (Environment.isExternalStorageManager()) {
                     String selection = MediaStore.MediaColumns.RELATIVE_PATH + "=?";
                     String[] selectionArgs = new String[]{DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName + File.separator};
-                    @SuppressLint("Recycle") Cursor cursor = getContentResolver().query(extVolumeUri, null, selection, selectionArgs, null);
+                    @SuppressLint("Recycle")
+                    Cursor cursor = getContentResolver().query(extVolumeUri, null, selection, selectionArgs, null);
 
                     if (cursor.getCount() == 0) {
                         savedTranslatedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedTranslatedSubtitleValues);
@@ -2013,6 +2028,7 @@ public class MainActivity extends AppCompatActivity {
                             savedTranslatedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedTranslatedSubtitleValues);
                         }
                     }
+                    cursor.close();
                 }
                 else {
                     savedTranslatedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedTranslatedSubtitleValues);
