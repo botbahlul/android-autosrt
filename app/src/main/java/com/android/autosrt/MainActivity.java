@@ -2789,15 +2789,15 @@ public class MainActivity extends AppCompatActivity {
             textview_output_messages.scrollTo(0, 0);
 
             int lines = textview_output_messages.getLineCount();
-            Log.d("appendText", "lines = " + lines);
-            Log.d("appendText", "maxLinesOfOutputMessages = " + maxLinesOfOutputMessages);
+            Log.d("adjustOutputMessagesHeight", "lines = " + lines);
+            Log.d("adjustOutputMessagesHeight", "maxLinesOfOutputMessages = " + maxLinesOfOutputMessages);
             if (lines >= maxLinesOfOutputMessages) {
                 textview_output_messages.setGravity(Gravity.BOTTOM);
-                Log.d("appendText", "tv.getGravity() = BOTTOM");
+                Log.d("adjustOutputMessagesHeight", "tv.getGravity() = BOTTOM");
             }
             else {
                 textview_output_messages.setGravity(Gravity.START);
-                Log.d("appendText", "tv.getGravity() = START");
+                Log.d("adjustOutputMessagesHeight", "tv.getGravity() = START");
             }
 
             equalMaxChars = calculateMaxCharacterOccurrences(equalChars, textview_output_messages);
