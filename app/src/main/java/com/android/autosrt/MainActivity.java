@@ -19,7 +19,6 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Paint;
-import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -64,6 +63,7 @@ import com.chaquo.python.android.AndroidPlatform;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
@@ -76,6 +76,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -90,53 +91,67 @@ public class MainActivity extends AppCompatActivity {
     ArrayList<String> arraylist_subtitle_format = new ArrayList<>();
 
     Spinner spinner_src_languages;
+
     CheckBox checkbox_create_translation;
+
     TextView textview_text2;
     Spinner spinner_dst_languages;
+
     Spinner spinner_subtitle_format;
+
     TextView textview_filePath;
     Button button_browse;
+
     Button button_grant_storage_permission;
     TextView textview_grant_storage_permission_notes;
+
     Button button_grant_manage_app_all_files_access_permission;
     TextView textview_grant_manage_app_all_files_access_permission_notes;
+
     Button button_grant_persisted_tree_uri_permission;
     TextView textview_grant_persisted_tree_uri_permission_notes;
+
     Button button_start;
-    TextView textview_currentFilePathProceed;
+    TextView textview_current_file;
     TextView textview_progress;
     ProgressBar progressBar;
     TextView textview_percentage;
     TextView textview_time;
+
     TextView textview_output_messages;
 
+    String mediaFormat;
+    String subtitleFormat;
+
     Python py;
-    PyObject pyObjTmpSubtitleFilePath;
+    PyObject pyObjTmpResults;
+    ArrayList<String> tmpSubtitleFilesPath;
+    String tmpSrcSubtitleFilePath;
+    String tmpDstSubtitleFilePath;
+    File[] savedSubtitleFilesPath;
 
     boolean isTranscribing = false;
     Thread threadTranscriber;
     String cancelFilePath;
 
+    boolean alreadySaved;
     ArrayList<Uri> selectedFilesUri;
     ArrayList<String> selectedFilesPath;
     ArrayList<String> selectedFilesDisplayName;
-    String subtitleFormat;
-    ArrayList<String> tmpSubtitleFilesPath;
-    ArrayList<String> tmpTranslatedSubtitleFilesPath;
-    File[] savedSubtitleFile;
-
     String selectedFolderPath;
     Uri selectedFolderUri;
     ArrayList<Uri> savedTreesUri;
 
     int heightOfOutputMessages;
     int maxLinesOfOutputMessages;
-    int maxChars = 0;
-    String equals;
+    int equalMaxChars = 0;
+    int dashMaxChars = 0;
+    String equalChars = StringUtils.repeat('=', 49);
+    String dashChars = StringUtils.repeat('-', 89);
+
     long transcribeStartTime;
     long transcribeElapsedTime;
     String formattedElapsedTime;
-
 
     int STORAGE_PERMISSION_CODE = 101;
 
@@ -714,7 +729,7 @@ public class MainActivity extends AppCompatActivity {
         textview_grant_persisted_tree_uri_permission_notes = findViewById(R.id.textview_grant_persisted_tree_uri_permission_notes);
 
         button_start = findViewById(R.id.button_start);
-        textview_currentFilePathProceed = findViewById(R.id.textview_currentFilePathProceed);
+        textview_current_file = findViewById(R.id.textview_current_file);
         textview_progress = findViewById(R.id.textview_progress);
         progressBar = findViewById(R.id.progressBar);
         textview_percentage = findViewById(R.id.textview_percentage);
@@ -755,7 +770,7 @@ public class MainActivity extends AppCompatActivity {
             Log.d("onCreate", f + " deleted");
         }
 
-        textview_currentFilePathProceed.setHint("");
+        textview_current_file.setHint("");
         textview_progress.setHint("");
         textview_percentage.setHint("");
         textview_time.setHint("");
@@ -841,10 +856,6 @@ public class MainActivity extends AppCompatActivity {
             selectedFilesPath = new ArrayList<>();
             selectedFilesDisplayName = null;
             selectedFilesDisplayName = new ArrayList<>();
-            tmpSubtitleFilesPath = null;
-            tmpSubtitleFilesPath = new ArrayList<>();
-            tmpTranslatedSubtitleFilesPath = null;
-            tmpTranslatedSubtitleFilesPath = new ArrayList<>();
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
@@ -907,35 +918,38 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("onCreate", new File(cancelFilePath).getName() + " deleted");
             }
 
-            if (selectedFilesUri != null) isTranscribing = !isTranscribing;
+            if (selectedFilesUri != null) {
+                isTranscribing = !isTranscribing;
+            }
 
-            if (isTranscribing && selectedFilesUri != null) {
-                transcribeStartTime = System.currentTimeMillis();
-                Log.d("transcribe", "transcribeStartTime = " + transcribeStartTime);
-                runOnUiThread(() -> {
-                    String t = "Cancel";
-                    button_start.setText(t);
-                    if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
-                        transcribe();
-                    }
-                    else {
-                        if (threadTranscriber != null) {
-                            threadTranscriber.interrupt();
-                            threadTranscriber = null;
+            if (selectedFilesUri != null) {
+                if (isTranscribing) {
+                    transcribeStartTime = System.currentTimeMillis();
+                    Log.d("transcribe", "transcribeStartTime = " + transcribeStartTime);
+                    runOnUiThread(() -> {
+                        String t = "Cancel";
+                        button_start.setText(t);
+                        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                            transcribe();
+                        } else {
+                            if (threadTranscriber != null) {
+                                threadTranscriber.interrupt();
+                                threadTranscriber = null;
+                            }
+                            isTranscribing = false;
+                            runOnUiThread(() -> {
+                                String t1 = "Start Transcribe";
+                                button_start.setText(t1);
+                                setText(textview_output_messages, "Storage permission is not granted, this app won't work");
+                            });
                         }
-                        isTranscribing = false;
-                        runOnUiThread(() -> {
-                            String t1 = "Start Transcribe";
-                            button_start.setText(t1);
-                            setText(textview_output_messages, "Storage permission is not granted, this app won't work");
-                        });
-                    }
-                });
+                    });
+                }
+                else {
+                    showConfirmationDialogue();
+                }
             }
-            else if (!isTranscribing && selectedFilesUri != null) {
-                showConfirmationDialogue();
-            }
-            else if (!isTranscribing && selectedFilesUri == null) {
+            else {
                 if (threadTranscriber != null) {
                     threadTranscriber.interrupt();
                     threadTranscriber = null;
@@ -944,7 +958,7 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     String t1 = "Start Transcribe";
                     button_start.setText(t1);
-                    String m = "Please select at least 1 video/audio file\n";
+                    String m = "Please select at least 1 media file\n";
                     textview_output_messages.setText(m);
                 });
             }
@@ -1018,15 +1032,17 @@ public class MainActivity extends AppCompatActivity {
             setText(textview_output_messages, "It seems that you're not connected to internet, this app won't work without internet connection.");
         }
 
-        adjustOutputMessagesHeight();
+        //adjustOutputMessagesHeight();
 
         textview_output_messages.post(() -> {
-            equals = StringUtils.repeat('=', 80);
-            maxChars = (calculateMaxCharsInTextView(equals, textview_output_messages.getWidth(), (int) textview_output_messages.getTextSize()));
+            equalMaxChars = (calculateMaxCharacterOccurrences(equalChars, textview_output_messages));
+            dashMaxChars = (calculateMaxCharacterOccurrences(dashChars, textview_output_messages));
             Log.d("onCreate", "textview_output_messages.getWidth() = " + textview_output_messages.getWidth());
             Log.d("onCreate", "textview_output_messages.getTextSize() = " + textview_output_messages.getTextSize());
-            Log.d("onCreate", "maxChars = " + maxChars);
-            equals = StringUtils.repeat('=', maxChars - 2);
+            Log.d("onCreate", "equalMaxChars = " + equalMaxChars);
+            Log.d("onCreate", "dashMaxChars = " + dashMaxChars);
+            equalChars = StringUtils.repeat('=', equalMaxChars - 1);
+            dashChars = StringUtils.repeat('-', dashMaxChars - 3);
         });
 
         try {
@@ -1050,6 +1066,19 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    protected void onDestroy(){
+        super.onDestroy();
+        File directory = new File(MainActivity.this.getExternalFilesDir(null).getAbsolutePath());
+        File equalCharsFile = new File(directory, "equalChars").getAbsoluteFile();
+        if (equalCharsFile.exists() && equalCharsFile.delete()) {
+            Log.i("onDestroy", equalCharsFile + " deleted");
+        }
+        File dashCharsFile = new File(directory, "dashChars").getAbsoluteFile();
+        if (dashCharsFile.exists() && dashCharsFile.delete()) {
+            Log.i("onDestroy", dashCharsFile + " deleted");
+        }
+    }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -1065,20 +1094,20 @@ public class MainActivity extends AppCompatActivity {
 
                 savedTreesUri = loadSavedTreeUrisFromSharedPreference();
                 Log.d("onRequestPermissionsResult", "savedTreesUri.size() = " + savedTreesUri.size());
-                if (savedTreesUri.size() > 0) {
+                if (savedTreesUri != null && savedTreesUri.size() > 0) {
                     appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
                     for (int i=0; i<savedTreesUri.size(); i++) {
                         appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
                         Log.d("onRequestPermissionsResult", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
                     }
-                    if (selectedFilesPath != null && selectedFilesPath.size()>0) {
+                    if (selectedFilesPath != null && selectedFilesPath.size() > 0) {
                         if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
                             setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                             appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                         }
                         else {
                             setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                            appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                            appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                         }
                     }
                     else {
@@ -1098,6 +1127,7 @@ public class MainActivity extends AppCompatActivity {
                         else {
                             button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
                             textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
+                            adjustOutputMessagesHeight();
                             appendText(textview_output_messages, "Manage app all files access permission is not granted.\n");
                             appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                         }
@@ -1113,6 +1143,7 @@ public class MainActivity extends AppCompatActivity {
             else {
                 button_grant_storage_permission.setVisibility(View.VISIBLE);
                 textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
+                adjustOutputMessagesHeight();
                 setText(textview_output_messages, "Storage permission is not granted, this app won't work.");
             }
             //Toast.makeText(MainActivity.this, m1 + m2 + m3, Toast.LENGTH_SHORT).show();
@@ -1167,20 +1198,20 @@ public class MainActivity extends AppCompatActivity {
 
                                 savedTreesUri = loadSavedTreeUrisFromSharedPreference();
                                 Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "savedTreesUri.size() = " + savedTreesUri.size());
-                                if (savedTreesUri.size() > 0) {
+                                if (savedTreesUri != null && savedTreesUri.size() > 0) {
                                     appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
                                     for (int i=0; i<savedTreesUri.size(); i++) {
                                         appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
                                         Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
                                     }
-                                    if (selectedFilesPath.size()>0) {
+                                    if (selectedFilesPath != null && selectedFilesPath.size() > 0) {
                                         if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
                                             setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                             appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                         }
                                         else {
                                             setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                            appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                            appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                         }
                                     }
                                     else {
@@ -1190,42 +1221,43 @@ public class MainActivity extends AppCompatActivity {
                                 }
                                 else {
                                     appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folder");
-                                    appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                    appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                 }
                             }
                             else {
                                 button_grant_storage_permission.setVisibility(View.VISIBLE);
                                 textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
+                                adjustOutputMessagesHeight();
                                 setText(textview_output_messages, "Storage permission is not granted, this app won't work.");
                             }
                         }
                         else {
                             button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
                             textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
-                            setText(textview_output_messages, "Manage all files permission is not granted.\n");
+                            adjustOutputMessagesHeight();
+                            setText(textview_output_messages, "Manage app all files access permission is not granted.\n");
 
                             if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
                                 button_grant_storage_permission.setVisibility(View.GONE);
                                 textview_grant_storage_permission_notes.setVisibility(View.GONE);
                                 adjustOutputMessagesHeight();
                                 appendText(textview_output_messages, "Storage permission is granted.\n");
-
                                 savedTreesUri = loadSavedTreeUrisFromSharedPreference();
                                 Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "savedTreesUri.size() = " + savedTreesUri.size());
-                                if (savedTreesUri.size() > 0) {
+                                if (savedTreesUri != null && savedTreesUri.size() > 0) {
                                     appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
                                     for (int i=0; i<savedTreesUri.size(); i++) {
                                         appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
                                         Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
                                     }
-                                    if (selectedFilesPath != null && selectedFilesPath.size()>0) {
+                                    if (selectedFilesPath != null && selectedFilesPath.size() > 0) {
                                         if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
                                             setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                             appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                         }
                                         else {
                                             setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                            appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                            appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                         }
                                     }
                                     else {
@@ -1240,6 +1272,7 @@ public class MainActivity extends AppCompatActivity {
                             else {
                                 button_grant_storage_permission.setVisibility(View.VISIBLE);
                                 textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
+                                adjustOutputMessagesHeight();
                                 setText(textview_output_messages, "Storage permission is not granted, this app won't work");
                             }
                         }
@@ -1308,6 +1341,7 @@ public class MainActivity extends AppCompatActivity {
                             else {
                                 button_grant_storage_permission.setVisibility(View.VISIBLE);
                                 textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
+                                adjustOutputMessagesHeight();
                                 setText(textview_output_messages, "Storage permission is not granted, this app won't work");
                                 ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
                             }
@@ -1353,6 +1387,7 @@ public class MainActivity extends AppCompatActivity {
                                 if (!alreadySaved) {
                                     Log.d("startForBrowseFileActivity", "alreadySaved = false -> requestTreeUriPermissions()");
                                     button_grant_persisted_tree_uri_permission.setVisibility(View.VISIBLE);
+                                    adjustOutputMessagesHeight();
                                     setText(textview_output_messages, "Folder " + selectedFolderPath + " has not been granted yet for persisted tree uri permission.\n");
                                     if (i==0) requestTreeUriPermissions();
                                 }
@@ -1375,7 +1410,7 @@ public class MainActivity extends AppCompatActivity {
                                                     appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                                 } else {
                                                     setText(textview_output_messages, "Persisted tree uri permission request has not been granted yet for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                                    appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                                    appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                                 }
                                             } else {
                                                 ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
@@ -1386,6 +1421,7 @@ public class MainActivity extends AppCompatActivity {
                                         else {
                                             button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
                                             textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
+                                            adjustOutputMessagesHeight();
                                             appendText(textview_output_messages, "Manage app all files access permission is not granted.\n");
 
                                             if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
@@ -1419,7 +1455,7 @@ public class MainActivity extends AppCompatActivity {
                                                 appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                             } else {
                                                 setText(textview_output_messages, "Persisted tree uri permission request has not been granted yet for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                                appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                                appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                             }
                                         } else {
                                             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
@@ -1470,7 +1506,7 @@ public class MainActivity extends AppCompatActivity {
                                                 appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                             } else {
                                                 setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                                appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                                appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                             }
                                         }
                                         else {
@@ -1483,10 +1519,10 @@ public class MainActivity extends AppCompatActivity {
                                         if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
                                             if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
                                                 setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                                appendText(textview_output_messages, "All subtitle files will always be saved as new files into " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                                appendText(textview_output_messages, "All subtitle files will be saved into " + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                             } else {
                                                 setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                                appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                                appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                             }
                                         }
                                         else {
@@ -1564,17 +1600,29 @@ public class MainActivity extends AppCompatActivity {
                             transcribe();
                         }
 
-                        savedSubtitleFile = new File[selectedFilesUri.size()];
+                        savedSubtitleFilesPath = new File[selectedFilesUri.size()];
+
+                        runOnUiThread(() -> {
+                            setText(textview_output_messages, "");
+                            equalChars = readStringFromFile(MainActivity.this, "equalChars");
+                            Log.d("transcribe", "equalChars.length() = " + equalChars.length());
+                            appendText(textview_output_messages, equalChars + "\n");
+                        });
 
                         for (int i=0; i<selectedFilesUri.size(); i++) {
                             if (!isTranscribing) return;
 
-                            setText(textview_currentFilePathProceed, "Processing file : " + selectedFilesDisplayName.get(i));
+                            tmpSubtitleFilesPath = new ArrayList<>();
+
+                            mediaFormat = selectedFilesPath.get(i).substring(selectedFilesPath.get(i).lastIndexOf(".") + 1);
+                            String subtitleFolderDisplayName = StringUtils.substring(selectedFilesDisplayName.get(i), 0, selectedFilesDisplayName.get(i).length() - mediaFormat.length() - 1);
+                            Log.d("transcribe", "subtitleFolderDisplayName = " + subtitleFolderDisplayName);
+
+                            setText(textview_current_file, "Processing file : " + selectedFilesDisplayName.get(i));
                             int finalI = i;
                             textview_output_messages.post(() -> {
-                                appendText(textview_output_messages, equals + "\n");
                                 appendText(textview_output_messages, "Processing file : " + selectedFilesDisplayName.get(finalI) + "\n");
-                                appendText(textview_output_messages, equals + "\n");
+                                appendText(textview_output_messages, equalChars + "\n");
                             });
 
                             if (!Python.isStarted()) {
@@ -1582,10 +1630,7 @@ public class MainActivity extends AppCompatActivity {
                                 py = Python.getInstance();
                             }
 
-                            String tmpSubtitleFilePath;
-                            String tmpTranslatedSubtitleFilePath;
-
-                            pyObjTmpSubtitleFilePath = py.getModule("autosrt").callAttr(
+                            pyObjTmpResults = py.getModule("autosrt").callAttr(
                                     "transcribe",
                                     src_code,
                                     dst_code,
@@ -1598,36 +1643,72 @@ public class MainActivity extends AppCompatActivity {
                                     progressBar,
                                     textview_percentage,
                                     textview_time
-                            );
+                                    );
 
-                            if (pyObjTmpSubtitleFilePath != null) {
-                                tmpSubtitleFilePath = pyObjTmpSubtitleFilePath.toString();
-                                tmpSubtitleFilesPath.add(tmpSubtitleFilePath);
-                                tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - subtitleFormat.length() - 1) + ".translated." + subtitleFormat;
-                                tmpTranslatedSubtitleFilesPath.add(tmpTranslatedSubtitleFilePath);
+                            Log.d("transcribe", "pyObjTmpResults = " + pyObjTmpResults);
 
-                                if (new File(tmpSubtitleFilePath).exists() && new File(tmpSubtitleFilePath).length() > 1) {
+                            // Extract the tuple tupleTmpResults
+                            if (pyObjTmpResults != null) {
+
+                                String extension;
+                                List<PyObject> tupleTmpResults = new ArrayList<>(pyObjTmpResults.asList());
+
+                                for (int idx = 0; idx < tupleTmpResults.size(); idx++) {
+                                    Log.d("transcribe", "tupleTmpResults.get(" + idx + ") = " + tupleTmpResults.get(idx));
+
+                                    extension = tupleTmpResults.get(idx).toString().substring(tupleTmpResults.get(idx).toString().lastIndexOf(".") + 1);
+                                    Log.d("transcribe", "extension = " + extension);
+
+                                    if (extension.equals("srt") || extension.equals("vtt") || extension.equals("json") || extension.equals("raw")) {
+                                        tmpSubtitleFilesPath.add(tupleTmpResults.get(idx).toString());
+                                    }
+                                }
+                            }
+
+                            if (tmpSubtitleFilesPath != null) {
+
+                                for (int idx = 0; idx < tmpSubtitleFilesPath.size(); idx++) {
+                                    Log.d("transcribe", "tmpSubtitleFilesPath.get(" + idx + ") = " + tmpSubtitleFilesPath.get(idx));
+                                }
+
+                                tmpSrcSubtitleFilePath = tmpSubtitleFilesPath.get(0);
+                                Log.d("transcribe", "tmpSrcSubtitleFilePath = " + tmpSrcSubtitleFilePath);
+
+                                if (tmpSubtitleFilesPath.size() == 2 && tmpSubtitleFilesPath.get(1) != null) {
+                                    tmpDstSubtitleFilePath = tmpSubtitleFilesPath.get(1);
+                                    Log.d("transcribe", "tmpDstSubtitleFilePath = " + tmpDstSubtitleFilePath);
+                                }
+
+                                Log.d("transcribe", "new File(tmpSrcSubtitleFilePath).exists() = " + new File(tmpSrcSubtitleFilePath).exists());
+                                Log.d("transcribe", "new File(tmpSrcSubtitleFilePath).length() = " + new File(tmpSrcSubtitleFilePath).length());
+
+                                if (new File(tmpSrcSubtitleFilePath).exists() && new File(tmpSrcSubtitleFilePath).length() > 1) {
+
                                     savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+                                    Log.d("transcribe", "savedTreesUri = " + savedTreesUri);
+
                                     if (savedTreesUri.size() == 0) {
 
                                         Log.d("transcribe", "Saving subtitle file using saveSubtitleFileToDocumentsDir()");
-                                        savedSubtitleFile[i] = saveSubtitleFileToDocumentsDir(tmpSubtitleFilePath);
-                                        Log.d("transcribe", "savedSubtitleFile[" + i + "] = " + savedSubtitleFile[i]);
+                                        savedSubtitleFilesPath[i] = saveSubtitleFileToDocumentsDir(tmpSrcSubtitleFilePath, tmpDstSubtitleFilePath, subtitleFolderDisplayName);
+                                        Log.d("transcribe", "savedSubtitleFilesPath[" + i + "] = " + savedSubtitleFilesPath[i]);
 
-                                        if (savedSubtitleFile[i].exists() && savedSubtitleFile[i].length() > 1) {
-                                            Log.d("transcribe", savedSubtitleFile[i] + " created");
-                                            appendText(textview_output_messages, equals + "\n");
-                                            appendText(textview_output_messages, "Saved subtitle files for " + selectedFilesDisplayName.get(i) + " : \n");
-                                            appendText(textview_output_messages, savedSubtitleFile[i] + "\n");
+                                        if (savedSubtitleFilesPath[i].exists() && savedSubtitleFilesPath[i].length() > 1) {
+                                            Log.d("transcribe", savedSubtitleFilesPath[i] + " created");
+                                            appendText(textview_output_messages, equalChars + "\n");
+                                            appendText(textview_output_messages, "Overall results for " + selectedFilesDisplayName.get(i) + " : \n");
+                                            appendText(textview_output_messages, equalChars + "\n");
+                                            appendText(textview_output_messages, savedSubtitleFilesPath[i] + "\n");
 
                                             if (!Objects.equals(src_code, dst_code)) {
-                                                String savedTranslatedSubtitleFilePath = StringUtils.replace(savedSubtitleFile[i].toString(), ".srt", ".translated.srt");
-                                                Log.d("transcribe", "savedTranslatedSubtitleFilePath = " + savedTranslatedSubtitleFilePath);
-                                                if (new File(savedTranslatedSubtitleFilePath).exists() && new File(savedTranslatedSubtitleFilePath).length() > 1) {
-                                                    appendText(textview_output_messages, savedTranslatedSubtitleFilePath + "\n");
+                                                String savedDstSubtitleFilePath = StringUtils.replace(savedSubtitleFilesPath[i].toString(), src_code + ".srt", dst_code + ".srt");
+                                                Log.d("transcribe", "savedDstSubtitleFilePath = " + savedDstSubtitleFilePath);
+                                                if (new File(savedDstSubtitleFilePath).exists() && new File(savedDstSubtitleFilePath).length() > 1) {
+                                                    appendText(textview_output_messages, equalChars + "\n");
+                                                    appendText(textview_output_messages, savedDstSubtitleFilePath + "\n");
                                                 }
                                             }
-                                            appendText(textview_output_messages, equals + "\n");
+                                            appendText(textview_output_messages, equalChars + "\n");
                                         }
 
                                     }
@@ -1646,58 +1727,65 @@ public class MainActivity extends AppCompatActivity {
                                             j+=1;
                                         }
 
-                                        boolean alreadySaved = isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(i));
+                                        alreadySaved = isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(i));
+
+                                        Log.d("transcribe", "alreadySaved = " + alreadySaved);
                                         if (alreadySaved) {
 
                                             Log.d("transcribe", "Saving subtitle file using saveSubtitleFileToSelectedDir()");
                                             Log.d("transcribe", "selectedFolderUri = " + selectedFolderUri);
-                                            savedSubtitleFile[i] = saveSubtitleFileToSelectedDir(tmpSubtitleFilePath, selectedFolderUri);
 
-                                            if (savedSubtitleFile[i].exists() && savedSubtitleFile[i].length() > 1) {
-                                                Log.d("transcribe", savedSubtitleFile[i].toString() + " created");
-                                                appendText(textview_output_messages, equals + "\n");
-                                                appendText(textview_output_messages, "Saved subtitle files for " + selectedFilesDisplayName.get(i) + " : \n");
-                                                appendText(textview_output_messages, savedSubtitleFile[i].toString() + "\n");
+                                            savedSubtitleFilesPath[i] = saveSubtitleFileToSelectedDir(tmpSrcSubtitleFilePath, tmpDstSubtitleFilePath, selectedFolderUri);
+
+                                            if (savedSubtitleFilesPath[i].exists() && savedSubtitleFilesPath[i].length() > 1) {
+                                                Log.d("transcribe", savedSubtitleFilesPath[i].toString() + " created");
+                                                appendText(textview_output_messages, equalChars + "\n");
+                                                appendText(textview_output_messages, "Overall results for " + selectedFilesDisplayName.get(i) + " : \n");
+                                                appendText(textview_output_messages, equalChars + "\n");
+                                                appendText(textview_output_messages, savedSubtitleFilesPath[i].toString() + "\n");
 
                                                 if (!Objects.equals(src_code, dst_code)) {
-                                                    String savedTranslatedSubtitleFilePath = StringUtils.replace(savedSubtitleFile[i].toString(), ".srt", ".translated.srt");
-                                                    Log.d("transcribe", "savedTranslatedSubtitleFilePath = " + savedTranslatedSubtitleFilePath);
-                                                    if (new File(savedTranslatedSubtitleFilePath).exists() && new File(savedTranslatedSubtitleFilePath).length() > 1) {
-                                                        appendText(textview_output_messages, savedTranslatedSubtitleFilePath + "\n");
+                                                    String savedDstSubtitleFilePath = StringUtils.replace(savedSubtitleFilesPath[i].toString(), src_code+ ".srt", dst_code + ".srt");
+                                                    Log.d("transcribe", "savedDstSubtitleFilePath = " + savedDstSubtitleFilePath);
+                                                    if (new File(savedDstSubtitleFilePath).exists() && new File(savedDstSubtitleFilePath).length() > 1) {
+                                                        appendText(textview_output_messages, equalChars + "\n");
+                                                        appendText(textview_output_messages, savedDstSubtitleFilePath + "\n");
                                                     }
                                                 }
-                                                appendText(textview_output_messages, equals + "\n");
+
+                                                appendText(textview_output_messages, equalChars + "\n");
                                             }
 
                                         }
                                         else {
 
                                             Log.d("transcribe", "Saving subtitle file using saveSubtitleFileToDocumentsDir()");
-                                            savedSubtitleFile[i] = saveSubtitleFileToDocumentsDir(tmpSubtitleFilePath);
-                                            Log.d("transcribe", "savedSubtitleFile[" + i + "] = " + savedSubtitleFile[i]);
+                                            savedSubtitleFilesPath[i] = saveSubtitleFileToDocumentsDir(tmpSrcSubtitleFilePath, tmpDstSubtitleFilePath, subtitleFolderDisplayName);
+                                            Log.d("transcribe", "savedSubtitleFilesPath[" + i + "] = " + savedSubtitleFilesPath[i]);
 
-                                            if (new File(savedSubtitleFile[i].toString()).exists() && new File(savedSubtitleFile[i].toString()).length() > 1) {
-                                                Log.d("transcribe", savedSubtitleFile[i] + " created");
-                                                appendText(textview_output_messages, equals + "\n");
-                                                appendText(textview_output_messages, "Saved subtitle files for " + selectedFilesDisplayName.get(i) + " : \n");
-                                                appendText(textview_output_messages, savedSubtitleFile[i] + "\n");
+                                            if (new File(savedSubtitleFilesPath[i].toString()).exists() && new File(savedSubtitleFilesPath[i].toString()).length() > 1) {
+                                                Log.d("transcribe", savedSubtitleFilesPath[i] + " created");
+                                                appendText(textview_output_messages, equalChars + "\n");
+                                                appendText(textview_output_messages, "Overall results for " + selectedFilesDisplayName.get(i) + " : \n");
+                                                appendText(textview_output_messages, equalChars + "\n");
+                                                appendText(textview_output_messages, savedSubtitleFilesPath[i] + "\n");
 
                                                 if (!Objects.equals(src_code, dst_code)) {
-                                                    String savedTranslatedSubtitleFilePath = StringUtils.replace(savedSubtitleFile[i].toString(), ".srt", ".translated.srt");
-                                                    Log.d("transcribe", "savedTranslatedSubtitleFilePath = " + savedTranslatedSubtitleFilePath);
-                                                    if (new File(savedTranslatedSubtitleFilePath).exists() && new File(savedTranslatedSubtitleFilePath).length() > 1) {
-                                                        appendText(textview_output_messages, savedTranslatedSubtitleFilePath + "\n");
+                                                    String savedDstSubtitleFilePath = StringUtils.replace(savedSubtitleFilesPath[i].toString(), src_code + ".srt", dst_code + ".srt");
+                                                    Log.d("transcribe", "savedDstSubtitleFilePath = " + savedDstSubtitleFilePath);
+                                                    if (new File(savedDstSubtitleFilePath).exists() && new File(savedDstSubtitleFilePath).length() > 1) {
+                                                        appendText(textview_output_messages, equalChars + "\n");
+                                                        appendText(textview_output_messages, savedDstSubtitleFilePath + "\n");
                                                     }
                                                 }
-                                                appendText(textview_output_messages, equals + "\n");
+                                                appendText(textview_output_messages, equalChars);
                                             }
-
                                         }
                                     }
                                 }
                             }
                         }
-                        setText(textview_currentFilePathProceed, "");
+                        setText(textview_current_file, "");
 
                         if (isTranscribing && selectedFilesUri != null) {
                             if (threadTranscriber != null) {
@@ -1718,8 +1806,8 @@ public class MainActivity extends AppCompatActivity {
                                 long minutes = (totalSeconds % 3600) / 60;
                                 long seconds = totalSeconds % 60;
                                 formattedElapsedTime = String.format("%02d:%02d:%02d", hours, minutes, seconds);
-                                appendText(textview_output_messages, "Transcribe total time : " + formattedElapsedTime + "\n");
-                                appendText(textview_output_messages, equals + "\n");
+                                appendText(textview_output_messages, "Total running time : " + formattedElapsedTime + "\n");
+                                appendText(textview_output_messages, equalChars + "\n");
                             });
                         }
 
@@ -1748,7 +1836,7 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     String t1 = "Start Transcribe";
                     button_start.setText(t1);
-                    String m = "Please select at least 1 video/audio file\n";
+                    String m = "Please select at least 1 media file\n";
                     textview_output_messages.setText(m);
                 });
             }
@@ -1843,7 +1931,7 @@ public class MainActivity extends AppCompatActivity {
                         new String[] {MediaStore.Files.FileColumns.DATA},
                         "_id=?",
                         new String[]{idStr}, null);
-                if (cursor != null && cursor.getCount()>0 && cursor.moveToFirst()) {
+                if (cursor != null && cursor.getCount() > 0 && cursor.moveToFirst()) {
                     cursor.moveToFirst();
                     try {
                         int idx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
@@ -1885,31 +1973,32 @@ public class MainActivity extends AppCompatActivity {
 
 
     @SuppressLint("Recycle")
-    private File saveSubtitleFileToDocumentsDir(String tmpSubtitleFilePath) {
-        InputStream tmpSubtitleInputStream;
-        Uri tmpSubtitleUri = Uri.fromFile(new File(tmpSubtitleFilePath));
+    private File saveSubtitleFileToDocumentsDir(String tmpSrcSubtitleFilePath, String tmpDstSubtitleFilePath, String subtitleFolderDisplayName) {
+        InputStream tmpSrcSubtitleInputStream;
+        Uri tmpSrcSubtitleUri = Uri.fromFile(new File(tmpSrcSubtitleFilePath));
         try {
-            tmpSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpSubtitleUri);
-        } catch (FileNotFoundException e) {
+            tmpSrcSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpSrcSubtitleUri);
+        }
+        catch (FileNotFoundException e) {
             Log.e("FileNotFoundException: ", e.getMessage());
             e.printStackTrace();
             throw new RuntimeException(e);
         }
 
-        String subtitleFileDisplayName = tmpSubtitleFilePath.substring(tmpSubtitleFilePath.lastIndexOf("/") + 1);
-        Log.d("saveSubtitleFileToDocumentsDir", "subtitleFileDisplayName = " + subtitleFileDisplayName);
-        String subtitleFolderDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - subtitleFormat.length() - 1);
+        String srcSubtitleFileDisplayName = tmpSrcSubtitleFilePath.substring(tmpSrcSubtitleFilePath.lastIndexOf("/") + 1);
+        Log.d("saveSubtitleFileToDocumentsDir", "srcSubtitleFileDisplayName = " + srcSubtitleFileDisplayName);
         String savedFolderPath = getExternalStorageDirectory() + File.separator + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName;
-        OutputStream savedSubtitleFileOutputStream;
-        Uri savedSubtitleUri = null;
-        Uri savedTranslatedSubtitleUri = null;
+        Log.d("saveSubtitleFileToDocumentsDir", "savedFolderPath = " + savedFolderPath);
+        OutputStream savedSrcSubtitleFilesOutputStream;
+        Uri savedSrcSubtitleUri = null;
+        Uri savedDstSubtitleUri = null;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             MainActivity.this.getActivityResultRegistry().register("key", new ActivityResultContracts.OpenDocument(), result -> MainActivity.this.getApplicationContext().getContentResolver().takePersistableUriPermission(result, Intent.FLAG_GRANT_READ_URI_PERMISSION));
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, subtitleFileDisplayName); // savedFile name subtitleFileDisplayName required to contain extension savedFile mime
-            values.put(MediaStore.MediaColumns.MIME_TYPE, "*/*");
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName);
+            ContentValues savedSrcSubtitleValues = new ContentValues();
+            savedSrcSubtitleValues.put(MediaStore.MediaColumns.DISPLAY_NAME, srcSubtitleFileDisplayName); // savedFile name srcSubtitleFileDisplayName required to contain extension savedFile mime
+            savedSrcSubtitleValues.put(MediaStore.MediaColumns.MIME_TYPE, "*/*");
+            savedSrcSubtitleValues.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName);
             Uri extVolumeUri = MediaStore.Files.getContentUri("external");
             Log.d("saveSubtitleFileToDocumentsDir", "extVolumeUri = " + extVolumeUri);
 
@@ -1920,29 +2009,30 @@ public class MainActivity extends AppCompatActivity {
 
                 Log.d("saveSubtitleFileToDocumentsDir", "cursor.getCount() = " + cursor.getCount());
                 if (cursor.getCount() == 0) {
-                    savedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);
+                    savedSrcSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedSrcSubtitleValues);
                 } else {
                     while (cursor.moveToNext()) {
                         String fileName = cursor.getString(cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME));
                         Log.d("saveSubtitleFileToDocumentsDir", "fileName = " + fileName);
-                        if (fileName.equals(subtitleFileDisplayName)) {
+                        if (fileName.equals(srcSubtitleFileDisplayName)) {
                             long id = cursor.getLong(cursor.getColumnIndex(MediaStore.MediaColumns._ID));
-                            savedSubtitleUri = ContentUris.withAppendedId(extVolumeUri, id);
+                            savedSrcSubtitleUri = ContentUris.withAppendedId(extVolumeUri, id);
                             break;
                         }
                     }
-                    if (savedSubtitleUri == null) {
-                        savedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);
+                    if (savedSrcSubtitleUri == null) {
+                        savedSrcSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedSrcSubtitleValues);
                     }
                 }
                 cursor.close();
             }
             else {
-                savedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, values);                
+                savedSrcSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedSrcSubtitleValues);
             }
             try {
-                savedSubtitleFileOutputStream = getApplicationContext().getContentResolver().openOutputStream(savedSubtitleUri);
-            } catch (FileNotFoundException e) {
+                savedSrcSubtitleFilesOutputStream = getApplicationContext().getContentResolver().openOutputStream(savedSrcSubtitleUri);
+            }
+            catch (FileNotFoundException e) {
                 Log.e("FileNotFoundException: ", e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException(e);
@@ -1954,39 +2044,43 @@ public class MainActivity extends AppCompatActivity {
             if (!root.exists() && root.mkdirs()) {
                 Log.d("saveSubtitleFileToDocumentsDir", root + " created");
             }
-            File savedSubtitleFile = new File(root, subtitleFileDisplayName);
-            Log.d("saveSubtitleFileToDocumentsDir", "savedSubtitleFile.getAbsolutePath() = " + savedSubtitleFile.getAbsolutePath());
+            File savedSubtitleFilesPath = new File(root, srcSubtitleFileDisplayName);
+            Log.d("saveSubtitleFileToDocumentsDir", "savedSubtitleFilesPath.getAbsolutePath() = " + savedSubtitleFilesPath.getAbsolutePath());
             try {
-                savedSubtitleFileOutputStream = new FileOutputStream(savedSubtitleFile);
-            } catch (FileNotFoundException e) {
+                savedSrcSubtitleFilesOutputStream = new FileOutputStream(savedSubtitleFilesPath);
+            }
+            catch (FileNotFoundException e) {
                 Log.e("FileNotFoundException: ", e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException(e);
             }
         }
 
-        byte[] bytes = new byte[1024];
+        byte[] bytesSrc = new byte[1024];
         int length;
         while (true) {
             try {
-                if (!((length = tmpSubtitleInputStream.read(bytes)) > 0)) break;
-            } catch (IOException e) {
+                if (!((length = tmpSrcSubtitleInputStream.read(bytesSrc)) > 0)) break;
+            }
+            catch (IOException e) {
                 Log.e("IOException: ", e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException(e);
             }
             try {
-                savedSubtitleFileOutputStream.write(bytes, 0, length);
-            } catch (IOException e) {
+                savedSrcSubtitleFilesOutputStream.write(bytesSrc, 0, length);
+            }
+            catch (IOException e) {
                 Log.e("IOException: ", e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException(e);
             }
         }
         try {
-            savedSubtitleFileOutputStream.close();
-            tmpSubtitleInputStream.close();
-        } catch (IOException e) {
+            savedSrcSubtitleFilesOutputStream.close();
+            tmpSrcSubtitleInputStream.close();
+        }
+        catch (IOException e) {
             Log.e("IOException: ", e.getMessage());
             e.printStackTrace();
             throw new RuntimeException(e);
@@ -1994,48 +2088,47 @@ public class MainActivity extends AppCompatActivity {
 
 
         if (!Objects.equals(src_code, dst_code)) {
-            InputStream tmpTranslatedSubtitleInputStream;
-            String translatedSubtitleFileDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - subtitleFormat.length() - 1) + ".translated." + subtitleFormat;
-            String tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - subtitleFormat.length() - 1) + ".translated." + subtitleFormat;
-            Uri tmpTranslatedSubtitleUri = Uri.fromFile(new File(tmpTranslatedSubtitleFilePath));
-            OutputStream savedTranslatedSubtitleFileOutputStream;
+            InputStream tmpDstSubtitleInputStream;
+            String dstSubtitleFileDisplayName = tmpDstSubtitleFilePath.substring(tmpDstSubtitleFilePath.lastIndexOf("/") + 1);
+            Uri tmpDstSubtitleUri = Uri.fromFile(new File(tmpDstSubtitleFilePath));
+            OutputStream savedDstSubtitleFileOutputStream;
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                ContentValues savedTranslatedSubtitleValues = new ContentValues();
-                savedTranslatedSubtitleValues.put(MediaStore.MediaColumns.DISPLAY_NAME, translatedSubtitleFileDisplayName); // savedFile name translatedSubtitleFileDisplayName required to contain extension savedFile mime
-                savedTranslatedSubtitleValues.put(MediaStore.MediaColumns.MIME_TYPE, "*/*");
-                savedTranslatedSubtitleValues.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName);
+                ContentValues savedDstSubtitleValues = new ContentValues();
+                savedDstSubtitleValues.put(MediaStore.MediaColumns.DISPLAY_NAME, dstSubtitleFileDisplayName); // savedFile name dstSubtitleFileDisplayName required to contain extension savedFile mime
+                savedDstSubtitleValues.put(MediaStore.MediaColumns.MIME_TYPE, "*/*");
+                savedDstSubtitleValues.put(MediaStore.MediaColumns.RELATIVE_PATH, DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName);
                 Uri extVolumeUri = MediaStore.Files.getContentUri("external");
 
                 if (Environment.isExternalStorageManager()) {
                     String selection = MediaStore.MediaColumns.RELATIVE_PATH + "=?";
                     String[] selectionArgs = new String[]{DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator + subtitleFolderDisplayName + File.separator};
-                    @SuppressLint("Recycle")
-                    Cursor cursor = getContentResolver().query(extVolumeUri, null, selection, selectionArgs, null);
+                    @SuppressLint("Recycle") Cursor cursor = getContentResolver().query(extVolumeUri, null, selection, selectionArgs, null);
 
                     if (cursor.getCount() == 0) {
-                        savedTranslatedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedTranslatedSubtitleValues);
+                        savedDstSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedDstSubtitleValues);
                     } else {
                         while (cursor.moveToNext()) {
                             String fileName = cursor.getString(cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME));
-                            if (fileName.equals(translatedSubtitleFileDisplayName)) {
+                            if (fileName.equals(dstSubtitleFileDisplayName)) {
                                 long id = cursor.getLong(cursor.getColumnIndex(MediaStore.MediaColumns._ID));
-                                savedTranslatedSubtitleUri = ContentUris.withAppendedId(extVolumeUri, id);
+                                savedDstSubtitleUri = ContentUris.withAppendedId(extVolumeUri, id);
                                 break;
                             }
                         }
-                        if (savedTranslatedSubtitleUri == null) {
-                            savedTranslatedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedTranslatedSubtitleValues);
+                        if (savedDstSubtitleUri == null) {
+                            savedDstSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedDstSubtitleValues);
                         }
                     }
                     cursor.close();
                 }
                 else {
-                    savedTranslatedSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedTranslatedSubtitleValues);
+                    savedDstSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedDstSubtitleValues);
                 }
                 try {
-                    savedTranslatedSubtitleFileOutputStream = getApplicationContext().getContentResolver().openOutputStream(savedTranslatedSubtitleUri);
-                } catch (FileNotFoundException e) {
+                    savedDstSubtitleFileOutputStream = getApplicationContext().getContentResolver().openOutputStream(savedDstSubtitleUri);
+                }
+                catch (FileNotFoundException e) {
                     Log.e("FileNotFoundException: ", e.getMessage());
                     e.printStackTrace();
                     throw new RuntimeException(e);
@@ -2046,11 +2139,12 @@ public class MainActivity extends AppCompatActivity {
                 if (!root.exists() && root.mkdirs()) {
                     Log.d("saveSubtitleFileToDocumentsDir", root + " created");
                 }
-                File savedTranslatedSubtitleFile = new File(root, translatedSubtitleFileDisplayName);
-                Log.d("saveSubtitleFileToDocumentsDir", "savedTranslatedSubtitleFile.getAbsolutePath() = " + savedTranslatedSubtitleFile.getAbsolutePath());
+                File savedDstSubtitleFile = new File(root, dstSubtitleFileDisplayName);
+                Log.d("saveSubtitleFileToDocumentsDir", "savedDstSubtitleFile.getAbsolutePath() = " + savedDstSubtitleFile.getAbsolutePath());
                 try {
-                    savedTranslatedSubtitleFileOutputStream = new FileOutputStream(savedTranslatedSubtitleFile);
-                } catch (FileNotFoundException e) {
+                    savedDstSubtitleFileOutputStream = new FileOutputStream(savedDstSubtitleFile);
+                }
+                catch (FileNotFoundException e) {
                     Log.e("FileNotFoundException: ", e.getMessage());
                     e.printStackTrace();
                     throw new RuntimeException(e);
@@ -2058,36 +2152,40 @@ public class MainActivity extends AppCompatActivity {
             }
 
             try {
-                tmpTranslatedSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpTranslatedSubtitleUri);
-            } catch (FileNotFoundException e) {
+                tmpDstSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpDstSubtitleUri);
+            }
+            catch (FileNotFoundException e) {
                 Log.e("FileNotFoundException: ", e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException(e);
             }
 
-            byte[] tmpTranslatedSubtitleBytes = new byte[1024];
-            int tmpTranslatedSubtitleLength;
+            byte[] tmpDstSubtitleBytes = new byte[1024];
+            int tmpDstSubtitleLength;
             while (true) {
                 try {
-                    if (!((tmpTranslatedSubtitleLength = tmpTranslatedSubtitleInputStream.read(tmpTranslatedSubtitleBytes)) > 0))
+                    if (!((tmpDstSubtitleLength = tmpDstSubtitleInputStream.read(tmpDstSubtitleBytes)) > 0))
                         break;
-                } catch (IOException e) {
+                }
+                catch (IOException e) {
                     Log.e("IOException: ", e.getMessage());
                     e.printStackTrace();
                     throw new RuntimeException(e);
                 }
                 try {
-                    savedTranslatedSubtitleFileOutputStream.write(tmpTranslatedSubtitleBytes, 0, tmpTranslatedSubtitleLength);
-                } catch (IOException e) {
+                    savedDstSubtitleFileOutputStream.write(tmpDstSubtitleBytes, 0, tmpDstSubtitleLength);
+                }
+                catch (IOException e) {
                     Log.e("IOException: ", e.getMessage());
                     e.printStackTrace();
                     throw new RuntimeException(e);
                 }
             }
             try {
-                savedTranslatedSubtitleFileOutputStream.close();
-                tmpTranslatedSubtitleInputStream.close();
-            } catch (IOException e) {
+                savedDstSubtitleFileOutputStream.close();
+                tmpDstSubtitleInputStream.close();
+            }
+            catch (IOException e) {
                 Log.e("IOException: ", e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException(e);
@@ -2095,45 +2193,54 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return new File(Uri2Path(getApplicationContext(), savedSubtitleUri));
+            return new File(Uri2Path(getApplicationContext(), savedSrcSubtitleUri));
         }
         else {
-            return new File(savedFolderPath + File.separator + subtitleFileDisplayName);
+            return new File(savedFolderPath + File.separator + srcSubtitleFileDisplayName);
         }
     }
 
 
     @SuppressLint("Recycle")
-    private File saveSubtitleFileToSelectedDir(String tmpSubtitleFilePath, Uri selectedDirUri) {
-        Uri tmpSubtitleUri = Uri.fromFile(new File(tmpSubtitleFilePath));
-        String tmpTranslatedSubtitleFilePath = StringUtils.substring(tmpSubtitleFilePath, 0, tmpSubtitleFilePath.length() - subtitleFormat.length() - 1) + ".translated." + subtitleFormat;
-        Uri tmpTranslatedSubtitleUri = Uri.fromFile(new File(tmpTranslatedSubtitleFilePath));
+    private File saveSubtitleFileToSelectedDir(String tmpSrcSubtitleFilePath, String tmpDstSubtitleFilePath, Uri selectedDirUri) {
+        Uri tmpSrcSubtitleUri = Uri.fromFile(new File(tmpSrcSubtitleFilePath));
 
-        InputStream tmpSubtitleInputStream;
-        InputStream tmpTranslatedSubtitleInputStream;
+        Uri tmpDstSubtitleUri = null;
+        if (tmpDstSubtitleFilePath != null) {
+            tmpDstSubtitleUri = Uri.fromFile(new File(tmpDstSubtitleFilePath));
+        }
 
-        OutputStream savedSubtitleOutputStream = null;
-        OutputStream savedTranslatedSubtitleOutputStream = null;
+        InputStream tmpSrcSubtitleInputStream;
+        InputStream tmpDstSubtitleInputStream;
 
-        Uri savedSubtitleUri;
-        Uri savedTranslatedSubtitleUri;
+        OutputStream savedSrcSubtitleOutputStream = null;
+        OutputStream savedDstSubtitleOutputStream = null;
 
-        String subtitleFileDisplayName = tmpSubtitleFilePath.substring(tmpSubtitleFilePath.lastIndexOf("/") + 1);
-        Log.d("saveSubtitleFileToSelectedDir", "subtitleFileDisplayName = " + subtitleFileDisplayName);
-        String translatedSubtitleFileDisplayName = StringUtils.substring(subtitleFileDisplayName, 0, subtitleFileDisplayName.length() - subtitleFormat.length() - 1) + ".translated." + subtitleFormat;
-        Log.d("saveSubtitleFileToSelectedDir", "translatedSubtitleFileDisplayName = " + translatedSubtitleFileDisplayName);
+        Uri savedSrcSubtitleUri;
+        Uri savedDstSubtitleUri;
+
+        String srcSubtitleFileDisplayName = tmpSrcSubtitleFilePath.substring(tmpSrcSubtitleFilePath.lastIndexOf("/") + 1);
+        Log.d("saveSubtitleFileToSelectedDir", "srcSubtitleFileDisplayName = " + srcSubtitleFileDisplayName);
+
+        String dstSubtitleFileDisplayName = null;
+        if (tmpDstSubtitleFilePath != null) {
+            dstSubtitleFileDisplayName = tmpDstSubtitleFilePath.substring(tmpDstSubtitleFilePath.lastIndexOf("/") + 1);
+            Log.d("saveSubtitleFileToSelectedDir", "dstSubtitleFileDisplayName = " + dstSubtitleFileDisplayName);
+        }
 
         DocumentFile selectedDirDocumentFile = DocumentFile.fromTreeUri(MainActivity.this, selectedDirUri);
-        DocumentFile savedSubtitleDocumentFile;
-        DocumentFile savedTranslatedSubtitleDocumentFile;
 
-        String savedSubtitleFilePath = null;
+        DocumentFile savedSrcSubtitleDocumentFile;
+        DocumentFile savedDstSubtitleDocumentFile;
 
-        ParcelFileDescriptor subtitleParcelFileDescriptor = null;
+        String savedSubtitleFilesPathPath = null;
+
+        ParcelFileDescriptor srcSubtitleParcelFileDescriptor = null;
 
         try {
-            tmpSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpSubtitleUri);
-        } catch (FileNotFoundException e) {
+            tmpSrcSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpSrcSubtitleUri);
+        }
+        catch (FileNotFoundException e) {
             Log.e("FileNotFoundException: ", e.getMessage());
             e.printStackTrace();
             throw new RuntimeException(e);
@@ -2147,43 +2254,46 @@ public class MainActivity extends AppCompatActivity {
                 return null;
             }
             else {
-                savedSubtitleDocumentFile = selectedDirDocumentFile.findFile(subtitleFileDisplayName);
-                Log.d("saveSubtitleFileToSelectedDir", "savedSubtitleDocumentFile = " + savedSubtitleDocumentFile);
-                if (savedSubtitleDocumentFile == null) savedSubtitleDocumentFile = selectedDirDocumentFile.createFile("*/*", subtitleFileDisplayName);
-                if (savedSubtitleDocumentFile != null && savedSubtitleDocumentFile.canWrite()) {
-                    savedSubtitleUri = savedSubtitleDocumentFile.getUri();
-                    Log.d("saveSubtitleFileToSelectedDir", "subtitleFile.getUri() = " + savedSubtitleDocumentFile.getUri());
-                    savedSubtitleFilePath = Uri2Path(getApplicationContext(), savedSubtitleUri);
-                    Log.d("saveSubtitleFileToSelectedDir", "savedSubtitleFilePath = " + savedSubtitleFilePath);
+                savedSrcSubtitleDocumentFile = selectedDirDocumentFile.findFile(srcSubtitleFileDisplayName);
+                Log.d("saveSubtitleFileToSelectedDir", "savedSrcSubtitleDocumentFile = " + savedSrcSubtitleDocumentFile);
+                if (savedSrcSubtitleDocumentFile == null) savedSrcSubtitleDocumentFile = selectedDirDocumentFile.createFile("*/*", srcSubtitleFileDisplayName);
+                if (savedSrcSubtitleDocumentFile != null && savedSrcSubtitleDocumentFile.canWrite()) {
+                    savedSrcSubtitleUri = savedSrcSubtitleDocumentFile.getUri();
+                    Log.d("saveSubtitleFileToSelectedDir", "subtitleFile.getUri() = " + savedSrcSubtitleDocumentFile.getUri());
+                    savedSubtitleFilesPathPath = Uri2Path(getApplicationContext(), savedSrcSubtitleUri);
+                    Log.d("saveSubtitleFileToSelectedDir", "savedSubtitleFilesPathPath = " + savedSubtitleFilesPathPath);
                     try {
-                        subtitleParcelFileDescriptor = getContentResolver().openFileDescriptor(savedSubtitleUri, "w");
-                        savedSubtitleOutputStream = new FileOutputStream(subtitleParcelFileDescriptor.getFileDescriptor());
-                    } catch (FileNotFoundException e) {
+                        srcSubtitleParcelFileDescriptor = getContentResolver().openFileDescriptor(savedSrcSubtitleUri, "w");
+                        savedSrcSubtitleOutputStream = new FileOutputStream(srcSubtitleParcelFileDescriptor.getFileDescriptor());
+                    }
+                    catch (FileNotFoundException e) {
                         throw new RuntimeException(e);
                     }
                 }
                 else {
-                    Log.d("saveSubtitleFileToSelectedDir", subtitleFileDisplayName + " is not exist or cannot write");
+                    Log.d("saveSubtitleFileToSelectedDir", srcSubtitleFileDisplayName + " is not exist or cannot write");
                     setText(textview_output_messages, "Write error!");
                 }
             }
         }
 
-        byte[] bytes = new byte[1024];
-        int length;
+        byte[] bytesSrc = new byte[1024];
+        int lengthSrc;
         while (true) {
             try {
-                if (!((length = tmpSubtitleInputStream.read(bytes)) > 0)) break;
-            } catch (IOException e) {
+                if (!((lengthSrc = tmpSrcSubtitleInputStream.read(bytesSrc)) > 0)) break;
+            }
+            catch (IOException e) {
                 Log.e("IOException: ", e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException(e);
             }
             try {
-                if (savedSubtitleOutputStream != null) {
-                    savedSubtitleOutputStream.write(bytes, 0, length);
+                if (savedSrcSubtitleOutputStream != null) {
+                    savedSrcSubtitleOutputStream.write(bytesSrc, 0, lengthSrc);
                 }
-            } catch (IOException e) {
+            }
+            catch (IOException e) {
                 Log.e("IOException: ", e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException(e);
@@ -2192,27 +2302,29 @@ public class MainActivity extends AppCompatActivity {
         }
 
         try {
-            if (savedSubtitleOutputStream != null) {
-                savedSubtitleOutputStream.close();
+            if (savedSrcSubtitleOutputStream != null) {
+                savedSrcSubtitleOutputStream.close();
             }
-            tmpSubtitleInputStream.close();
-        } catch (IOException e) {
+            tmpSrcSubtitleInputStream.close();
+        }
+        catch (IOException e) {
             Log.e("IOException: ", e.getMessage());
             e.printStackTrace();
             throw new RuntimeException(e);
         }
 
         try {
-            if (subtitleParcelFileDescriptor != null) {
-                subtitleParcelFileDescriptor.close();
+            if (srcSubtitleParcelFileDescriptor != null) {
+                srcSubtitleParcelFileDescriptor.close();
             }
-        } catch (IOException e) {
+        }
+        catch (IOException e) {
             throw new RuntimeException(e);
         }
 
-        ParcelFileDescriptor translatedSubtitleParcelFileDescriptor = null;
+        ParcelFileDescriptor dstSubtitleParcelFileDescriptor = null;
 
-        if (!Objects.equals(src_code, dst_code)) {
+        if (!Objects.equals(src_code, dst_code) && dstSubtitleFileDisplayName != null) {
             if (selectedDirDocumentFile == null || !selectedDirDocumentFile.exists()) {
                 Log.e("saveSubtitleFileToSelectedDir", selectedDirDocumentFile +  " not exists");
                 releasePermissions(selectedDirUri);
@@ -2220,78 +2332,84 @@ public class MainActivity extends AppCompatActivity {
                 return null;
             }
             else {
-                savedTranslatedSubtitleDocumentFile = selectedDirDocumentFile.findFile(translatedSubtitleFileDisplayName);
-                if (savedTranslatedSubtitleDocumentFile == null) savedTranslatedSubtitleDocumentFile = selectedDirDocumentFile.createFile("*/*", translatedSubtitleFileDisplayName);
-                if (savedTranslatedSubtitleDocumentFile != null && savedTranslatedSubtitleDocumentFile.canWrite()) {
-                    savedTranslatedSubtitleUri = savedTranslatedSubtitleDocumentFile.getUri();
-                    Log.d("saveSubtitleFileToSelectedDir", "savedTranslatedSubtitleDocumentFile.getUri() = " + savedTranslatedSubtitleDocumentFile.getUri());
-                    String savedTranslatedSubtitleFile = Uri2Path(getApplicationContext(), savedTranslatedSubtitleUri);
-                    Log.d("saveSubtitleFileToSelectedDir", "savedTranslatedSubtitleFile = " + savedTranslatedSubtitleFile);
+                savedDstSubtitleDocumentFile = selectedDirDocumentFile.findFile(dstSubtitleFileDisplayName);
+                if (savedDstSubtitleDocumentFile == null) savedDstSubtitleDocumentFile = selectedDirDocumentFile.createFile("*/*", dstSubtitleFileDisplayName);
+                if (savedDstSubtitleDocumentFile != null && savedDstSubtitleDocumentFile.canWrite()) {
+                    savedDstSubtitleUri = savedDstSubtitleDocumentFile.getUri();
+                    Log.d("saveSubtitleFileToSelectedDir", "savedDstSubtitleDocumentFile.getUri() = " + savedDstSubtitleDocumentFile.getUri());
+                    String savedDstSubtitleFile = Uri2Path(getApplicationContext(), savedDstSubtitleUri);
+                    Log.d("saveSubtitleFileToSelectedDir", "savedDstSubtitleFile = " + savedDstSubtitleFile);
                     try {
-                        translatedSubtitleParcelFileDescriptor = getContentResolver().openFileDescriptor(savedTranslatedSubtitleUri, "w");
-                        savedTranslatedSubtitleOutputStream = new FileOutputStream(translatedSubtitleParcelFileDescriptor.getFileDescriptor());
-                    } catch (FileNotFoundException e) {
+                        dstSubtitleParcelFileDescriptor = getContentResolver().openFileDescriptor(savedDstSubtitleUri, "w");
+                        savedDstSubtitleOutputStream = new FileOutputStream(dstSubtitleParcelFileDescriptor.getFileDescriptor());
+                    }
+                    catch (FileNotFoundException e) {
                         throw new RuntimeException(e);
                     }
                 }
                 else {
-                    Log.d("saveSubtitleFileToSelectedDir", subtitleFileDisplayName + " is not exist or cannot write");
+                    Log.d("saveSubtitleFileToSelectedDir", srcSubtitleFileDisplayName + " is not exist or cannot write");
                     setText(textview_output_messages, "Write error!");
                 }
             }
 
             try {
-                tmpTranslatedSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpTranslatedSubtitleUri);
-            } catch (FileNotFoundException e) {
+                tmpDstSubtitleInputStream = getApplicationContext().getContentResolver().openInputStream(tmpDstSubtitleUri);
+            }
+            catch (FileNotFoundException e) {
                 Log.e("FileNotFoundException: ", e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException(e);
             }
-            byte[] bytesTranslated = new byte[1024];
-            int lengthTranslated;
+            byte[] bytesDst = new byte[1024];
+            int lengthDst;
             while (true) {
                 try {
-                    if (!((lengthTranslated = tmpTranslatedSubtitleInputStream.read(bytesTranslated)) > 0))
+                    if (!((lengthDst = tmpDstSubtitleInputStream.read(bytesDst)) > 0))
                         break;
-                } catch (IOException e) {
+                }
+                catch (IOException e) {
                     Log.e("IOException: ", e.getMessage());
                     e.printStackTrace();
                     throw new RuntimeException(e);
                 }
                 try {
-                    if (savedTranslatedSubtitleOutputStream != null) {
-                        savedTranslatedSubtitleOutputStream.write(bytesTranslated, 0, lengthTranslated);
+                    if (savedDstSubtitleOutputStream != null) {
+                        savedDstSubtitleOutputStream.write(bytesDst, 0, lengthDst);
                     }
-                } catch (IOException e) {
+                }
+                catch (IOException e) {
                     Log.e("IOException: ", e.getMessage());
                     e.printStackTrace();
                     throw new RuntimeException(e);
                 }
             }
             try {
-                if (savedTranslatedSubtitleOutputStream != null) {
-                    savedTranslatedSubtitleOutputStream.close();
+                if (savedDstSubtitleOutputStream != null) {
+                    savedDstSubtitleOutputStream.close();
                 }
-                tmpTranslatedSubtitleInputStream.close();
-            } catch (IOException e) {
+                tmpDstSubtitleInputStream.close();
+            }
+            catch (IOException e) {
                 Log.e("IOException: ", e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException(e);
             }
 
             try {
-                if (translatedSubtitleParcelFileDescriptor != null) {
-                    translatedSubtitleParcelFileDescriptor.close();
+                if (dstSubtitleParcelFileDescriptor != null) {
+                    dstSubtitleParcelFileDescriptor.close();
                 }
-            } catch (IOException e) {
+            }
+            catch (IOException e) {
                 throw new RuntimeException(e);
             }
 
         }
 
-        if (savedSubtitleFilePath != null) {
-            Log.d("saveSubtitleFileToSelectedDir", "Succesed! Returned savedSubtitleFilePath = " + savedSubtitleFilePath);
-            return new File(savedSubtitleFilePath);
+        if (savedSubtitleFilesPathPath != null) {
+            Log.d("saveSubtitleFileToSelectedDir", "Succesed! Returned savedSubtitleFilesPathPath = " + savedSubtitleFilesPathPath);
+            return new File(savedSubtitleFilesPathPath);
         }
         else {
             Log.d("saveSubtitleFileToSelectedDir", "Failed! Returned null!");
@@ -2327,22 +2445,20 @@ public class MainActivity extends AppCompatActivity {
                 Log.i("showConfirmationDialogue", "cancelFile is not exist");
             }
 
-            if (tmpSubtitleFilesPath != null) {
-                for (int i=0; i<tmpSubtitleFilesPath.size(); i++) {
-                    File sf = new File(tmpSubtitleFilesPath.get(i)).getAbsoluteFile();
-                    if (sf.exists() && sf.delete()) {
-                        Log.i("showConfirmationDialogue", new File(tmpSubtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
-                    }
+            if (tmpSrcSubtitleFilePath != null) {
+                File sf = new File(tmpSrcSubtitleFilePath).getAbsoluteFile();
+                if (sf.exists() && sf.delete()) {
+                    Log.i("showConfirmationDialogue", new File(tmpSrcSubtitleFilePath).getAbsoluteFile() + " deleted");
                 }
             }
-            if (tmpTranslatedSubtitleFilesPath != null) {
-                for (int i=0; i<tmpTranslatedSubtitleFilesPath.size(); i++) {
-                    File stf = new File(tmpTranslatedSubtitleFilesPath.get(i)).getAbsoluteFile();
-                    if (stf.exists() && stf.delete()) {
-                        Log.i("showConfirmationDialogue", new File(tmpTranslatedSubtitleFilesPath.get(i)).getAbsoluteFile() + " deleted");
-                    }
+            if (tmpDstSubtitleFilePath != null) {
+                File stf = new File(tmpDstSubtitleFilePath).getAbsoluteFile();
+                if (stf.exists() && stf.delete()) {
+                    Log.i("showConfirmationDialogue", new File(tmpDstSubtitleFilePath).getAbsoluteFile() + " deleted");
                 }
             }
+
+
 
             if (threadTranscriber != null) {
                 threadTranscriber.interrupt();
@@ -2380,20 +2496,24 @@ public class MainActivity extends AppCompatActivity {
 
                             savedTreesUri = loadSavedTreeUrisFromSharedPreference();
                             Log.d("requestTreeUriPermissions", "savedTreesUri.size() = " + savedTreesUri.size());
-                            if (savedTreesUri.size() > 0) {
+                            if (savedTreesUri != null && savedTreesUri.size() > 0) {
                                 appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
                                 for (int i=0; i<savedTreesUri.size(); i++) {
                                     appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
                                     Log.d("requestTreeUriPermissions", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
                                 }
-                                if (selectedFilesPath != null && selectedFilesPath.size()>0) {
+                                if (selectedFilesPath != null && selectedFilesPath.size() > 0) {
                                     if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
-                                        setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                        appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        textview_output_messages.post(() -> {
+                                            setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                            appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        });
                                     }
                                     else {
-                                        setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                        appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                        textview_output_messages.post(() -> {
+                                            setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                            appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
+                                        });
                                     }
                                 }
                                 else {
@@ -2407,11 +2527,12 @@ public class MainActivity extends AppCompatActivity {
                                     textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
                                     adjustOutputMessagesHeight();
                                     appendText(textview_output_messages, "Manage app all files access permission is granted.\n");
-                                    appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                    appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                 }
                                 else {
                                     button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
                                     textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
+                                    adjustOutputMessagesHeight();
                                     appendText(textview_output_messages, "Manage app all files access permission is not granted.\n");
                                     appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                 }
@@ -2421,6 +2542,7 @@ public class MainActivity extends AppCompatActivity {
                         else {
                             button_grant_storage_permission.setVisibility(View.VISIBLE);
                             textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
+                            adjustOutputMessagesHeight();
                             setText(textview_output_messages, "Storage permission is not granted, this app won't work");
                         }
                     })
@@ -2470,20 +2592,20 @@ public class MainActivity extends AppCompatActivity {
 
                             savedTreesUri = loadSavedTreeUrisFromSharedPreference();
                             Log.d("requestTreeUriPermissions", "savedTreesUri.size() = " + savedTreesUri.size());
-                            if (savedTreesUri.size() > 0) {
+                            if (savedTreesUri != null && savedTreesUri.size() > 0) {
                                 appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
                                 for (int i=0; i<savedTreesUri.size(); i++) {
                                     appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
                                     Log.d("requestTreeUriPermissions", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
                                 }
-                                if (selectedFilesPath != null && selectedFilesPath.size()>0) {
+                                if (selectedFilesPath != null && selectedFilesPath.size() > 0) {
                                     if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
                                         setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                         appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                     }
                                     else {
                                         setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                        appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                        appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                     }
                                 }
                                 else {
@@ -2492,7 +2614,7 @@ public class MainActivity extends AppCompatActivity {
                             }
                             else {
                                 appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders\n");
-                                appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + File.separator + getPackageName() + File.separator);
+                                appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                             }
                         }
 
@@ -2638,20 +2760,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    public int calculateMaxCharsInTextView(String text, int viewWidth, int textSize) {
-        Paint paint = new Paint();
-        paint.setTextSize(textSize);
-        Rect bounds = new Rect();
-        paint.getTextBounds(text, 0, text.length(), bounds);
-        int textWidth = bounds.width();
-        return (int) Math.floor((double) viewWidth / (double) textWidth * text.length());
-    }
-
-
     private void adjustOutputMessagesHeight() {
         textview_output_messages.post(() -> {
             DisplayMetrics display = new DisplayMetrics();
             getWindowManager().getDefaultDisplay().getMetrics(display);
+            int newHeight;
             int displayheightPixels = display.heightPixels;
             Log.d("adjustOutputMessagesHeight", "displayheightPixels = " + displayheightPixels);
             int[] location = new int[2];
@@ -2662,22 +2775,104 @@ public class MainActivity extends AppCompatActivity {
             Log.d("adjustOutputMessagesHeight", "height = " + height);
             int emptySpace = displayheightPixels - (top + height);
             Log.d("adjustOutputMessagesHeight", "emptySpace = " + emptySpace);
-            int newHeight = height + emptySpace - 24;
+            newHeight = height + emptySpace - 24;
             Log.d("adjustOutputMessagesHeight", "newHeight = " + (height + emptySpace));
-
             RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) textview_output_messages.getLayoutParams();
             params.height = newHeight;
             textview_output_messages.setLayoutParams(params);
             heightOfOutputMessages = newHeight;
-
             int lineHeight = textview_output_messages.getLineHeight();
             maxLinesOfOutputMessages = heightOfOutputMessages / lineHeight;
             Log.d("adjustOutputMessagesHeight", "maxLinesOfOutputMessages = " + maxLinesOfOutputMessages);
 
-        });
+            textview_output_messages.setGravity(Gravity.START);
+            textview_output_messages.scrollTo(0, 0);
 
+            int lines = textview_output_messages.getLineCount();
+            Log.d("appendText", "lines = " + lines);
+            Log.d("appendText", "maxLinesOfOutputMessages = " + maxLinesOfOutputMessages);
+            if (lines >= maxLinesOfOutputMessages) {
+                textview_output_messages.setGravity(Gravity.BOTTOM);
+                Log.d("appendText", "tv.getGravity() = BOTTOM");
+            }
+            else {
+                textview_output_messages.setGravity(Gravity.START);
+                Log.d("appendText", "tv.getGravity() = START");
+            }
+
+            equalMaxChars = calculateMaxCharacterOccurrences(equalChars, textview_output_messages);
+            dashMaxChars = calculateMaxCharacterOccurrences(dashChars, textview_output_messages);
+            Log.d("adjustOutputMessagesHeight", "textview_output_messages.getWidth() = " + textview_output_messages.getWidth());
+            Log.d("adjustOutputMessagesHeight", "textview_output_messages.getTextSize() = " + textview_output_messages.getTextSize());
+            Log.d("adjustOutputMessagesHeight", "equalMaxChars = " + equalMaxChars);
+            Log.d("adjustOutputMessagesHeight", "dashMaxChars = " + dashMaxChars);
+            if (equalMaxChars > 0) {
+                equalChars = StringUtils.repeat('=', equalMaxChars - 2);
+                //Log.d("adjustOutputMessagesHeight", "equalChars = " + equalChars);
+                //Log.d("adjustOutputMessagesHeight", "equalChars.length() = " + equalChars.length());
+                storeStringToFile(MainActivity.this, equalChars, "equalChars");
+            }
+            if (dashMaxChars > 0) {
+                dashChars = StringUtils.repeat('-', dashMaxChars - 4);
+                //Log.d("adjustOutputMessagesHeight", "dashChars = " + dashChars);
+                //Log.d("adjustOutputMessagesHeight", "dashChars.length() = " + dashChars.length());
+                storeStringToFile(MainActivity.this, dashChars, "dashChars");
+            }
+
+        });
     }
 
+    public int calculateMaxCharacterOccurrences(String character, TextView textView) {
+        int textViewWidth = textView.getWidth();
+        float textSize = textView.getTextSize();
+        Paint paint = textView.getPaint();
+
+        int maxOccurrences = 0;
+        if (textViewWidth > 0 && textSize > 0) {
+            float textWidth = paint.measureText(character);
+
+            if (textWidth > 0) {
+                int totalCharacters = character.length();
+                float averageCharacterWidth = textWidth / totalCharacters;
+                maxOccurrences = (int) (textViewWidth / averageCharacterWidth);
+            }
+        }
+        return maxOccurrences;
+    }
+
+    public void storeStringToFile(Context context, String data, String fileName) {
+        try {
+            File directory = new File(context.getExternalFilesDir(null).getAbsolutePath());
+            if (!directory.exists() && directory.mkdirs()) {
+                Log.d("storeStringToFile", directory + "created");
+            }
+
+            File file = new File(directory, fileName);
+            FileOutputStream fileOutputStream = new FileOutputStream(file);
+            fileOutputStream.write(data.getBytes());
+            fileOutputStream.close();
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public String readStringFromFile(Context context, String fileName) {
+        try {
+            File file = new File(context.getExternalFilesDir(null), fileName);
+            FileInputStream fileInputStream = new FileInputStream(file);
+            byte[] buffer = new byte[(int) file.length()];
+            int b = fileInputStream.read(buffer);
+            Log.d("readStringFromFile", "b = " + b);
+            fileInputStream.close();
+            Log.d("readStringFromFile", "new String(buffer) = " + new String(buffer));
+            return new String(buffer);
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
 
     private void setText(final TextView tv, final String text){
         runOnUiThread(() -> tv.setText(text));
@@ -2685,8 +2880,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void appendText(final TextView tv, final String text){
         runOnUiThread(() -> {
-            int lines = textview_output_messages.getLineCount();
-            if (lines >= maxLinesOfOutputMessages) textview_output_messages.setGravity(Gravity.BOTTOM);
+            int lines = tv.getLineCount();
+            Log.d("appendText", "lines = " + lines);
+            Log.d("appendText", "maxLinesOfOutputMessages = " + maxLinesOfOutputMessages);
+            if (lines >= maxLinesOfOutputMessages) {
+                tv.setGravity(Gravity.BOTTOM);
+                Log.d("appendText", "tv.getGravity() = BOTTOM");
+            }
+            else {
+                Log.d("appendText", "tv.getGravity() = START");
+            }
             tv.append(text);
         });
     }
