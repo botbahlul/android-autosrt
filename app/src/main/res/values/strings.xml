@@ -10,7 +10,7 @@
     <string name="start">Start Transcribe</string>
     <string name="output_messages">Output messages</string>
     <string name="create_translation">Create Translation</string>
-    <string name="current_file_proceed">Current file proceed</string>
+    <string name="current_file_processed">Current file processed</string>
     <string name="saved_subtitle_files">Saved subtitle files</string>
     <string name="files_path">Selected media files</string>
     <string name="grant_write_storage_permission">GRANT WRITE STORAGE PERMISSION</string>

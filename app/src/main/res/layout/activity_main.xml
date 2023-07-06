@@ -289,7 +289,7 @@
             />
         <TextView
             android:id="@+id/textview_current_file"
-            android:hint="@string/current_file_proceed"
+            android:hint="@string/current_file_processed"
             android:padding="5dp"
             android:gravity="start|center"
             android:textAlignment="gravity"
