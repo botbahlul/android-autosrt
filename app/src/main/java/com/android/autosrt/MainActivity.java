@@ -1116,7 +1116,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 else {
-                    appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders\n");
+                    appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders.\n");
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         if (Environment.isExternalStorageManager()) {
                             button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
@@ -1221,7 +1221,7 @@ public class MainActivity extends AppCompatActivity {
 
                                 }
                                 else {
-                                    appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folder");
+                                    appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders.\n");
                                     appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                 }
                             }
@@ -1266,7 +1266,7 @@ public class MainActivity extends AppCompatActivity {
                                     }
                                 }
                                 else {
-                                    appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folder");
+                                    appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders.\n");
                                     appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                 }
                             }
@@ -2513,24 +2513,32 @@ public class MainActivity extends AppCompatActivity {
 
                             savedTreesUri = loadSavedTreeUrisFromSharedPreference();
                             Log.d("requestTreeUriPermissions", "savedTreesUri.size() = " + savedTreesUri.size());
-                            if (savedTreesUri != null && savedTreesUri.size() > 0) {
+                            if (savedTreesUri.size() > 0) {
                                 appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
                                 for (int i=0; i<savedTreesUri.size(); i++) {
                                     appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
                                     Log.d("requestTreeUriPermissions", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
                                 }
-                                if (selectedFilesPath != null && selectedFilesPath.size() > 0) {
+                                if (selectedFilesPath != null && selectedFilesPath.size()>0) {
                                     if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
-                                        textview_output_messages.post(() -> {
-                                            setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                            appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                        });
+                                        setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                     }
                                     else {
-                                        textview_output_messages.post(() -> {
-                                            setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
+                                        if (Environment.isExternalStorageManager()) {
+                                            button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
+                                            textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
+                                            adjustOutputMessagesHeight();
+                                            appendText(textview_output_messages, "Manage app all files access permission is granted.\n");
+                                            appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
+                                        }
+                                        else {
+                                            button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
+                                            textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
+                                            appendText(textview_output_messages, "Manage app all files access permission is not granted.\n");
                                             appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
-                                        });
+                                        }
                                     }
                                 }
                                 else {
@@ -2538,7 +2546,7 @@ public class MainActivity extends AppCompatActivity {
                                 }
                             }
                             else {
-                                appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders\n");
+                                appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders.\n");
                                 if (Environment.isExternalStorageManager()) {
                                     button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
                                     textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
@@ -2549,7 +2557,6 @@ public class MainActivity extends AppCompatActivity {
                                 else {
                                     button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
                                     textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
-                                    adjustOutputMessagesHeight();
                                     appendText(textview_output_messages, "Manage app all files access permission is not granted.\n");
                                     appendText(textview_output_messages, "All subtitle files will always be saved as new files into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                 }
@@ -2559,7 +2566,6 @@ public class MainActivity extends AppCompatActivity {
                         else {
                             button_grant_storage_permission.setVisibility(View.VISIBLE);
                             textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
-                            adjustOutputMessagesHeight();
                             setText(textview_output_messages, "Storage permission is not granted, this app won't work");
                         }
                     })
@@ -2609,13 +2615,13 @@ public class MainActivity extends AppCompatActivity {
 
                             savedTreesUri = loadSavedTreeUrisFromSharedPreference();
                             Log.d("requestTreeUriPermissions", "savedTreesUri.size() = " + savedTreesUri.size());
-                            if (savedTreesUri != null && savedTreesUri.size() > 0) {
+                            if (savedTreesUri.size() > 0) {
                                 appendText(textview_output_messages, "Persisted tree uri permission is granted for folders :\n");
                                 for (int i=0; i<savedTreesUri.size(); i++) {
                                     appendText(textview_output_messages, savedTreesUri.get(i).toString() + "\n");
                                     Log.d("requestTreeUriPermissions", "savedTreesUri.get(" + i + ") = " + savedTreesUri.get(i));
                                 }
-                                if (selectedFilesPath != null && selectedFilesPath.size() > 0) {
+                                if (selectedFilesPath != null && selectedFilesPath.size()>0) {
                                     if (isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(0))) {
                                         setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                         appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
@@ -2630,7 +2636,7 @@ public class MainActivity extends AppCompatActivity {
                                 }
                             }
                             else {
-                                appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders\n");
+                                appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders.\n");
                                 appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                             }
                         }
