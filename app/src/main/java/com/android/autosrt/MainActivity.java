@@ -927,8 +927,11 @@ public class MainActivity extends AppCompatActivity {
                         startForRequestManageAppAllFileAccessPermissionActivity.launch(intent);
                     }
                     catch (Exception e) {
-                        Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
-                        e.printStackTrace();
+                        //Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
+                        if (e.getMessage() != null) {
+                            Log.e("Exception: ", e.getMessage());
+                            e.printStackTrace();
+                        }
                         Intent intent = new Intent();
                         intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
                         startActivity(intent);
@@ -1030,8 +1033,11 @@ public class MainActivity extends AppCompatActivity {
                     startForRequestManageAppAllFileAccessPermissionActivity.launch(intent);
                 }
                 catch (Exception e) {
-                    Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
-                    e.printStackTrace();
+                    //Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
+                    if (e.getMessage() != null) {
+                        Log.e("Exception: ", e.getMessage());
+                        e.printStackTrace();
+                    }
                     Intent intent = new Intent();
                     intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
                     startActivity(intent);
@@ -1693,10 +1699,10 @@ public class MainActivity extends AppCompatActivity {
                             String subtitleFolderDisplayName = StringUtils.substring(selectedFilesDisplayName.get(i), 0, selectedFilesDisplayName.get(i).length() - mediaFormat.length() - 1);
                             Log.d("transcribe", "subtitleFolderDisplayName = " + subtitleFolderDisplayName);
 
-                            setText(textview_current_file, "Processing file : " + selectedFilesDisplayName.get(i));
+                            setText(textview_current_file, "Processing file : '" + selectedFilesDisplayName.get(i) + "'");
                             int finalI = i;
                             textview_output_messages.post(() -> {
-                                appendText(textview_output_messages, "Processing file : " + selectedFilesDisplayName.get(finalI) + "\n");
+                                appendText(textview_output_messages, "Processing file : '" + selectedFilesDisplayName.get(finalI) + "'\n");
                                 appendText(textview_output_messages, equalChars + "\n");
                             });
 
@@ -1775,7 +1781,7 @@ public class MainActivity extends AppCompatActivity {
                                         savedSubtitleFiles[i] = saveSubtitleFileToDocumentsDir(tmpSrcSubtitleFilePath, tmpDstSubtitleFilePath, subtitleFolderDisplayName);
                                         Log.d("transcribe", "savedSubtitleFiles[" + i + "] = " + savedSubtitleFiles[i]);
 
-                                        if (new File(tmpSubtitleEmbeddedFilePath).exists() && new File(tmpSubtitleEmbeddedFilePath).length() > 1) {
+                                        if (tmpSubtitleEmbeddedFilePath != null && new File(tmpSubtitleEmbeddedFilePath).exists() && new File(tmpSubtitleEmbeddedFilePath).length() > 1) {
                                             Log.d("transcribe", "Saving subtitle embedded file using saveSubtitleEmbeddedFileToDocumentsDir()");
                                             savedSubtitleEmbeddedFiles[i] = saveSubtitleEmbeddedFileToDocumentsDir(tmpSubtitleEmbeddedFilePath, subtitleFolderDisplayName);
                                             Log.d("transcribe", "savedSubtitleEmbeddedFiles[" + i + "] = " + savedSubtitleEmbeddedFiles[i]);
@@ -1784,7 +1790,7 @@ public class MainActivity extends AppCompatActivity {
                                         if (savedSubtitleFiles[i].exists() && savedSubtitleFiles[i].length() > 1) {
                                             Log.d("transcribe", savedSubtitleFiles[i] + " created");
                                             appendText(textview_output_messages, equalChars + "\n");
-                                            appendText(textview_output_messages, "Overall results for " + selectedFilesDisplayName.get(i) + " : \n");
+                                            appendText(textview_output_messages, "Overall results for '" + selectedFilesDisplayName.get(i) + "' : \n");
                                             appendText(textview_output_messages, equalChars + "\n");
                                             appendText(textview_output_messages, savedSubtitleFiles[i] + "\n");
 
@@ -1796,7 +1802,7 @@ public class MainActivity extends AppCompatActivity {
                                                     appendText(textview_output_messages, savedDstSubtitleFilePath + "\n");
                                                 }
                                             }
-                                            if (savedSubtitleEmbeddedFiles[i].exists() && savedSubtitleEmbeddedFiles[i].length() > 1) {
+                                            if (savedSubtitleEmbeddedFiles != null && savedSubtitleEmbeddedFiles[i] != null && savedSubtitleEmbeddedFiles[i].exists() && savedSubtitleEmbeddedFiles[i].length() > 1) {
                                                 appendText(textview_output_messages, equalChars + "\n");
                                                 appendText(textview_output_messages, savedSubtitleEmbeddedFiles[i] + "\n");
                                             }
@@ -1828,8 +1834,9 @@ public class MainActivity extends AppCompatActivity {
                                             Log.d("transcribe", "selectedFolderUri = " + selectedFolderUri);
 
                                             savedSubtitleFiles[i] = saveSubtitleFileToSelectedDir(tmpSrcSubtitleFilePath, tmpDstSubtitleFilePath, selectedFolderUri);
+                                            Log.d("transcribe", "savedSubtitleFiles[" + i + "] = " + savedSubtitleFiles[i]);
 
-                                            if (new File(tmpSubtitleEmbeddedFilePath).exists() && new File(tmpSubtitleEmbeddedFilePath).length() > 1) {
+                                            if (tmpSubtitleEmbeddedFilePath != null && new File(tmpSubtitleEmbeddedFilePath).exists() && new File(tmpSubtitleEmbeddedFilePath).length() > 1) {
                                                 Log.d("transcribe", "Saving subtitle embedded file using saveSubtitleEmbeddedFileToSelectedDir()");
                                                 savedSubtitleEmbeddedFiles[i] = saveSubtitleEmbeddedFileToSelectedDir(tmpSubtitleEmbeddedFilePath, selectedFolderUri);
                                                 Log.d("transcribe", "savedSubtitleEmbeddedFiles[" + i + "] = " + savedSubtitleEmbeddedFiles[i]);
@@ -1838,7 +1845,7 @@ public class MainActivity extends AppCompatActivity {
                                             if (savedSubtitleFiles[i].exists() && savedSubtitleFiles[i].length() > 1) {
                                                 Log.d("transcribe", savedSubtitleFiles[i].toString() + " created");
                                                 appendText(textview_output_messages, equalChars + "\n");
-                                                appendText(textview_output_messages, "Overall results for " + selectedFilesDisplayName.get(i) + " : \n");
+                                                appendText(textview_output_messages, "Overall results for '" + selectedFilesDisplayName.get(i) + "' : \n");
                                                 appendText(textview_output_messages, equalChars + "\n");
                                                 appendText(textview_output_messages, savedSubtitleFiles[i].toString() + "\n");
 
@@ -1851,7 +1858,7 @@ public class MainActivity extends AppCompatActivity {
                                                     }
                                                 }
 
-                                                if (savedSubtitleEmbeddedFiles[i].exists() && savedSubtitleEmbeddedFiles[i].length() > 1) {
+                                                if (savedSubtitleEmbeddedFiles != null && savedSubtitleEmbeddedFiles[i] != null && savedSubtitleEmbeddedFiles[i].exists() && savedSubtitleEmbeddedFiles[i].length() > 1) {
                                                     appendText(textview_output_messages, equalChars + "\n");
                                                     appendText(textview_output_messages, savedSubtitleEmbeddedFiles[i] + "\n");
                                                 }
@@ -1869,7 +1876,7 @@ public class MainActivity extends AppCompatActivity {
                                             if (new File(savedSubtitleFiles[i].toString()).exists() && new File(savedSubtitleFiles[i].toString()).length() > 1) {
                                                 Log.d("transcribe", savedSubtitleFiles[i] + " created");
                                                 appendText(textview_output_messages, equalChars + "\n");
-                                                appendText(textview_output_messages, "Overall results for " + selectedFilesDisplayName.get(i) + " : \n");
+                                                appendText(textview_output_messages, "Overall results for '" + selectedFilesDisplayName.get(i) + "' : \n");
                                                 appendText(textview_output_messages, equalChars + "\n");
                                                 appendText(textview_output_messages, savedSubtitleFiles[i] + "\n");
 
@@ -1882,7 +1889,7 @@ public class MainActivity extends AppCompatActivity {
                                                     }
                                                 }
 
-                                                if (savedSubtitleEmbeddedFiles[i].exists() && savedSubtitleEmbeddedFiles[i].length() > 1) {
+                                                if (savedSubtitleEmbeddedFiles != null && savedSubtitleEmbeddedFiles[i] != null && savedSubtitleEmbeddedFiles[i].exists() && savedSubtitleEmbeddedFiles[i].length() > 1) {
                                                     appendText(textview_output_messages, equalChars + "\n");
                                                     appendText(textview_output_messages, savedSubtitleEmbeddedFiles[i] + "\n");
                                                 }
@@ -1921,8 +1928,11 @@ public class MainActivity extends AppCompatActivity {
 
                     }
                     catch (Exception e) {
-                        Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
-                        e.printStackTrace();
+                        //Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
+                        if (e.getMessage() != null) {
+                            Log.e("Exception: ", e.getMessage());
+                            e.printStackTrace();
+                        }
                     }
 
                 }

@@ -886,8 +886,8 @@ class WavConverter:
 
     def __call__(self, media_filepath):
         if not os.path.isfile(media_filepath):
-            print(f"The given file does not exist: {media_filepath}")
-            raise Exception(f"Invalid file: {media_filepath}")
+            print(f"The given file does not exist: '{media_filepath}'")
+            raise Exception(f"Invalid file: '{media_filepath}'")
 
         temp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
 
@@ -1425,8 +1425,8 @@ class MediaSubtitleRenderer:
 
     def __call__(self, media_filepath):
         if not os.path.isfile(media_filepath):
-            print(f"The given file does not exist: {media_filepath}")
-            raise Exception(f"Invalid file: {media_filepath}")
+            print(f"The given file does not exist: '{media_filepath}'")
+            raise Exception(f"Invalid file: '{media_filepath}'")
 
         try:
             scale_switch = "'trunc(iw/2)*2'\:'trunc(ih/2)*2'"
@@ -1505,8 +1505,8 @@ class MediaSubtitleEmbedder:
 
     def __call__(self, media_filepath):
         if not os.path.isfile(media_filepath):
-            print(f"The given file does not exist: {media_filepath}")
-            raise Exception(f"Invalid file: {media_filepath}")
+            print(f"The given file does not exist: '{media_filepath}'")
+            raise Exception(f"Invalid file: '{media_filepath}'")
 
         try:
             existing_languages, total_duration = self.get_subtitle_languages_and_duration(media_filepath)
@@ -1539,7 +1539,7 @@ class MediaSubtitleEmbedder:
                 media_file_display_name = os.path.basename(media_filepath).split('/')[-1]
                 info = f"Embedding '{self.language}' subtitles"
 
-                #print(f"EMBEDDER : media_filepath = {media_filepath} , size = {os.path.getsize(media_filepath)} , total_duration = {total_duration}")
+                #print(f"EMBEDDER : media_filepath = '{media_filepath}' , size = {os.path.getsize(media_filepath)} , total_duration = {total_duration}")
 
                 Config.enableRedirection()
                 Config.enableStatisticsCallback(MyStatisticsCallback(info, total_duration, self.start_time, self.activity, self.textview_progress, self.progress_bar, self.textview_percentage, self.textview_time))
@@ -1596,8 +1596,8 @@ class MediaSubtitleRemover:
 
     def __call__(self, media_filepath):
         if not os.path.isfile(media_filepath):
-            print(f"The given file does not exist: {media_filepath}")
-            raise Exception(f"Invalid file: {media_filepath}")
+            print(f"The given file does not exist: '{media_filepath}'")
+            raise Exception(f"Invalid file: '{media_filepath}'")
 
         try:
             ffmpeg_command = [
@@ -1735,13 +1735,13 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
 
     multiprocessing.freeze_support()
 
-    print(f"media_filepath = {media_filepath}")
+    print(f"media_filepath = '{media_filepath}'")
 
     base, ext = os.path.splitext(media_filepath)
     media_file_display_name = os.path.basename(media_filepath).split('/')[-1]
-    print(f"media_file_display_name = {media_file_display_name}")
+    print(f"media_file_display_name = '{media_file_display_name}'")
     media_file_format = ext[1:]
-    print(f"media_file_format = {media_file_format}")
+    print(f"media_file_format = '{media_file_format}'")
 
     language = Language()
     removed_media_filepaths = []
@@ -2121,10 +2121,15 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
                             if not os.path.isdir(subtitle_folder_name):
                                 os.mkdir(subtitle_folder_name)
 
-                            src_tmp_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.tmp.embedded.{ext[1:]}"
+                            if ext[1:] == "ts":
+                                media_file_format = "mp4"
+                            else:
+                                media_file_format = ext[1:]
+
+                            src_tmp_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.tmp.embedded.{media_file_format}"
                             src_tmp_embedded_media_file_display_name = os.path.basename(src_tmp_embedded_media_filepath).split('/')[-1]
 
-                            src_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.embedded.{ext[1:]}"
+                            src_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.embedded.{media_file_format}"
                             src_embedded_media_file_display_name = os.path.basename(src_embedded_media_filepath).split('/')[-1]
 
                             if os.path.isfile(cancel_file):
@@ -2297,10 +2302,15 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
                             if not os.path.isdir(subtitle_folder_name):
                                 os.mkdir(subtitle_folder_name)
 
-                            dst_tmp_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_dst_language_code}.tmp.embedded.{ext[1:]}"
+                            if ext[1:] == "ts":
+                                media_file_format = "mp4"
+                            else:
+                                media_file_format = ext[1:]
+
+                            dst_tmp_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_dst_language_code}.tmp.embedded.{media_file_format}"
                             dst_tmp_embedded_media_file_display_name = os.path.basename(dst_tmp_embedded_media_filepath).split('/')[-1]
 
-                            dst_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_dst_language_code}.embedded.{ext[1:]}"
+                            dst_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_dst_language_code}.embedded.{media_file_format}"
                             dst_embedded_media_file_display_name = os.path.basename(dst_embedded_media_filepath).split('/')[-1]
 
                             if os.path.isfile(cancel_file):
@@ -2395,7 +2405,12 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
 
         base, ext = os.path.splitext(media_filepath)
 
-        tmp_force_recognize_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.tmp.force.recognize.{ext[1:]}"
+        if ext[1:] == "ts":
+            media_file_format = "mp4"
+        else:
+            media_file_format = ext[1:]
+
+        tmp_force_recognize_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.tmp.force.recognize.{media_file_format}"
 
         activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
         print("Removing subtitle streams...")
@@ -2673,22 +2688,27 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
             if not os.path.isdir(subtitle_folder_name):
                 os.mkdir(subtitle_folder_name)
 
-            src_tmp_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.tmp.embedded.{ext[1:]}"
+            if ext[1:] == "ts":
+                media_file_format = "mp4"
+            else:
+                media_file_format = ext[1:]
+
+            src_tmp_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.tmp.embedded.{media_file_format}"
             src_tmp_embedded_media_file_display_name = os.path.basename(src_tmp_embedded_media_filepath).split('/')[-1]
 
-            dst_tmp_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_dst_language_code}.tmp.embedded.{ext[1:]}"
+            dst_tmp_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_dst_language_code}.tmp.embedded.{media_file_format}"
             dst_tmp_embedded_media_file_display_name = os.path.basename(dst_tmp_embedded_media_filepath).split('/')[-1]
 
-            src_dst_tmp_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.{ffmpeg_dst_language_code}.tmp.embedded.{ext[1:]}"
+            src_dst_tmp_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.{ffmpeg_dst_language_code}.tmp.embedded.{media_file_format}"
             src_dst_tmp_embedded_media_file_display_name = os.path.basename(src_dst_tmp_embedded_media_filepath).split('/')[-1]
 
-            src_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.embedded.{ext[1:]}"
+            src_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.embedded.{media_file_format}"
             src_embedded_media_file_display_name = os.path.basename(src_embedded_media_filepath).split('/')[-1]
 
-            dst_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_dst_language_code}.embedded.{ext[1:]}"
+            dst_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_dst_language_code}.embedded.{media_file_format}"
             dst_embedded_media_file_display_name = os.path.basename(dst_embedded_media_filepath).split('/')[-1]
 
-            src_dst_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.{ffmpeg_dst_language_code}.embedded.{ext[1:]}"
+            src_dst_embedded_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{ffmpeg_src_language_code}.{ffmpeg_dst_language_code}.embedded.{media_file_format}"
             src_dst_embedded_media_file_display_name = os.path.basename(src_dst_embedded_media_filepath).split('/')[-1]
                 
             #activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
