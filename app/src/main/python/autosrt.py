@@ -868,6 +868,7 @@ class WavConverter:
                     media_filepath
                   ]
 
+        Config.resetStatistics()
         Config.enableRedirection()
         FFprobe.execute(command)
         output = Config.getLastCommandOutput()
@@ -917,6 +918,7 @@ class WavConverter:
             info = "Converting to WAV file"
             existing_languages, total_duration = self.get_subtitle_languages_and_duration(media_filepath)
 
+            Config.resetStatistics()
             Config.enableRedirection()
             Config.enableStatisticsCallback(MyStatisticsCallback(info, total_duration, self.start_time, self.activity, self.textview_progress, self.progress_bar, self.textview_percentage, self.textview_time))
 
@@ -1321,6 +1323,7 @@ class SubtitleStreamParser:
                          ]
 
         try:
+            Config.resetStatistics()
             Config.enableRedirection()
             FFmpeg.execute(ffmpeg_command)
             output = Config.getLastCommandOutput()
@@ -1406,6 +1409,7 @@ class MediaSubtitleRenderer:
                     media_filepath
                   ]
 
+        Config.resetStatistics()
         Config.enableRedirection()
         FFprobe.execute(command)
         output = Config.getLastCommandOutput()
@@ -1458,6 +1462,7 @@ class MediaSubtitleRenderer:
             info = f"Rendering '{self.language}' subtitles"
             existing_languages, total_duration = self.get_subtitle_languages_and_duration(media_filepath)
 
+            Config.resetStatistics()
             Config.enableRedirection()
             Config.enableStatisticsCallback(MyStatisticsCallback(info, total_duration, self.start_time, self.activity, self.textview_progress, self.progress_bar, self.textview_percentage, self.textview_time))
 
@@ -1486,6 +1491,7 @@ class MediaSubtitleEmbedder:
                     media_filepath
                   ]
 
+        Config.resetStatistics()
         Config.enableRedirection()
         FFprobe.execute(command)
         output = Config.getLastCommandOutput()
@@ -1551,6 +1557,7 @@ class MediaSubtitleEmbedder:
 
                 #print(f"EMBEDDER : media_filepath = '{media_filepath}' , size = {os.path.getsize(media_filepath)} , total_duration = {total_duration}")
 
+                Config.resetStatistics()
                 Config.enableRedirection()
                 Config.enableStatisticsCallback(MyStatisticsCallback(info, total_duration, self.start_time, self.activity, self.textview_progress, self.progress_bar, self.textview_percentage, self.textview_time))
 
@@ -1579,6 +1586,7 @@ class MediaSubtitleRemover:
                     media_filepath
                   ]
 
+        Config.resetStatistics()
         Config.enableRedirection()
         FFprobe.execute(command)
         output = Config.getLastCommandOutput()
@@ -1626,6 +1634,7 @@ class MediaSubtitleRemover:
             start_time = time.time()
             existing_languages, total_duration = self.get_subtitle_languages_and_duration(media_filepath)
 
+            Config.resetStatistics()
             Config.enableRedirection()
             Config.enableStatisticsCallback(MyStatisticsCallback(info, total_duration, self.start_time, self.activity, self.textview_progress, self.progress_bar, self.textview_percentage, self.textview_time))
 
@@ -1665,6 +1674,7 @@ def check_file_type(media_filepath, error_messages_callback=None):
                     media_filepath
                   ]
 
+        Config.resetStatistics()
         Config.enableRedirection()
         FFprobe.execute(command)
         output = Config.getLastCommandOutput()
@@ -1695,20 +1705,36 @@ def has_subtitles(media_filepath, error_messages_callback=None):
             raise Exception(f"Invalid file: '{media_filepath}'")
 
     try:
+        media_file_display_name = os.path.basename(media_filepath).split('/')[-1]
+
+        base, ext = os.path.splitext(media_filepath)
+        media_file_format = ext[1:]
+        print(f"has_subtitles: media_file_format = '{media_file_format}'")
+
+        files_dir = str(context.getExternalFilesDir(None))
+        subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
+        print(f"has_subtitles: subtitle_folder_name = '{subtitle_folder_name}'")
+
+        if not os.path.isdir(subtitle_folder_name):
+            os.mkdir(subtitle_folder_name)
+
+        subtitle_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.srt"
+        print(f"has_subtitles: subtitle_filepath = '{subtitle_filepath}'")
+
         ffmpeg_cmd = [
-                        'ffmpeg',
                         '-hide_banner',
                         '-v', 'error',
                         '-loglevel', 'error',
                         '-y',
                         '-i', media_filepath,
-                        '-map', '0:s:0',
+                        '-map', '0:s:0?',
                         '-c:s', 'text',
                         subtitle_filepath
                      ]
 
+        Config.resetStatistics()
         Config.enableRedirection()
-        FFmpeg.execute(ffmpeg_command)
+        FFmpeg.execute(ffmpeg_cmd)
         output = Config.getLastCommandOutput()
 
         if os.path.isfile(subtitle_filepath):
@@ -1718,8 +1744,10 @@ def has_subtitles(media_filepath, error_messages_callback=None):
             timed_subtitles = None
 
         if timed_subtitles:
+            print("has_subtitles = True")
             return True  # Subtitles detected
         else:
+            print("has_subtitles = False")
             return False  # No subtitles detected
 
     except Exception as e:
@@ -1758,6 +1786,7 @@ def convert_to_wav(media_filepath, start_time, activity, textview_progress, prog
         print("The given file does not exist: {0}".format(media_filepath))
         raise Exception("Invalid filepath: {0}".format(media_filepath))
 
+    Config.resetStatistics()
     Config.enableRedirection()
     file = File(media_filepath)
     fileUri = Uri.fromFile(file)
@@ -1830,11 +1859,10 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
 
     print(f"media_filepath = '{media_filepath}'")
 
-    base, ext = os.path.splitext(media_filepath)
-
     media_file_display_name = os.path.basename(media_filepath).split('/')[-1]
     print(f"media_file_display_name = '{media_file_display_name}'")
 
+    base, ext = os.path.splitext(media_filepath)
     media_file_format = ext[1:]
     print(f"media_file_format = '{media_file_format}'")
 
@@ -2229,17 +2257,6 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
 
                             ffmpeg_src_language_code = language.ffmpeg_code_of_code[src]
 
-                            base, ext = os.path.splitext(media_filepath)
-                            if ext[1:] == "ts":
-                                media_file_format = "mp4"
-                            else:
-                                media_file_format = ext[1:]
-
-                            files_dir = str(context.getExternalFilesDir(None))
-                            subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
-                            if not os.path.isdir(subtitle_folder_name):
-                                os.mkdir(subtitle_folder_name)
-
                             src_tmp_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_src_language_code}.tmp.embedded.{subtitle_embedded_media_file_format}"
                             src_tmp_embedded_media_file_display_name = os.path.basename(src_tmp_embedded_media_filepath).split('/')[-1]
 
@@ -2411,17 +2428,6 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
 
                             ffmpeg_dst_language_code = language.ffmpeg_code_of_code[dst]
 
-                            base, ext = os.path.splitext(media_filepath)
-                            if ext[1:] == "ts":
-                                media_file_format = "mp4"
-                            else:
-                                media_file_format = ext[1:]
-
-                            files_dir = str(context.getExternalFilesDir(None))
-                            subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
-                            if not os.path.isdir(subtitle_folder_name):
-                                os.mkdir(subtitle_folder_name)
-
                             dst_tmp_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_dst_language_code}.tmp.embedded.{subtitle_embedded_media_file_format}"
                             dst_tmp_embedded_media_file_display_name = os.path.basename(dst_tmp_embedded_media_filepath).split('/')[-1]
 
@@ -2512,20 +2518,32 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
                     pool = None
                 return
 
-    else:
+    elif media_type == "video" and force_recognize == True:
+    #else:
+        print("media_type == 'video' and force_recognize == True")
+        print(f"media_type = {media_type}")
+        print(f"force_recognize = {force_recognize}")
+
         base, ext = os.path.splitext(media_filepath)
+        force_recognize_media_file_format = None
         if ext[1:] == "ts":
-            media_file_format = "mp4"
+            force_recognize_media_file_format = "mp4"
         else:
-            media_file_format = ext[1:]
+            force_recognize_media_file_format = ext[1:]
+        print(f"checking if has_subtitles : force_recognize_media_file_format = {force_recognize_media_file_format}")
 
         files_dir = str(context.getExternalFilesDir(None))
-        subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
+        subtitle_folder_name = join(files_dir, media_file_display_name[:-len(force_recognize_media_file_format)-1])
         if not os.path.isdir(subtitle_folder_name):
             os.mkdir(subtitle_folder_name)
 
-        if has_subtitles(media_filepath):
-            tmp_force_recognize_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.tmp.force.recognize.{media_file_format}"
+        subtitle_stream_parser = SubtitleStreamParser()
+        subtitle_streams_data = subtitle_stream_parser(media_filepath)
+        print(f"subtitle_streams_data = {subtitle_streams_data}")
+
+        if subtitle_streams_data and subtitle_streams_data != []:
+        #if has_subtitles(media_filepath):
+            tmp_force_recognize_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(force_recognize_media_file_format)-1]}.tmp.force.recognize.{force_recognize_media_file_format}"
 
             activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
             print("Removing subtitle streams...")
@@ -2691,6 +2709,7 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
                 os.mkdir(subtitle_folder_name)
 
             src_subtitle_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{src}.{subtitle_format}"
+            print(f"src_subtitle_filepath = {src_subtitle_filepath}")
             src_subtitle_file_display_name = os.path.basename(src_subtitle_filepath).split('/')[-1]
 
             writer = SubtitleWriter(regions, src_transcriptions, subtitle_format)
