@@ -858,9 +858,9 @@ class WavConverter:
                     media_filepath
                   ]
 
+        Config.enableRedirection()
         FFprobe.execute(command)
         output = Config.getLastCommandOutput()
-
         metadata = json.loads(output)
         streams = metadata['streams']
         duration = int(float(metadata['format']['duration'])*1000)
@@ -1396,9 +1396,9 @@ class MediaSubtitleRenderer:
                     media_filepath
                   ]
 
+        Config.enableRedirection()
         FFprobe.execute(command)
         output = Config.getLastCommandOutput()
-
         metadata = json.loads(output)
         streams = metadata['streams']
         duration = int(float(metadata['format']['duration'])*1000)
@@ -1476,9 +1476,9 @@ class MediaSubtitleEmbedder:
                     media_filepath
                   ]
 
+        Config.enableRedirection()
         FFprobe.execute(command)
         output = Config.getLastCommandOutput()
-
         metadata = json.loads(output)
         streams = metadata['streams']
         duration = int(float(metadata['format']['duration'])*1000)
@@ -1569,9 +1569,9 @@ class MediaSubtitleRemover:
                     media_filepath
                   ]
 
+        Config.enableRedirection()
         FFprobe.execute(command)
         output = Config.getLastCommandOutput()
-
         metadata = json.loads(output)
         streams = metadata['streams']
         duration = int(float(metadata['format']['duration'])*1000)
@@ -1635,6 +1635,89 @@ class MediaSubtitleRemover:
             print(e)
             return
 
+
+def check_file_type(media_filepath, error_messages_callback=None):
+    if not os.path.isfile(media_filepath):
+        if error_messages_callback:
+           error_messages_callback(f"The given file does not exist: '{media_filepath}'")
+        else:
+            print(f"The given file does not exist: '{media_filepath}'")
+            raise Exception(f"Invalid file: '{media_filepath}'")
+
+    try:
+        command = [
+                    '-hide_banner',
+                    '-v', 'error',
+                    '-loglevel', 'error',
+                    '-of', 'json',
+                    '-show_entries',
+                    'format:stream',
+                    media_filepath
+                  ]
+
+        Config.enableRedirection()
+        FFprobe.execute(command)
+        output = Config.getLastCommandOutput()
+        metadata = json.loads(output)
+        streams = metadata['streams']
+
+        for stream in streams:
+            if 'codec_type' in stream and stream['codec_type'] == 'audio':
+                return 'audio'
+            elif 'codec_type' in stream and stream['codec_type'] == 'video':
+                return 'video'
+
+    except Exception as e:
+        if error_messages_callback:
+            error_messages_callback(e)
+        else:
+            print(e)
+
+    return None
+
+
+def has_subtitles(media_filepath, error_messages_callback=None):
+    if not os.path.isfile(media_filepath):
+        if error_messages_callback:
+           error_messages_callback(f"The given file does not exist: '{media_filepath}'")
+        else:
+            print(f"The given file does not exist: '{media_filepath}'")
+            raise Exception(f"Invalid file: '{media_filepath}'")
+
+    try:
+        ffmpeg_cmd = [
+                        'ffmpeg',
+                        '-hide_banner',
+                        '-v', 'error',
+                        '-loglevel', 'error',
+                        '-y',
+                        '-i', media_filepath,
+                        '-map', '0:s:0',
+                        '-c:s', 'text',
+                        subtitle_filepath
+                     ]
+
+        Config.enableRedirection()
+        FFmpeg.execute(ffmpeg_command)
+        output = Config.getLastCommandOutput()
+
+        if os.path.isfile(subtitle_filepath):
+            srt_file_reader = SRTFileReader()
+            timed_subtitles = srt_file_reader(subtitle_filepath)
+        else:
+            timed_subtitles = None
+
+        if timed_subtitles:
+            return True  # Subtitles detected
+        else:
+            return False  # No subtitles detected
+
+    except Exception as e:
+        if error_messages_callback:
+            error_messages_callback(e)
+        else:
+            print(e)
+        return False
 
 
 def is_same_language(lang1, lang2):
@@ -1740,6 +1823,8 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
     base, ext = os.path.splitext(media_filepath)
     media_file_display_name = os.path.basename(media_filepath).split('/')[-1]
     print(f"media_file_display_name = '{media_file_display_name}'")
+    media_type = check_file_type(media_filepath)
+    print(f"media_type = '{media_type}'")
     media_file_format = ext[1:]
     print(f"media_file_format = '{media_file_format}'")
 
@@ -1769,7 +1854,7 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
     activity.runOnUiThread(appendText(textview_output_messages, "Running python script...\n"))
 
     # CHECKING SUBTITLE STREAMS
-    if force_recognize == False:
+    if media_type == "video" and force_recognize == False:
 
         src_subtitle_filepath = None
         dst_subtitle_filepath = None
@@ -2404,35 +2489,35 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
             os.mkdir(subtitle_folder_name)
 
         base, ext = os.path.splitext(media_filepath)
-
         if ext[1:] == "ts":
             media_file_format = "mp4"
         else:
             media_file_format = ext[1:]
 
-        tmp_force_recognize_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.tmp.force.recognize.{media_file_format}"
+        if has_subtitles(media_filepath):
+            tmp_force_recognize_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.tmp.force.recognize.{media_file_format}"
 
-        activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
-        print("Removing subtitle streams...")
-        activity.runOnUiThread(appendText(textview_output_messages, "Removing subtitle streams...\n"))
-        remove_subtitle_streams_start_time = time.time()
-        pbar(0, remove_subtitle_streams_start_time, 100, "Removing subtitle streams", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-        Config.enableRedirection()
+            activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
+            print("Removing subtitle streams...")
+            activity.runOnUiThread(appendText(textview_output_messages, "Removing subtitle streams...\n"))
+            remove_subtitle_streams_start_time = time.time()
+            pbar(0, remove_subtitle_streams_start_time, 100, "Removing subtitle streams", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+            Config.enableRedirection()
         
-        subtitle_remover = MediaSubtitleRemover(output_path=tmp_force_recognize_media_filepath, start_time=remove_subtitle_streams_start_time, activity=activity, textview_progress=textview_progress, progress_bar=progress_bar, textview_percentage=textview_percentage, textview_time=textview_time)
-        tmp_output = subtitle_remover(media_filepath)
+            subtitle_remover = MediaSubtitleRemover(output_path=tmp_force_recognize_media_filepath, start_time=remove_subtitle_streams_start_time, activity=activity, textview_progress=textview_progress, progress_bar=progress_bar, textview_percentage=textview_percentage, textview_time=textview_time)
+            tmp_output = subtitle_remover(media_filepath)
 
-        Config.disableRedirection()
-        pbar(100, remove_subtitle_streams_start_time, 100, "Removing subtitle streams", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-        time.sleep(1)
+            Config.disableRedirection()
+            pbar(100, remove_subtitle_streams_start_time, 100, "Removing subtitle streams", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+            time.sleep(1)
 
-        print(f"Subtitle streams removed")
-        activity.runOnUiThread(appendText(textview_output_messages, "Subtitle streams removed\n"))
-        activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.INVISIBLE))
+            print(f"Subtitle streams removed")
+            activity.runOnUiThread(appendText(textview_output_messages, "Subtitle streams removed\n"))
+            activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.INVISIBLE))
 
-        if os.path.isfile(tmp_output):
-            shutil.copy(tmp_output, media_filepath)
-            os.remove(tmp_output)
+            if os.path.isfile(tmp_output):
+                shutil.copy(tmp_output, media_filepath)
+                os.remove(tmp_output)
 
 
     # TRANSCRIBE PART
@@ -2713,9 +2798,17 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
                 
             #activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
 
+            print(f"media_type = {media_type}")
+            print(f"embed_src = {embed_src}")
+            print(f"embed_dst = {embed_dst}")
+
             if is_same_language(src, dst):
 
-                if embed_src == True:
+                if media_type == "audio":
+                    print("Subtitles can only be embedded into video file, not audio file")
+                    activity.runOnUiThread(appendText(textview_output_messages, "Subtitles can only be embedded into video file, not audio file\n"))
+
+                if media_type == "video" and embed_src == True:
                     try:
                         print(f"Embedding '{ffmpeg_src_language_code}' subtitles...")
                         activity.runOnUiThread(appendText(textview_output_messages, f"Embedding '{ffmpeg_src_language_code}' subtitles...\n"))
@@ -2759,7 +2852,11 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
 
             elif not is_same_language(src, dst):
 
-                if embed_src == True and embed_dst == True:
+                if media_type == "audio":
+                    print("Subtitles can only be embedded into video file, not audio file")
+                    activity.runOnUiThread(appendText(textview_output_messages, "Subtitles can only be embedded into video file, not audio file\n"))
+
+                if media_type == "video" and embed_src == True and embed_dst == True:
                     try:
                         print(f"Embedding '{ffmpeg_src_language_code}' subtitles...")
                         activity.runOnUiThread(appendText(textview_output_messages, f"Embedding '{ffmpeg_src_language_code}' subtitles...\n"))
@@ -2828,7 +2925,7 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
                             pool.join()
                         return
 
-                elif embed_src == True and embed_dst == False:
+                elif media_type == "video" and embed_src == True and embed_dst == False:
                     try:
 
                         print(f"Embedding '{ffmpeg_src_language_code}' subtitles...")
@@ -2879,7 +2976,7 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
                             pool.join()
                         return
 
-                elif embed_src == False and embed_dst == True:
+                elif media_type == "video" and embed_src == False and embed_dst == True:
                     try:
 
                         print(f"Embedding '{ffmpeg_dst_language_code}' subtitles...")

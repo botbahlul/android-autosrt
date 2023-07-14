@@ -1862,7 +1862,6 @@ public class MainActivity extends AppCompatActivity {
                                                     appendText(textview_output_messages, equalChars + "\n");
                                                     appendText(textview_output_messages, savedSubtitleEmbeddedFiles[i] + "\n");
                                                 }
-
                                                 appendText(textview_output_messages, equalChars + "\n");
                                             }
 
