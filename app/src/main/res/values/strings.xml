@@ -25,4 +25,6 @@
     <string name="embed_translated_subtitles_into_media_file">Embed translated subtitles into media file</string>
     <string name="force_speech_recognition_process_to_media_files">Force speech recognition process to media files</string>
     <string name="eta_00_00_00">Time:00:00:00</string>
+    <string name="time_00_00_00">Time:00:00:00</string>
+    <string name="_100">100%</string>
 </resources>

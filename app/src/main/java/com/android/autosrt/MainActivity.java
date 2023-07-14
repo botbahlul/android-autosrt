@@ -927,7 +927,6 @@ public class MainActivity extends AppCompatActivity {
                         startForRequestManageAppAllFileAccessPermissionActivity.launch(intent);
                     }
                     catch (Exception e) {
-                        //Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
                         if (e.getMessage() != null) {
                             Log.e("Exception: ", e.getMessage());
                             e.printStackTrace();
@@ -1033,7 +1032,6 @@ public class MainActivity extends AppCompatActivity {
                     startForRequestManageAppAllFileAccessPermissionActivity.launch(intent);
                 }
                 catch (Exception e) {
-                    //Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
                     if (e.getMessage() != null) {
                         Log.e("Exception: ", e.getMessage());
                         e.printStackTrace();
@@ -1080,19 +1078,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
         adjustOutputMessagesHeight();
-
-        /*
-        textview_output_messages.post(() -> {
-            equalMaxChars = (calculateMaxCharsInTextView(equalChars, textview_output_messages.getWidth(), (int) textview_output_messages.getTextSize()));
-            dashMaxChars = (calculateMaxCharsInTextView(dashChars, textview_output_messages.getWidth(), (int) textview_output_messages.getTextSize()));
-            Log.d("onCreate", "textview_output_messages.getWidth() = " + textview_output_messages.getWidth());
-            Log.d("onCreate", "textview_output_messages.getTextSize() = " + textview_output_messages.getTextSize());
-            Log.d("onCreate", "equalMaxChars = " + equalMaxChars);
-            Log.d("onCreate", "dashMaxChars = " + dashMaxChars);
-            equalChars = StringUtils.repeat('=', equalMaxChars - 1);
-            dashChars = StringUtils.repeat('-', dashMaxChars - 3);
-        });
-        */
 
         try {
             Class.forName("dalvik.system.CloseGuard")
@@ -1660,134 +1645,211 @@ public class MainActivity extends AppCompatActivity {
             if (selectedFilesUri != null) {
                 if (isTranscribing) {
                     Log.d("transcribe", "Running");
-                    try {
-                        if (!Python.isStarted()) {
-                            Python.start(new AndroidPlatform(MainActivity.this));
-                            py = Python.getInstance();
-                        }
+                    if (!Python.isStarted()) {
+                        Python.start(new AndroidPlatform(MainActivity.this));
+                        py = Python.getInstance();
+                    }
 
-                        if (selectedFilesPath == null) {
-                            threadTranscriber.interrupt();
-                            threadTranscriber = null;
-                            setText(textview_output_messages, "");
-                            transcribe();
-                        }
+                    if (selectedFilesPath == null) {
+                        threadTranscriber.interrupt();
+                        threadTranscriber = null;
+                        setText(textview_output_messages, "");
+                        transcribe();
+                    }
 
-                        savedSubtitleFiles = new File[selectedFilesUri.size()];
-                        savedSubtitleEmbeddedFiles = new File[selectedFilesUri.size()];
+                    savedSubtitleFiles = new File[selectedFilesUri.size()];
+                    savedSubtitleEmbeddedFiles = new File[selectedFilesUri.size()];
 
-                        embed_src_subtitle = checkbox_embed_src_subtitle.isChecked();
+                    embed_src_subtitle = checkbox_embed_src_subtitle.isChecked();
+                    embed_dst_subtitle = checkbox_embed_dst_subtitle.isChecked();
+                    force_recognize = checkbox_force_recognize.isChecked();
 
-                        embed_dst_subtitle = checkbox_embed_dst_subtitle.isChecked();
+                    runOnUiThread(() -> {
+                        setText(textview_output_messages, "");
+                        equalChars = readStringFromFile(MainActivity.this, "equalChars");
+                        Log.d("transcribe", "equalChars.length() = " + equalChars.length());
+                        appendText(textview_output_messages, equalChars + "\n");
+                    });
 
-                        force_recognize = checkbox_force_recognize.isChecked();
+                    for (int i=0; i<selectedFilesUri.size(); i++) {
+                        if (!isTranscribing) return;
 
-                        runOnUiThread(() -> {
-                            setText(textview_output_messages, "");
-                            equalChars = readStringFromFile(MainActivity.this, "equalChars");
-                            Log.d("transcribe", "equalChars.length() = " + equalChars.length());
+                        tmpSubtitleFilesPath = new ArrayList<>();
+                        tmpSubtitleEmbeddedFilePath = null;
+
+                        mediaFormat = selectedFilesPath.get(i).substring(selectedFilesPath.get(i).lastIndexOf(".") + 1);
+                        String subtitleFolderDisplayName = StringUtils.substring(selectedFilesDisplayName.get(i), 0, selectedFilesDisplayName.get(i).length() - mediaFormat.length() - 1);
+                        Log.d("transcribe", "subtitleFolderDisplayName = " + subtitleFolderDisplayName);
+
+                        setText(textview_current_file, "Processing file : '" + selectedFilesDisplayName.get(i) + "'");
+                        int finalI = i;
+                        textview_output_messages.post(() -> {
+                            appendText(textview_output_messages, "Processing file : '" + selectedFilesDisplayName.get(finalI) + "'\n");
                             appendText(textview_output_messages, equalChars + "\n");
                         });
 
-                        for (int i=0; i<selectedFilesUri.size(); i++) {
-                            if (!isTranscribing) return;
+                        pyObjTmpResults = py.getModule("autosrt").callAttr(
+                                "transcribe",
+                                src_code,
+                                dst_code,
+                                selectedFilesPath.get(i),
+                                selectedFilesDisplayName.get(i),
+                                subtitleFormat,
+                                embed_src_subtitle,
+                                embed_dst_subtitle,
+                                force_recognize,
+                                MainActivity.this,
+                                textview_output_messages,
+                                textview_progress,
+                                progressBar,
+                                textview_percentage,
+                                textview_time
+                        );
 
-                            tmpSubtitleFilesPath = new ArrayList<>();
-                            tmpSubtitleEmbeddedFilePath = null;
+                        Log.d("transcribe", "pyObjTmpResults = " + pyObjTmpResults);
 
-                            mediaFormat = selectedFilesPath.get(i).substring(selectedFilesPath.get(i).lastIndexOf(".") + 1);
-                            String subtitleFolderDisplayName = StringUtils.substring(selectedFilesDisplayName.get(i), 0, selectedFilesDisplayName.get(i).length() - mediaFormat.length() - 1);
-                            Log.d("transcribe", "subtitleFolderDisplayName = " + subtitleFolderDisplayName);
+                        // Extract the tuple tupleTmpResults
+                        if (pyObjTmpResults != null) {
 
-                            setText(textview_current_file, "Processing file : '" + selectedFilesDisplayName.get(i) + "'");
-                            int finalI = i;
-                            textview_output_messages.post(() -> {
-                                appendText(textview_output_messages, "Processing file : '" + selectedFilesDisplayName.get(finalI) + "'\n");
-                                appendText(textview_output_messages, equalChars + "\n");
-                            });
+                            String extension;
+                            List<PyObject> tupleTmpResults = new ArrayList<>(pyObjTmpResults.asList());
 
-                            if (!Python.isStarted()) {
-                                Python.start(new AndroidPlatform(MainActivity.this));
-                                py = Python.getInstance();
+                            for (int idx = 0; idx < tupleTmpResults.size(); idx++) {
+                                Log.d("transcribe", "tupleTmpResults.get(" + idx + ") = " + tupleTmpResults.get(idx));
+
+                                extension = tupleTmpResults.get(idx).toString().substring(tupleTmpResults.get(idx).toString().lastIndexOf(".") + 1);
+                                Log.d("transcribe", "extension = " + extension);
+
+                                if (extension.equals("srt") || extension.equals("vtt") || extension.equals("json") || extension.equals("raw")) {
+                                    tmpSubtitleFilesPath.add(tupleTmpResults.get(idx).toString());
+                                }
+                                else {
+                                    tmpSubtitleEmbeddedFilePath = tupleTmpResults.get(idx).toString();
+                                }
+                            }
+                        }
+
+                        for (int idx = 0; idx < tmpSubtitleFilesPath.size(); idx++) {
+                            Log.d("transcribe", "tmpSubtitleFilesPath.get(" + idx + ") = " + tmpSubtitleFilesPath.get(idx));
+                        }
+
+                        Log.d("transcribe", "tmpSubtitleEmbeddedFilePath = " + tmpSubtitleEmbeddedFilePath);
+
+                        if (tmpSubtitleFilesPath != null) {
+                            tmpSrcSubtitleFilePath = tmpSubtitleFilesPath.get(0);
+                            Log.d("transcribe", "tmpSrcSubtitleFilePath = " + tmpSrcSubtitleFilePath);
+
+                            if (tmpSubtitleFilesPath.size() == 2 && tmpSubtitleFilesPath.get(1) != null) {
+                                tmpDstSubtitleFilePath = tmpSubtitleFilesPath.get(1);
+                                Log.d("transcribe", "tmpDstSubtitleFilePath = " + tmpDstSubtitleFilePath);
                             }
 
-                            pyObjTmpResults = py.getModule("autosrt").callAttr(
-                                    "transcribe",
-                                    src_code,
-                                    dst_code,
-                                    selectedFilesPath.get(i),
-                                    selectedFilesDisplayName.get(i),
-                                    subtitleFormat,
-                                    embed_src_subtitle,
-                                    embed_dst_subtitle,
-                                    force_recognize,
-                                    MainActivity.this,
-                                    textview_output_messages,
-                                    textview_progress,
-                                    progressBar,
-                                    textview_percentage,
-                                    textview_time
-                            );
+                            Log.d("transcribe", "new File(tmpSrcSubtitleFilePath).exists() = " + new File(tmpSrcSubtitleFilePath).exists());
+                            Log.d("transcribe", "new File(tmpSrcSubtitleFilePath).length() = " + new File(tmpSrcSubtitleFilePath).length());
 
-                            Log.d("transcribe", "pyObjTmpResults = " + pyObjTmpResults);
+                            if (new File(tmpSrcSubtitleFilePath).exists() && new File(tmpSrcSubtitleFilePath).length() > 1) {
 
-                            // Extract the tuple tupleTmpResults
-                            if (pyObjTmpResults != null) {
+                                savedTreesUri = loadSavedTreeUrisFromSharedPreference();
+                                Log.d("transcribe", "savedTreesUri = " + savedTreesUri);
 
-                                String extension;
-                                List<PyObject> tupleTmpResults = new ArrayList<>(pyObjTmpResults.asList());
+                                if (savedTreesUri.size() == 0) {
 
-                                for (int idx = 0; idx < tupleTmpResults.size(); idx++) {
-                                    Log.d("transcribe", "tupleTmpResults.get(" + idx + ") = " + tupleTmpResults.get(idx));
+                                    Log.d("transcribe", "Saving subtitle file using saveSubtitleFileToDocumentsDir()");
+                                    savedSubtitleFiles[i] = saveSubtitleFileToDocumentsDir(tmpSrcSubtitleFilePath, tmpDstSubtitleFilePath, subtitleFolderDisplayName);
+                                    Log.d("transcribe", "savedSubtitleFiles[" + i + "] = " + savedSubtitleFiles[i]);
 
-                                    extension = tupleTmpResults.get(idx).toString().substring(tupleTmpResults.get(idx).toString().lastIndexOf(".") + 1);
-                                    Log.d("transcribe", "extension = " + extension);
+                                    if (tmpSubtitleEmbeddedFilePath != null && new File(tmpSubtitleEmbeddedFilePath).exists() && new File(tmpSubtitleEmbeddedFilePath).length() > 1) {
+                                        Log.d("transcribe", "Saving subtitle embedded file using saveSubtitleEmbeddedFileToDocumentsDir()");
+                                        savedSubtitleEmbeddedFiles[i] = saveSubtitleEmbeddedFileToDocumentsDir(tmpSubtitleEmbeddedFilePath, subtitleFolderDisplayName);
+                                        Log.d("transcribe", "savedSubtitleEmbeddedFiles[" + i + "] = " + savedSubtitleEmbeddedFiles[i]);
+                                    }
 
-                                    if (extension.equals("srt") || extension.equals("vtt") || extension.equals("json") || extension.equals("raw")) {
-                                        tmpSubtitleFilesPath.add(tupleTmpResults.get(idx).toString());
+                                    if (savedSubtitleFiles[i].exists() && savedSubtitleFiles[i].length() > 1) {
+                                        Log.d("transcribe", savedSubtitleFiles[i] + " created");
+                                        appendText(textview_output_messages, equalChars + "\n");
+                                        appendText(textview_output_messages, "Overall results for '" + selectedFilesDisplayName.get(i) + "' : \n");
+                                        appendText(textview_output_messages, equalChars + "\n");
+                                        appendText(textview_output_messages, savedSubtitleFiles[i] + "\n");
+
+                                        if (!Objects.equals(src_code, dst_code)) {
+                                            String savedDstSubtitleFilePath = StringUtils.replace(savedSubtitleFiles[i].toString(), src_code + ".srt", dst_code + ".srt");
+                                            Log.d("transcribe", "savedDstSubtitleFilePath = " + savedDstSubtitleFilePath);
+                                            if (new File(savedDstSubtitleFilePath).exists() && new File(savedDstSubtitleFilePath).length() > 1) {
+                                                appendText(textview_output_messages, equalChars + "\n");
+                                                appendText(textview_output_messages, savedDstSubtitleFilePath + "\n");
+                                            }
+                                        }
+                                        if (savedSubtitleEmbeddedFiles != null && savedSubtitleEmbeddedFiles[i] != null && savedSubtitleEmbeddedFiles[i].exists() && savedSubtitleEmbeddedFiles[i].length() > 1) {
+                                            appendText(textview_output_messages, equalChars + "\n");
+                                            appendText(textview_output_messages, savedSubtitleEmbeddedFiles[i] + "\n");
+                                        }
+                                        appendText(textview_output_messages, equalChars + "\n");
+                                    }
+
+                                }
+                                else {
+                                    Log.d("transcribe", "savedTreesUri.size() = " + savedTreesUri.size());
+                                    Uri dirUri = getFolderUri(selectedFolderPath);
+                                    Log.d("transcribe", "dirUri = " + dirUri);
+
+                                    int j=0;
+                                    for (Uri savedTreeUri : savedTreesUri) {
+                                        Log.d("transcribe", "savedTreeUri[" + j + "] = " + savedTreeUri);
+                                        if (dirUri.getLastPathSegment().contains(savedTreeUri.getLastPathSegment())) {
+                                            selectedFolderUri = savedTreeUri;
+                                            Log.d("transcribe", "selectedFolderUri = " + selectedFolderUri);
+                                        }
+                                        j+=1;
+                                    }
+
+                                    alreadySaved = isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(i));
+
+                                    Log.d("transcribe", "alreadySaved = " + alreadySaved);
+                                    if (alreadySaved) {
+
+                                        Log.d("transcribe", "Saving subtitle file using saveSubtitleFileToSelectedDir()");
+                                        Log.d("transcribe", "selectedFolderUri = " + selectedFolderUri);
+
+                                        savedSubtitleFiles[i] = saveSubtitleFileToSelectedDir(tmpSrcSubtitleFilePath, tmpDstSubtitleFilePath, selectedFolderUri);
+                                        Log.d("transcribe", "savedSubtitleFiles[" + i + "] = " + savedSubtitleFiles[i]);
+
+                                        if (tmpSubtitleEmbeddedFilePath != null && new File(tmpSubtitleEmbeddedFilePath).exists() && new File(tmpSubtitleEmbeddedFilePath).length() > 1) {
+                                            Log.d("transcribe", "Saving subtitle embedded file using saveSubtitleEmbeddedFileToSelectedDir()");
+                                            savedSubtitleEmbeddedFiles[i] = saveSubtitleEmbeddedFileToSelectedDir(tmpSubtitleEmbeddedFilePath, selectedFolderUri);
+                                            Log.d("transcribe", "savedSubtitleEmbeddedFiles[" + i + "] = " + savedSubtitleEmbeddedFiles[i]);
+                                        }
+
+                                        if (savedSubtitleFiles[i].exists() && savedSubtitleFiles[i].length() > 1) {
+                                            Log.d("transcribe", savedSubtitleFiles[i].toString() + " created");
+                                            appendText(textview_output_messages, equalChars + "\n");
+                                            appendText(textview_output_messages, "Overall results for '" + selectedFilesDisplayName.get(i) + "' : \n");
+                                            appendText(textview_output_messages, equalChars + "\n");
+                                            appendText(textview_output_messages, savedSubtitleFiles[i].toString() + "\n");
+
+                                            if (!Objects.equals(src_code, dst_code)) {
+                                                String savedDstSubtitleFilePath = StringUtils.replace(savedSubtitleFiles[i].toString(), src_code+ ".srt", dst_code + ".srt");
+                                                Log.d("transcribe", "savedDstSubtitleFilePath = " + savedDstSubtitleFilePath);
+                                                if (new File(savedDstSubtitleFilePath).exists() && new File(savedDstSubtitleFilePath).length() > 1) {
+                                                    appendText(textview_output_messages, equalChars + "\n");
+                                                    appendText(textview_output_messages, savedDstSubtitleFilePath + "\n");
+                                                }
+                                            }
+
+                                            if (savedSubtitleEmbeddedFiles != null && savedSubtitleEmbeddedFiles[i] != null && savedSubtitleEmbeddedFiles[i].exists() && savedSubtitleEmbeddedFiles[i].length() > 1) {
+                                                appendText(textview_output_messages, equalChars + "\n");
+                                                appendText(textview_output_messages, savedSubtitleEmbeddedFiles[i] + "\n");
+                                            }
+                                            appendText(textview_output_messages, equalChars + "\n");
+                                        }
+
                                     }
                                     else {
-                                        tmpSubtitleEmbeddedFilePath = tupleTmpResults.get(idx).toString();
-                                    }
-                                }
-                            }
-
-                            for (int idx = 0; idx < tmpSubtitleFilesPath.size(); idx++) {
-                                Log.d("transcribe", "tmpSubtitleFilesPath.get(" + idx + ") = " + tmpSubtitleFilesPath.get(idx));
-                            }
-
-                            Log.d("transcribe", "tmpSubtitleEmbeddedFilePath = " + tmpSubtitleEmbeddedFilePath);
-
-                            if (tmpSubtitleFilesPath != null) {
-                                tmpSrcSubtitleFilePath = tmpSubtitleFilesPath.get(0);
-                                Log.d("transcribe", "tmpSrcSubtitleFilePath = " + tmpSrcSubtitleFilePath);
-
-                                if (tmpSubtitleFilesPath.size() == 2 && tmpSubtitleFilesPath.get(1) != null) {
-                                    tmpDstSubtitleFilePath = tmpSubtitleFilesPath.get(1);
-                                    Log.d("transcribe", "tmpDstSubtitleFilePath = " + tmpDstSubtitleFilePath);
-                                }
-
-                                Log.d("transcribe", "new File(tmpSrcSubtitleFilePath).exists() = " + new File(tmpSrcSubtitleFilePath).exists());
-                                Log.d("transcribe", "new File(tmpSrcSubtitleFilePath).length() = " + new File(tmpSrcSubtitleFilePath).length());
-
-                                if (new File(tmpSrcSubtitleFilePath).exists() && new File(tmpSrcSubtitleFilePath).length() > 1) {
-
-                                    savedTreesUri = loadSavedTreeUrisFromSharedPreference();
-                                    Log.d("transcribe", "savedTreesUri = " + savedTreesUri);
-
-                                    if (savedTreesUri.size() == 0) {
 
                                         Log.d("transcribe", "Saving subtitle file using saveSubtitleFileToDocumentsDir()");
                                         savedSubtitleFiles[i] = saveSubtitleFileToDocumentsDir(tmpSrcSubtitleFilePath, tmpDstSubtitleFilePath, subtitleFolderDisplayName);
                                         Log.d("transcribe", "savedSubtitleFiles[" + i + "] = " + savedSubtitleFiles[i]);
 
-                                        if (tmpSubtitleEmbeddedFilePath != null && new File(tmpSubtitleEmbeddedFilePath).exists() && new File(tmpSubtitleEmbeddedFilePath).length() > 1) {
-                                            Log.d("transcribe", "Saving subtitle embedded file using saveSubtitleEmbeddedFileToDocumentsDir()");
-                                            savedSubtitleEmbeddedFiles[i] = saveSubtitleEmbeddedFileToDocumentsDir(tmpSubtitleEmbeddedFilePath, subtitleFolderDisplayName);
-                                            Log.d("transcribe", "savedSubtitleEmbeddedFiles[" + i + "] = " + savedSubtitleEmbeddedFiles[i]);
-                                        }
-
-                                        if (savedSubtitleFiles[i].exists() && savedSubtitleFiles[i].length() > 1) {
+                                        if (new File(savedSubtitleFiles[i].toString()).exists() && new File(savedSubtitleFiles[i].toString()).length() > 1) {
                                             Log.d("transcribe", savedSubtitleFiles[i] + " created");
                                             appendText(textview_output_messages, equalChars + "\n");
                                             appendText(textview_output_messages, "Overall results for '" + selectedFilesDisplayName.get(i) + "' : \n");
@@ -1802,138 +1864,43 @@ public class MainActivity extends AppCompatActivity {
                                                     appendText(textview_output_messages, savedDstSubtitleFilePath + "\n");
                                                 }
                                             }
+
                                             if (savedSubtitleEmbeddedFiles != null && savedSubtitleEmbeddedFiles[i] != null && savedSubtitleEmbeddedFiles[i].exists() && savedSubtitleEmbeddedFiles[i].length() > 1) {
                                                 appendText(textview_output_messages, equalChars + "\n");
                                                 appendText(textview_output_messages, savedSubtitleEmbeddedFiles[i] + "\n");
                                             }
                                             appendText(textview_output_messages, equalChars + "\n");
                                         }
-
-                                    }
-                                    else {
-                                        Log.d("transcribe", "savedTreesUri.size() = " + savedTreesUri.size());
-                                        Uri dirUri = getFolderUri(selectedFolderPath);
-                                        Log.d("transcribe", "dirUri = " + dirUri);
-
-                                        int j=0;
-                                        for (Uri savedTreeUri : savedTreesUri) {
-                                            Log.d("transcribe", "savedTreeUri[" + j + "] = " + savedTreeUri);
-                                            if (dirUri.getLastPathSegment().contains(savedTreeUri.getLastPathSegment())) {
-                                                selectedFolderUri = savedTreeUri;
-                                                Log.d("transcribe", "selectedFolderUri = " + selectedFolderUri);
-                                            }
-                                            j+=1;
-                                        }
-
-                                        alreadySaved = isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilesPath.get(i));
-
-                                        Log.d("transcribe", "alreadySaved = " + alreadySaved);
-                                        if (alreadySaved) {
-
-                                            Log.d("transcribe", "Saving subtitle file using saveSubtitleFileToSelectedDir()");
-                                            Log.d("transcribe", "selectedFolderUri = " + selectedFolderUri);
-
-                                            savedSubtitleFiles[i] = saveSubtitleFileToSelectedDir(tmpSrcSubtitleFilePath, tmpDstSubtitleFilePath, selectedFolderUri);
-                                            Log.d("transcribe", "savedSubtitleFiles[" + i + "] = " + savedSubtitleFiles[i]);
-
-                                            if (tmpSubtitleEmbeddedFilePath != null && new File(tmpSubtitleEmbeddedFilePath).exists() && new File(tmpSubtitleEmbeddedFilePath).length() > 1) {
-                                                Log.d("transcribe", "Saving subtitle embedded file using saveSubtitleEmbeddedFileToSelectedDir()");
-                                                savedSubtitleEmbeddedFiles[i] = saveSubtitleEmbeddedFileToSelectedDir(tmpSubtitleEmbeddedFilePath, selectedFolderUri);
-                                                Log.d("transcribe", "savedSubtitleEmbeddedFiles[" + i + "] = " + savedSubtitleEmbeddedFiles[i]);
-                                            }
-
-                                            if (savedSubtitleFiles[i].exists() && savedSubtitleFiles[i].length() > 1) {
-                                                Log.d("transcribe", savedSubtitleFiles[i].toString() + " created");
-                                                appendText(textview_output_messages, equalChars + "\n");
-                                                appendText(textview_output_messages, "Overall results for '" + selectedFilesDisplayName.get(i) + "' : \n");
-                                                appendText(textview_output_messages, equalChars + "\n");
-                                                appendText(textview_output_messages, savedSubtitleFiles[i].toString() + "\n");
-
-                                                if (!Objects.equals(src_code, dst_code)) {
-                                                    String savedDstSubtitleFilePath = StringUtils.replace(savedSubtitleFiles[i].toString(), src_code+ ".srt", dst_code + ".srt");
-                                                    Log.d("transcribe", "savedDstSubtitleFilePath = " + savedDstSubtitleFilePath);
-                                                    if (new File(savedDstSubtitleFilePath).exists() && new File(savedDstSubtitleFilePath).length() > 1) {
-                                                        appendText(textview_output_messages, equalChars + "\n");
-                                                        appendText(textview_output_messages, savedDstSubtitleFilePath + "\n");
-                                                    }
-                                                }
-
-                                                if (savedSubtitleEmbeddedFiles != null && savedSubtitleEmbeddedFiles[i] != null && savedSubtitleEmbeddedFiles[i].exists() && savedSubtitleEmbeddedFiles[i].length() > 1) {
-                                                    appendText(textview_output_messages, equalChars + "\n");
-                                                    appendText(textview_output_messages, savedSubtitleEmbeddedFiles[i] + "\n");
-                                                }
-                                                appendText(textview_output_messages, equalChars + "\n");
-                                            }
-
-                                        }
-                                        else {
-
-                                            Log.d("transcribe", "Saving subtitle file using saveSubtitleFileToDocumentsDir()");
-                                            savedSubtitleFiles[i] = saveSubtitleFileToDocumentsDir(tmpSrcSubtitleFilePath, tmpDstSubtitleFilePath, subtitleFolderDisplayName);
-                                            Log.d("transcribe", "savedSubtitleFiles[" + i + "] = " + savedSubtitleFiles[i]);
-
-                                            if (new File(savedSubtitleFiles[i].toString()).exists() && new File(savedSubtitleFiles[i].toString()).length() > 1) {
-                                                Log.d("transcribe", savedSubtitleFiles[i] + " created");
-                                                appendText(textview_output_messages, equalChars + "\n");
-                                                appendText(textview_output_messages, "Overall results for '" + selectedFilesDisplayName.get(i) + "' : \n");
-                                                appendText(textview_output_messages, equalChars + "\n");
-                                                appendText(textview_output_messages, savedSubtitleFiles[i] + "\n");
-
-                                                if (!Objects.equals(src_code, dst_code)) {
-                                                    String savedDstSubtitleFilePath = StringUtils.replace(savedSubtitleFiles[i].toString(), src_code + ".srt", dst_code + ".srt");
-                                                    Log.d("transcribe", "savedDstSubtitleFilePath = " + savedDstSubtitleFilePath);
-                                                    if (new File(savedDstSubtitleFilePath).exists() && new File(savedDstSubtitleFilePath).length() > 1) {
-                                                        appendText(textview_output_messages, equalChars + "\n");
-                                                        appendText(textview_output_messages, savedDstSubtitleFilePath + "\n");
-                                                    }
-                                                }
-
-                                                if (savedSubtitleEmbeddedFiles != null && savedSubtitleEmbeddedFiles[i] != null && savedSubtitleEmbeddedFiles[i].exists() && savedSubtitleEmbeddedFiles[i].length() > 1) {
-                                                    appendText(textview_output_messages, equalChars + "\n");
-                                                    appendText(textview_output_messages, savedSubtitleEmbeddedFiles[i] + "\n");
-                                                }
-                                                appendText(textview_output_messages, equalChars + "\n");
-                                            }
-                                        }
                                     }
                                 }
                             }
                         }
-                        setText(textview_current_file, "");
-
-                        if (isTranscribing && selectedFilesUri != null) {
-                            if (threadTranscriber != null) {
-                                threadTranscriber.interrupt();
-                                threadTranscriber = null;
-                            }
-                            isTranscribing = false;
-                            runOnUiThread(() -> {
-                                String t1 = "Start Transcribe";
-                                button_start.setText(t1);
-                                Log.d("transcribe", "transcribeStartTime = " + transcribeStartTime);
-                                Log.d("transcribe", "transcribeEndTime = " + System.currentTimeMillis());
-                                transcribeElapsedTime = System.currentTimeMillis() - transcribeStartTime;
-                                Log.d("transcribe", "transcribeElapsedTime = " + transcribeElapsedTime);
-                                long totalSeconds = transcribeElapsedTime / 1000;
-                                Log.d("transcribe", "totalSeconds = " + totalSeconds);
-                                long hours = totalSeconds / 3600;
-                                long minutes = (totalSeconds % 3600) / 60;
-                                long seconds = totalSeconds % 60;
-                                formattedElapsedTime = String.format("%02d:%02d:%02d", hours, minutes, seconds);
-                                appendText(textview_output_messages, "Total running time : " + formattedElapsedTime + "\n");
-                                appendText(textview_output_messages, equalChars + "\n");
-                            });
-                        }
-
                     }
-                    catch (Exception e) {
-                        //Log.e("Exception: ", Objects.requireNonNull(e.getMessage()));
-                        if (e.getMessage() != null) {
-                            Log.e("Exception: ", e.getMessage());
-                            e.printStackTrace();
-                        }
-                    }
+                    setText(textview_current_file, "");
 
+                    if (isTranscribing && selectedFilesUri != null) {
+                        if (threadTranscriber != null) {
+                            threadTranscriber.interrupt();
+                            threadTranscriber = null;
+                        }
+                        isTranscribing = false;
+                        runOnUiThread(() -> {
+                            String t1 = "Start Transcribe";
+                            button_start.setText(t1);
+                            Log.d("transcribe", "transcribeStartTime = " + transcribeStartTime);
+                            Log.d("transcribe", "transcribeEndTime = " + System.currentTimeMillis());
+                            transcribeElapsedTime = System.currentTimeMillis() - transcribeStartTime;
+                            Log.d("transcribe", "transcribeElapsedTime = " + transcribeElapsedTime);
+                            long totalSeconds = transcribeElapsedTime / 1000;
+                            Log.d("transcribe", "totalSeconds = " + totalSeconds);
+                            long hours = totalSeconds / 3600;
+                            long minutes = (totalSeconds % 3600) / 60;
+                            long seconds = totalSeconds % 60;
+                            formattedElapsedTime = String.format("%02d:%02d:%02d", hours, minutes, seconds);
+                            appendText(textview_output_messages, "Total running time : " + formattedElapsedTime + "\n");
+                            appendText(textview_output_messages, equalChars + "\n");
+                        });
+                    }
                 }
                 else {
                     if (threadTranscriber != null) {
@@ -3242,7 +3209,7 @@ public class MainActivity extends AppCompatActivity {
             int b = fileInputStream.read(buffer);
             Log.d("readStringFromFile", "b = " + b);
             fileInputStream.close();
-            Log.d("readStringFromFile", "new String(buffer) = " + new String(buffer));
+            //Log.d("readStringFromFile", "new String(buffer) = " + new String(buffer));
             return new String(buffer);
         }
         catch (IOException e) {

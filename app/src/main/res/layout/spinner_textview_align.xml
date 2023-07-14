@@ -7,6 +7,6 @@
 		android:layout_centerHorizontal="true"
 		android:layout_centerVertical="true"
 		android:gravity="start|center"
-		android:textSize="15sp"
+		android:textSize="16sp"
 		android:textAlignment="gravity"
 	/>
