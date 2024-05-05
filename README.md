@@ -16,3 +16,5 @@ You can try android-autosrt-v2 which is using 2 activities
 https://github.com/botbahlul/android-autosrt-v2
 
 Check my other SPEECH RECOGNITIION + TRANSLATE PROJECTS https://github.com/botbahlul?tab=repositories
+
+Buy me coffee : https://sociabuzz.com/botbahlul/tribe
