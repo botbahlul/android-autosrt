@@ -1535,7 +1535,9 @@ public class MainActivity extends AppCompatActivity {
                             selectedFilesPath.add(selectedFilePath);
                             String fileDisplayName = queryName(getApplicationContext(), fileUri);
                             selectedFilesDisplayName.add(fileDisplayName);
-                            selectedFolderPath = new File(selectedFilePath).getParent();
+                            if (selectedFilePath != null) {
+                                selectedFolderPath = new File(selectedFilePath).getParent();
+                            }
 
                             alreadySaved = isTreeUriPermissionGrantedForDirPathOfFilePath(selectedFilePath);
                             if (!alreadySaved) {
@@ -1955,85 +1957,289 @@ public class MainActivity extends AppCompatActivity {
         return uri;
     }
 
-
     private String TreeUri2Path(Uri uri) {
         if (uri == null) {
             return null;
         }
         String docId = DocumentsContract.getTreeDocumentId(uri);
         Log.d("TreeUri2Path", "docId = " + docId);
+
+        // Handle "raw:/absolute/path" docId (seen on some vendors/SD cards)
+        if (docId.startsWith("raw:")) {
+            String rawPath = docId.substring(4);
+            Log.d("TreeUri2Path", "rawPath = " + rawPath);
+            return (rawPath.isEmpty()) ? null : rawPath;
+        }
+
         String[] split = docId.split(":");
         Log.d("TreeUri2Path", "split = " + Arrays.toString(split));
+
+        if (split.length < 2) {
+            Log.e("TreeUri2Path", "Unexpected docId format: " + docId);
+            return null;
+        }
+
         String fullPath = getPathFromExtSD(split);
-        if (!fullPath.equals("")) {
-            Log.d("TreeUri2Path", "fullPath = " + fullPath);
+        Log.d("TreeUri2Path", "fullPath = " + fullPath);
+
+        // fullPath can be null, not just "", so check null first
+        if (fullPath != null && !fullPath.isEmpty()) {
             return fullPath;
         }
-        else {
-            return null;
-        }
+        return null;
     }
 
-
     private String Uri2Path(Context context, Uri uri) {
+
+        Log.d("Uri2Path", "========================================");
+
         if (uri == null) {
+            Log.e("Uri2Path", "URI IS NULL");
             return null;
         }
 
-        if(ContentResolver.SCHEME_FILE.equals(uri.getScheme())) {
-            Log.d("Uri2Path", "uri.getPath() = " + uri.getPath());
-            return uri.getPath();
+        Log.d("Uri2Path", "uri = " + uri);
+        Log.d("Uri2Path", "scheme = " + uri.getScheme());
+        Log.d("Uri2Path", "authority = " + uri.getAuthority());
+        Log.d("Uri2Path", "path = " + uri.getPath());
+
+        // ============================================================
+        // FILE URI
+        // ============================================================
+
+        if (ContentResolver.SCHEME_FILE.equals(uri.getScheme())) {
+
+            String path = uri.getPath();
+
+            Log.d("Uri2Path", "FILE URI path = " + path);
+
+            return path;
         }
 
-        else if(ContentResolver.SCHEME_CONTENT.equals(uri.getScheme())) {
-            String authority = uri.getAuthority();
-            Log.d("Uri2Path", "authority = " + authority);
-            String idStr = "";
 
-            if(authority.startsWith("com.android.externalstorage")) {
-                String docId = DocumentsContract.getDocumentId(uri);
-                String[] split = docId.split(":");
-                String fullPath = getPathFromExtSD(split);
-                if (!fullPath.equals("")) {
-                    Log.d("Uri2Path", "fullPath = " + fullPath);
-                    return fullPath;
+        // ============================================================
+        // CONTENT URI
+        // ============================================================
+
+        if (!ContentResolver.SCHEME_CONTENT.equals(uri.getScheme())) {
+
+            Log.e("Uri2Path", "Unsupported URI scheme: " + uri.getScheme());
+
+            return null;
+        }
+
+
+        String authority = uri.getAuthority();
+
+        Log.d("Uri2Path", "CONTENT authority = " + authority);
+
+
+        // ============================================================
+        // DOCUMENT PROVIDER
+        // ============================================================
+
+        if (DocumentsContract.isDocumentUri(context, uri)) {
+
+            String docId;
+
+            try {
+                docId = DocumentsContract.getDocumentId(uri);
+            }
+            catch (Exception e) {
+                Log.e("Uri2Path", "getDocumentId() failed", e);
+                return null;
+            }
+
+            Log.d("Uri2Path", "DocumentProvider docId = " + docId);
+
+
+            // ========================================================
+            // RAW DOCUMENT
+            //
+            // Example:
+            //
+            // raw:/storage/emulated/0/Download/AUTOSRT/file.mp4
+            //
+            // ========================================================
+
+            if (docId != null && docId.startsWith("raw:")) {
+
+                String rawPath = docId.substring(4);
+
+                Log.d("Uri2Path", "RAW path = " + rawPath);
+
+                if (rawPath != null && !rawPath.isEmpty()) {
+                    return rawPath;
                 }
-                else {
-                    return null;
+
+                return null;
+            }
+
+
+            // ========================================================
+            // EXTERNAL STORAGE PROVIDER
+            //
+            // Example:
+            //
+            // primary:Download/AUTOSRT/file.mp4
+            //
+            // ========================================================
+
+            if ("com.android.externalstorage.documents".equals(authority)) {
+
+                String[] split = new String[0];
+                if (docId != null) {
+                    split = docId.split(":", 2);
+                }
+
+                Log.d("Uri2Path",
+                        "ExternalStorage split = " + Arrays.toString(split));
+
+                if (split.length == 2) {
+
+                    String fullPath = getPathFromExtSD(split);
+
+                    Log.d("Uri2Path",
+                            "ExternalStorage fullPath = " + fullPath);
+
+                    if (fullPath != null && !fullPath.isEmpty()) {
+                        return fullPath;
+                    }
+                }
+
+                Log.e("Uri2Path",
+                        "Unable to resolve ExternalStorage document");
+
+                return null;
+            }
+
+
+            // ========================================================
+            // DOWNLOADS PROVIDER
+            // ========================================================
+
+            if ("com.android.providers.downloads.documents".equals(authority)) {
+
+                Log.d("Uri2Path",
+                        "DownloadsProvider detected");
+
+                // raw: sudah ditangani di atas.
+                //
+                // Untuk document ID selain raw:, coba resolver/query
+                // melalui ContentResolver.
+
+                try {
+
+                    Cursor cursor = context.getContentResolver().query(
+                            uri,
+                            new String[]{
+                                    MediaStore.Files.FileColumns.DATA
+                            },
+                            null,
+                            null,
+                            null
+                    );
+
+                    if (cursor != null) {
+
+                        try {
+
+                            if (cursor.moveToFirst()) {
+
+                                int index = cursor.getColumnIndex(
+                                        MediaStore.Files.FileColumns.DATA
+                                );
+
+                                if (index >= 0) {
+
+                                    String path = cursor.getString(index);
+
+                                    Log.d("Uri2Path",
+                                            "Downloads DATA = " + path);
+
+                                    if (path != null && !path.isEmpty()) {
+                                        return path;
+                                    }
+                                }
+                            }
+
+                        }
+                        finally {
+                            cursor.close();
+                        }
+                    }
+
+                }
+                catch (Exception e) {
+
+                    Log.e("Uri2Path",
+                            "DownloadsProvider query failed",
+                            e);
+                }
+            }
+        }
+
+
+        // ============================================================
+        // MEDIA PROVIDER / OTHER CONTENT PROVIDER
+        // ============================================================
+
+        Cursor cursor = null;
+
+        try {
+
+            cursor = context.getContentResolver().query(
+                    uri,
+                    new String[]{
+                            MediaStore.Files.FileColumns.DATA
+                    },
+                    null,
+                    null,
+                    null
+            );
+
+            if (cursor != null && cursor.moveToFirst()) {
+
+                int index = cursor.getColumnIndex(
+                        MediaStore.Files.FileColumns.DATA
+                );
+
+                if (index >= 0) {
+
+                    String path = cursor.getString(index);
+
+                    Log.d("Uri2Path",
+                            "Generic DATA = " + path);
+
+                    if (path != null && !path.isEmpty()) {
+                        return path;
+                    }
                 }
             }
 
-            else {
-                if(authority.equals("media")) {
-                    idStr = uri.toString().substring(uri.toString().lastIndexOf('/') + 1);
-                    Log.d("Uri2Path", "media idStr = " + idStr);
-                }
-                else if(authority.startsWith("com.android.providers")) {
-                    idStr = DocumentsContract.getDocumentId(uri).split(":")[1];
-                    Log.d("Uri2Path", "providers idStr = " + idStr);
-                }
+        }
+        catch (Exception e) {
 
-                ContentResolver contentResolver = context.getContentResolver();
-                Cursor cursor = contentResolver.query(MediaStore.Files.getContentUri("external"),
-                        new String[] {MediaStore.Files.FileColumns.DATA},
-                        "_id=?",
-                        new String[]{idStr}, null);
-                if (cursor != null && cursor.getCount()>0 && cursor.moveToFirst()) {
-                    cursor.moveToFirst();
-                    try {
-                        int idx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
-                        Log.d("Uri2Path", "cursor.getString(idx) = " + cursor.getString(idx));
-                        return cursor.getString(idx);
-                    }
-                    catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                    finally {
-                        cursor.close();
-                    }
-                }
+            Log.e("Uri2Path",
+                    "Generic content resolver failed",
+                    e);
+
+        }
+        finally {
+
+            if (cursor != null) {
+                cursor.close();
             }
         }
+
+
+        // ============================================================
+        // LAST RESORT
+        // ============================================================
+
+        Log.e("Uri2Path",
+                "FAILED TO RESOLVE URI TO FILESYSTEM PATH: " + uri);
+
         return null;
     }
 
@@ -2285,7 +2491,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return new File(Uri2Path(getApplicationContext(), savedSrcSubtitleUri));
+            return new File(Objects.requireNonNull(Uri2Path(getApplicationContext(), savedSrcSubtitleUri)));
+            //return new File(Uri2Path(getApplicationContext(), savedSrcSubtitleUri));
         }
         else {
             return new File(savedFolderPath + File.separator + srcSubtitleFileDisplayName);
@@ -2407,7 +2614,8 @@ public class MainActivity extends AppCompatActivity {
 
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return new File(Uri2Path(getApplicationContext(), savedSubtitleEmbeddedUri));
+            return new File(Objects.requireNonNull(Uri2Path(getApplicationContext(), savedSubtitleEmbeddedUri)));
+            //return new File(Uri2Path(getApplicationContext(), savedSubtitleEmbeddedUri));
         }
         else {
             return new File(savedFolderPath + File.separator + SubtitleEmbeddedFileDisplayName);
@@ -3066,35 +3274,126 @@ public class MainActivity extends AppCompatActivity {
 
 
     private boolean isTreeUriPermissionGrantedForDirPathOfFilePath(String filePath) {
-        Log.d("isTreeUriPermissionGrantedForDirPathOfFilePath", "filePath = " + filePath);
-        String dirName = Objects.requireNonNull(new File(filePath).getParentFile()).getName();
-        Log.d("isTreeUriPermissionGrantedForDirPathOfFilePath", "dirName = " + dirName);
+
+        if (filePath == null || filePath.isEmpty()) {
+            Log.e(
+                    "isTreeUriPermissionGrantedForDirPathOfFilePath",
+                    "filePath == null or empty"
+            );
+            return false;
+        }
+
+        File file = new File(filePath);
+        File parent = file.getParentFile();
+
+        if (parent == null) {
+            Log.e(
+                    "isTreeUriPermissionGrantedForDirPathOfFilePath",
+                    "parent == null for: " + filePath
+            );
+            return false;
+        }
+
+        String dirName = parent.getName();
+
         Uri dirUri = getFolderUri(dirName);
 
+        if (dirUri == null) {
+            Log.e(
+                    "isTreeUriPermissionGrantedForDirPathOfFilePath",
+                    "dirUri == null for directory: " + dirName
+            );
+            return false;
+        }
+
         savedTreesUri = loadSavedTreeUrisFromSharedPreference();
-        if (savedTreesUri.size() > 0) {
-            for (int j=0; j<savedTreesUri.size(); j++) {
-                Uri savedTreeUri = Uri.parse(savedTreesUri.get(j).toString());
 
-                Log.d("isTreeUriPermissionGrantedForFilePath", "savedTreeUri = " + savedTreeUri);
-                Log.d("isTreeUriPermissionGrantedForFilePath", "savedTreeUri.getLastPathSegment() = " + savedTreeUri.getLastPathSegment());
-                Log.d("isTreeUriPermissionGrantedForFilePath", "dirUri = " + dirUri);
-                Log.d("isTreeUriPermissionGrantedForFilePath", "dirUri.getLastPathSegment() = " + dirUri.getLastPathSegment());
+        if (savedTreesUri == null
+                || savedTreesUri.size() == 0) {
+            return false;
+        }
 
-                if (savedTreeUri.getLastPathSegment().contains(dirUri.getLastPathSegment())) {
-                    selectedFolderUri = savedTreeUri;
-                    Log.d("isTreeUriPermissionGrantedForDirPathOfFilePath", "selectedFolderUri = " + selectedFolderUri);
-                    Log.d("isTreeUriPermissionGrantedForDirPathOfFilePath", "alreadySaved = true");
-                    return true;
-                }
-                else {
-                    Log.d("isTreeUriPermissionGrantedForDirPathOfFilePath", "alreadySaved = false");
-                }
+        String dirLastPathSegment =
+                dirUri.getLastPathSegment();
+
+        if (dirLastPathSegment == null) {
+            Log.e(
+                    "isTreeUriPermissionGrantedForDirPathOfFilePath",
+                    "dirUri.getLastPathSegment() == null"
+            );
+            return false;
+        }
+
+        for (int j = 0;
+             j < savedTreesUri.size();
+             j++) {
+
+            if (savedTreesUri.get(j) == null) {
+                continue;
+            }
+
+            Uri savedTreeUri =
+                    Uri.parse(
+                            savedTreesUri.get(j).toString()
+                    );
+
+            if (savedTreeUri == null) {
+                continue;
+            }
+
+            String savedLastPathSegment =
+                    savedTreeUri.getLastPathSegment();
+
+            Log.d(
+                    "isTreeUriPermissionGrantedForDirPathOfFilePath",
+                    "savedTreeUri = " + savedTreeUri
+            );
+
+            Log.d(
+                    "isTreeUriPermissionGrantedForDirPathOfFilePath",
+                    "savedLastPathSegment = "
+                            + savedLastPathSegment
+            );
+
+            Log.d(
+                    "isTreeUriPermissionGrantedForDirPathOfFilePath",
+                    "dirUri = " + dirUri
+            );
+
+            Log.d(
+                    "isTreeUriPermissionGrantedForDirPathOfFilePath",
+                    "dirLastPathSegment = "
+                            + dirLastPathSegment
+            );
+
+            if (savedLastPathSegment != null
+                    && savedLastPathSegment.contains(
+                    dirLastPathSegment
+            )) {
+
+                selectedFolderUri = savedTreeUri;
+
+                Log.d(
+                        "isTreeUriPermissionGrantedForDirPathOfFilePath",
+                        "selectedFolderUri = " + selectedFolderUri
+                );
+
+                Log.d(
+                        "isTreeUriPermissionGrantedForDirPathOfFilePath",
+                        "alreadySaved = true"
+                );
+
+                return true;
             }
         }
+
+        Log.d(
+                "isTreeUriPermissionGrantedForDirPathOfFilePath",
+                "alreadySaved = false"
+        );
+
         return false;
     }
-
 
     private void hideProgressBar() {
         runOnUiThread(() -> {

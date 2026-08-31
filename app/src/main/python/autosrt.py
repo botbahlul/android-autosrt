@@ -1055,26 +1055,68 @@ class SpeechRecognizer(object):
 
 
 class SentenceTranslator(object):
-    def __init__(self, src, dst, patience=-1, timeout=30):
+    def __init__(
+        self,
+        src,
+        dst,
+        endpoint_config,
+        patience=-1,
+        timeout=30,
+        error_messages_callback=None
+    ):
         self.src = src
         self.dst = dst
+        self.endpoint_config = endpoint_config
         self.patience = patience
         self.timeout = timeout
 
     def __call__(self, sentence):
+
         try:
-            translated_sentence = []
-            # handle the special case: empty string.
+
             if not sentence:
                 return None
-            translated_sentence = self.GoogleTranslate(sentence, src=self.src, dst=self.dst, timeout=self.timeout)
-            fail_to_translate = translated_sentence[-1] == '\n'
+
+            translated_sentence = self.GoogleTranslate(
+                sentence,
+                src=self.src,
+                dst=self.dst,
+                timeout=self.timeout
+            )
+
+            if translated_sentence is None:
+                return None
+
+            translated_sentence = str(translated_sentence)
+
+            if not translated_sentence:
+                return None
+
+            fail_to_translate = translated_sentence.endswith('\n')
+
+            patience = self.patience
+
             while fail_to_translate and patience:
-                translated_sentence = self.GoogleTranslate(translated_sentence, src=self.src, dst=self.dst, timeout=self.timeout).text
-                if translated_sentence[-1] == '\n':
+
+                translated_sentence = self.GoogleTranslate(
+                    translated_sentence,
+                    src=self.src,
+                    dst=self.dst,
+                    timeout=self.timeout
+                )
+
+                if translated_sentence is None:
+                    return None
+
+                translated_sentence = str(translated_sentence)
+
+                if translated_sentence.endswith('\n'):
+
                     if patience == -1:
                         continue
+
                     patience -= 1
+
                 else:
                     fail_to_translate = False
 
@@ -1082,39 +1124,477 @@ class SentenceTranslator(object):
 
         except Exception as e:
             print(e)
-            return
+            return None
 
     def GoogleTranslate(self, text, src, dst, timeout=30):
-        url = 'https://translate.googleapis.com/translate_a/'
-        params = 'single?client=gtx&sl='+src+'&tl='+dst+'&dt=t&q='+text;
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Referer': 'https://translate.google.com',}
+
+        endpoint_type = self.endpoint_config.get("type")
 
         try:
-            response = requests.get(url+params, headers=headers, timeout=self.timeout)
-            if response.status_code == 200:
-                response_json = response.json()[0]
-                length = len(response_json)
+
+            # ========================================================
+            # ENDPOINT 1
+            # ========================================================
+
+            if endpoint_type == 1:
+
+                url = self.endpoint_config["url"]
+
+                params = {
+                    "client": "gtx",
+                    "sl": src,
+                    "tl": dst,
+                    "dt": "t",
+                    "q": text
+                }
+
+                headers = self.endpoint_config["headers"]
+
+                response = requests.get(
+                    url,
+                    params=params,
+                    headers=headers,
+                    timeout=timeout
+                )
+
+                if response.status_code != 200:
+                    print(
+                        "Google Translate HTTP error: %s"
+                        % response.status_code
+                    )
+                    return None
+
+                try:
+                    data = response.json()
+                except ValueError:
+                    print("Google Translate returned invalid JSON:")
+                    print(response.text[:500])
+                    return None
+
+                if not isinstance(data, list) or not data:
+                    return None
+
+                response_json = data[0]
+
+                if not isinstance(response_json, list):
+                    return None
+
                 translation = ""
-                for i in range(length):
-                    translation = translation + response_json[i][0]
-                return translation
-            return
+
+                for item in response_json:
+
+                    if isinstance(item, list) and len(item) > 0:
+                        if isinstance(item[0], str):
+                            translation += item[0]
+
+                if translation:
+                    return translation
+
+                return None
+
+            # ========================================================
+            # ENDPOINT 2
+            # ========================================================
+
+            elif endpoint_type == 2:
+
+                url = self.endpoint_config["url"]
+
+                params = {
+                    "client": "dict-chrome-ex",
+                    "sl": src,
+                    "tl": dst,
+                    "q": text
+                }
+
+                headers = self.endpoint_config["headers"]
+
+                response = requests.get(
+                    url,
+                    params=params,
+                    headers=headers,
+                    timeout=timeout
+                )
+
+                if response.status_code != 200:
+                    print(
+                        "Google Translate HTTP error: %s"
+                        % response.status_code
+                    )
+                    return None
+
+                try:
+                    data = response.json()
+                except ValueError:
+                    print("Google Translate returned invalid JSON:")
+                    print(response.text[:500])
+                    return None
+
+                if isinstance(data, list) and len(data) > 0:
+
+                    translation = data[0]
+
+                    # Normal response:
+                    # ["Halo"]
+
+                    if isinstance(translation, str):
+                        return translation
+
+                    # Nested response
+
+                    if isinstance(translation, list):
+
+                        result = ""
+
+                        for item in translation:
+
+                            if isinstance(item, str):
+                                result += item
+
+                            elif isinstance(item, list) and len(item) > 0:
+
+                                if isinstance(item[0], str):
+                                    result += item[0]
+
+                        if result:
+                            return result
+
+                print("Unexpected Google Translate response:")
+                print(data)
+
+                return None
+
+            else:
+
+                print("Invalid Google Translate endpoint configuration.")
+                return None
 
         except requests.exceptions.ConnectionError:
-            with httpx.Client() as client:
-                response = client.get(url+params, headers=headers, timeout=self.timeout)
-                if response.status_code == 200:
-                    response_json = response.json()[0]
-                    length = len(response_json)
-                    translation = ""
-                    for i in range(length):
-                        translation = translation + response_json[i][0]
-                    return translation
-                return
+
+            # ========================================================
+            # FALLBACK HTTPX
+            # ========================================================
+
+            try:
+
+                if endpoint_type == 1:
+
+                    url = self.endpoint_config["url"]
+
+                    params = {
+                        "client": "gtx",
+                        "sl": src,
+                        "tl": dst,
+                        "dt": "t",
+                        "q": text
+                    }
+
+                elif endpoint_type == 2:
+
+                    url = self.endpoint_config["url"]
+
+                    params = {
+                        "client": "dict-chrome-ex",
+                        "sl": src,
+                        "tl": dst,
+                        "q": text
+                    }
+
+                else:
+                    return None
+
+                headers = self.endpoint_config["headers"]
+
+                with httpx.Client() as client:
+
+                    response = client.get(
+                        url,
+                        params=params,
+                        headers=headers,
+                        timeout=timeout
+                    )
+
+                if response.status_code != 200:
+                    return None
+
+                try:
+                    data = response.json()
+                except ValueError:
+                    return None
+
+                # Endpoint 1
+
+                if endpoint_type == 1:
+
+                    if isinstance(data, list) and len(data) > 0:
+
+                        response_json = data[0]
+
+                        if isinstance(response_json, list):
+
+                            translation = ""
+
+                            for item in response_json:
+
+                                if (
+                                    isinstance(item, list)
+                                    and len(item) > 0
+                                    and isinstance(item[0], str)
+                                ):
+                                    translation += item[0]
+
+                            if translation:
+                                return translation
+
+                # Endpoint 2
+
+                elif endpoint_type == 2:
+
+                    if isinstance(data, list) and len(data) > 0:
+
+                        translation = data[0]
+
+                        if isinstance(translation, str):
+                            return translation
+
+                        if isinstance(translation, list):
+
+                            result = ""
+
+                            for item in translation:
+
+                                if isinstance(item, str):
+                                    result += item
+
+                                elif (
+                                    isinstance(item, list)
+                                    and len(item) > 0
+                                    and isinstance(item[0], str)
+                                ):
+                                    result += item[0]
+
+                            if result:
+                                return result
+
+                return None
+
+            except Exception as e:
+                print(e)
+                return None
 
         except Exception as e:
             print(e)
-            return
+            return None
+
+
+# ================================================================
+# TEST ENDPOINT
+# ================================================================
+
+def test_translation_endpoint(src, dst):
+
+    """
+    Menguji kedua endpoint Google Translate.
+
+    Return:
+
+        dictionary endpoint aktif
+
+        atau None jika kedua endpoint gagal.
+
+    Struktur:
+
+        {
+            "type": 1 atau 2,
+            "url": "...",
+            "params": {...},
+            "headers": {...}
+        }
+    """
+
+    test_sentence = "Hello"
+
+    #print("")
+    #print("CHECKING GOOGLE TRANSLATE ENDPOINT")
+    #print("=================================-")
+
+    # ============================================================
+    # ENDPOINT 1
+    # ============================================================
+
+    endpoint1 = {
+        "type": 1,
+
+        "url": (
+            "https://translate.googleapis.com/"
+            "translate_a/single"
+        ),
+
+        "params": {
+            "client": "gtx",
+            "sl": src,
+            "tl": dst,
+            "dt": "t",
+            "q": test_sentence
+        },
+
+        "headers": {
+            "User-Agent": (
+                "Mozilla/5.0 "
+                "(Windows NT 10.0; Win64; x64)"
+            ),
+            "Referer": "https://translate.google.com"
+        }
+    }
+
+    try:
+
+        #print("Testing SentenceTranslator endpoint 1...")
+        #print("URL: %s" % endpoint1["url"])
+
+        response = requests.get(
+            endpoint1["url"],
+            params=endpoint1["params"],
+            headers=endpoint1["headers"],
+            timeout=10
+        )
+
+        if response.status_code == 200:
+
+            try:
+                data = response.json()
+            except ValueError:
+                data = None
+
+            translation = None
+
+            if isinstance(data, list) and len(data) > 0:
+
+                response_json = data[0]
+
+                if isinstance(response_json, list):
+
+                    result = ""
+
+                    for item in response_json:
+
+                        if (
+                            isinstance(item, list)
+                            and len(item) > 0
+                            and isinstance(item[0], str)
+                        ):
+                            result += item[0]
+
+                    if result:
+                        translation = result
+
+            if translation:
+                #print("SentenceTranslator endpoint 1 : OK")
+                #print("Translation test result         : %s" % translation)
+                #print("Using endpoint 1")
+                #print("")
+                return endpoint1
+
+        #print("SentenceTranslator endpoint 1 : FAILED " "(HTTP %s)" % response.status_code)
+
+    except Exception as e:
+            print("SentenceTranslator endpoint 1 : FAILED")
+            print("Error: %s" % e)
+
+    # ============================================================
+    # ENDPOINT 2
+    # ============================================================
+
+    endpoint2 = {
+        "type": 2,
+
+        "url": "https://clients5.google.com/translate_a/t",
+
+        "params": {
+            "client": "dict-chrome-ex",
+            "sl": src,
+            "tl": dst,
+            "q": test_sentence
+        },
+
+        "headers": {
+            "User-Agent": (
+                "Mozilla/5.0 "
+                "(Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 "
+                "(KHTML, like Gecko) "
+                "Chrome/139.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json,text/plain,*/*"
+        }
+    }
+
+    try:
+
+        #print("Testing SentenceTranslator endpoint 2...")
+        #print("URL: %s" % endpoint2["url"])
+
+        response = requests.get(
+            endpoint2["url"],
+            params=endpoint2["params"],
+            headers=endpoint2["headers"],
+            timeout=10
+        )
+
+        if response.status_code == 200:
+
+            try:
+                data = response.json()
+            except ValueError:
+                data = None
+
+            translation = None
+
+            if isinstance(data, list) and len(data) > 0:
+
+                first = data[0]
+
+                if isinstance(first, str):
+
+                    translation = first
+
+                elif isinstance(first, list):
+
+                    result = ""
+
+                    for item in first:
+
+                        if isinstance(item, str):
+                            result += item
+
+                        elif (
+                            isinstance(item, list)
+                            and len(item) > 0
+                            and isinstance(item[0], str)
+                        ):
+                            result += item[0]
+
+                    if result:
+                        translation = result
+
+            if translation:
+                #print("SentenceTranslator endpoint 2 : OK")
+                #print("Translation test result         : %s" % translation)
+                #print("Using endpoint 2")
+                #print("")
+                return endpoint2
+
+        #print("SentenceTranslator endpoint 2 : FAILED " "(HTTP %s)" % response.status_code)
+
+    except Exception as e:
+            print("SentenceTranslator endpoint 2 : FAILED")
+            print("Error: %s" % e)
+
+    #print("")
+    #print("ERROR: Both Google Translate endpoints are unavailable.")
+    #print("")
+
+    return None
 
 
 class SubtitleFormatter:
@@ -1852,43 +2332,72 @@ def find_speech_regions(wav_file, frame_width=4096, min_region_size=0.3, max_reg
     return regions
 '''
 
-
-def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_format, embed_src, embed_dst, force_recognize, activity, textview_output_messages, textview_progress, progress_bar, textview_percentage, textview_time):
+def transcribe(src, dst, media_filepath, media_file_display_name,
+               subtitle_format, embed_src, embed_dst, force_recognize,
+               activity, textview_output_messages, textview_progress,
+               progress_bar, textview_percentage, textview_time):
 
     multiprocessing.freeze_support()
 
     print(f"media_filepath = '{media_filepath}'")
 
-    media_file_display_name = os.path.basename(media_filepath).split('/')[-1]
+    media_file_display_name = os.path.basename(media_filepath)
     print(f"media_file_display_name = '{media_file_display_name}'")
 
     base, ext = os.path.splitext(media_filepath)
-    media_file_format = ext[1:]
+    media_file_format = ext[1:].lower()
     print(f"media_file_format = '{media_file_format}'")
 
     files_dir = str(context.getExternalFilesDir(None))
-    subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
+
+    media_name_without_ext = os.path.splitext(media_file_display_name)[0]
+
+    subtitle_folder_name = join(
+        files_dir,
+        media_name_without_ext
+    )
+
     print(f"subtitle_folder_name = '{subtitle_folder_name}'")
+
+    if not os.path.isdir(subtitle_folder_name):
+        os.mkdir(subtitle_folder_name)
 
     media_type = check_file_type(media_filepath)
     print(f"media_type = '{media_type}'")
 
+    # ============================================================
+    # EMBEDDED MEDIA FORMAT
+    # ============================================================
+
     subtitle_embedded_media_file_format = None
     subtitle_embedded_media_file_base_name = None
+
     if media_type == "video":
-        if ext[1:] == "ts":
+
+        if media_file_format == "ts":
             subtitle_embedded_media_file_format = "mp4"
-            subtitle_embedded_media_file_base_name = subtitle_folder_name
         else:
-            subtitle_embedded_media_file_format = ext[1:]
-            subtitle_embedded_media_file_base_name = subtitle_folder_name
-        print(f"subtitle_embedded_media_file_format = '{subtitle_embedded_media_file_format}'")
+            subtitle_embedded_media_file_format = media_file_format
+
+        subtitle_embedded_media_file_base_name = subtitle_folder_name
+
+        print(
+            f"subtitle_embedded_media_file_format = "
+            f"'{subtitle_embedded_media_file_format}'"
+        )
+
+    # ============================================================
+    # VARIABLES
+    # ============================================================
 
     language = Language()
+
     removed_media_filepaths = []
     results = []
 
     pool = multiprocessing.pool.ThreadPool(10)
+
+    wav_filepath = None
 
     print(f"src = {src}")
     print(f"dst = {dst}")
@@ -1896,1207 +2405,2697 @@ def transcribe(src, dst, media_filepath, media_file_display_name, subtitle_forma
     print(f"embed_dst = {embed_dst}")
     print(f"force_recognize = {force_recognize}")
 
-    files_dir = str(context.getExternalFilesDir(None))
+    # ============================================================
+    # DASH CHARACTERS
+    # ============================================================
+
     dashChars_file_display_name = "dashChars"
-    dashChars_filepath = join(files_dir, dashChars_file_display_name)
-    dashChars_file = open(dashChars_filepath, "r")
-    dashChars = dashChars_file.read()
-    dashChars_file.close()
+    dashChars_filepath = join(
+        files_dir,
+        dashChars_file_display_name
+    )
+
+    with open(dashChars_filepath, "r") as dashChars_file:
+        dashChars = dashChars_file.read()
+
+    # ============================================================
+    # CONFIG
+    # ============================================================
 
     Config.disableRedirection()
     Config.resetStatistics()
     Config.enableRedirection()
 
-    activity.runOnUiThread(appendText(textview_output_messages, "Running python script...\n"))
+    # ============================================================
+    # TEST GOOGLE TRANSLATE ENDPOINT ONCE
+    # ============================================================
 
-    # CHECKING SUBTITLE STREAMS
+    endpoint_config = test_translation_endpoint(src, dst)
+
+    if endpoint_config is None:
+        print("ERROR: No working Google Translate endpoint.")
+
+        if pool:
+            pool.close()
+            pool.join()
+            pool = None
+
+        return 1
+
+    print(f"endpoint_config = {endpoint_config}")
+
+    activity.runOnUiThread(
+        appendText(
+            textview_output_messages,
+            "Running python script...\n"
+        )
+    )
+
+    # ============================================================
+    # HELPER FUNCTIONS
+    # ============================================================
+
+    def cancelled():
+
+        if os.path.isfile(cancel_file):
+
+            try:
+                os.remove(cancel_file)
+            except Exception:
+                pass
+
+            return True
+
+        return False
+
+
+    def stop_pool():
+
+        nonlocal pool
+
+        if pool:
+
+            try:
+                pool.terminate()
+            except Exception:
+                pass
+
+            try:
+                pool.close()
+            except Exception:
+                pass
+
+            try:
+                pool.join()
+            except Exception:
+                pass
+
+            pool = None
+
+
+    def close_pool():
+
+        nonlocal pool
+
+        if pool:
+
+            try:
+                pool.close()
+            except Exception:
+                pass
+
+            try:
+                pool.join()
+            except Exception:
+                pass
+
+            pool = None
+
+
+    def show_results():
+
+        if not results:
+            return
+
+        print(
+            f"\nTemporary results for "
+            f"'{media_file_display_name}' :"
+        )
+
+        activity.runOnUiThread(
+            appendText(
+                textview_output_messages,
+                f"{dashChars}\n"
+            )
+        )
+
+        activity.runOnUiThread(
+            appendText(
+                textview_output_messages,
+                f"Temporary results for "
+                f"'{media_file_display_name}' :\n"
+            )
+        )
+
+        for result in results:
+
+            print(result)
+
+            activity.runOnUiThread(
+                appendText(
+                    textview_output_messages,
+                    f"{dashChars}\n"
+                )
+            )
+
+            activity.runOnUiThread(
+                appendText(
+                    textview_output_messages,
+                    f"{result}\n"
+                )
+            )
+
+
+    def append_result(filepath):
+
+        if (
+            filepath
+            and os.path.isfile(filepath)
+            and filepath not in results
+        ):
+            results.append(filepath)
+            return True
+
+        return False
+
+
+    # ============================================================
+    # CHECKING EXISTING SUBTITLE STREAMS
+    #
+    # IMPORTANT:
+    #
+    # This entire section is executed ONLY when
+    # force_recognize == False.
+    #
+    # The original src == dst / src != dst logic is preserved.
+    # ============================================================
+
     if media_type == "video" and force_recognize == False:
 
         src_subtitle_filepath = None
         dst_subtitle_filepath = None
+
         src_embedded_media_filepath = None
         dst_embedded_media_filepath = None
+
         ffmpeg_src_language_code = None
         ffmpeg_dst_language_code = None
 
-        # NO TRANSLATE (src == dst)
-        # CHECKING ffmpeg_src_language_code SUBTITLE STREAM ONLY, IF EXISTS WE PRINT IT AND EXTRACT IT
+        # ========================================================
+        # SRC == DST
+        # ========================================================
+
         if is_same_language(src, dst):
 
-            if os.path.isfile(cancel_file):
-                os.remove(cancel_file)
+            if cancelled():
                 return
 
-            print(f"Checking subtitles streams...")
-            activity.runOnUiThread(appendText(textview_output_messages, f"Checking subtitles streams...\n"))
+            print("Checking subtitles streams...")
+            activity.runOnUiThread(
+                appendText(
+                    textview_output_messages,
+                    "Checking subtitles streams...\n"
+                )
+            )
 
-            ffmpeg_src_language_code = language.ffmpeg_code_of_code[src]
+            ffmpeg_src_language_code = \
+                language.ffmpeg_code_of_code[src]
 
             subtitle_stream_parser = SubtitleStreamParser()
-            subtitle_streams_data = subtitle_stream_parser(media_filepath)
-            print(f"subtitle_streams_data = {subtitle_streams_data}")
+            subtitle_streams_data = \
+                subtitle_stream_parser(media_filepath)
 
-            if os.path.isfile(cancel_file):
-                os.remove(cancel_file)
+            print(
+                f"subtitle_streams_data = "
+                f"{subtitle_streams_data}"
+            )
+
+            if cancelled():
                 return
 
-            if subtitle_streams_data and subtitle_streams_data != []:
+            if subtitle_streams_data:
 
-                src_subtitle_stream_timed_subtitles = subtitle_stream_parser.timed_subtitles_of_language(ffmpeg_src_language_code)
+                src_subtitle_stream_timed_subtitles = \
+                    subtitle_stream_parser.timed_subtitles_of_language(
+                        ffmpeg_src_language_code
+                    )
 
-                if ffmpeg_src_language_code in subtitle_stream_parser.languages():
+                if (
+                    ffmpeg_src_language_code
+                    in subtitle_stream_parser.languages()
+                ):
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
+                    if cancelled():
                         return
 
-                    print(f"Is '{ffmpeg_src_language_code}' subtitle stream exist : Yes")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Is '{ffmpeg_src_language_code}' subtitle stream exist : Yes\n"))
+                    print(
+                        f"Is '{ffmpeg_src_language_code}' "
+                        f"subtitle stream exist : Yes"
+                    )
+
+                    activity.runOnUiThread(
+                        appendText(
+                            textview_output_messages,
+                            f"Is '{ffmpeg_src_language_code}' "
+                            f"subtitle stream exist : Yes\n"
+                        )
+                    )
 
                     subtitle_stream_regions = []
                     subtitle_stream_transcripts = []
+
                     for entry in src_subtitle_stream_timed_subtitles:
+
                         subtitle_stream_regions.append(entry[0])
                         subtitle_stream_transcripts.append(entry[1])
 
-                    files_dir = str(context.getExternalFilesDir(None))
-                    subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
-                    if not os.path.isdir(subtitle_folder_name):
-                        os.mkdir(subtitle_folder_name)
+                    src_subtitle_filepath = join(
+                        subtitle_folder_name,
+                        f"{media_name_without_ext}.{src}.{subtitle_format}"
+                    )
 
-                    src_subtitle_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{src}.{subtitle_format}"
-                    src_subtitle_file_display_name = os.path.basename(src_subtitle_filepath).split('/')[-1]
+                    writer = SubtitleWriter(
+                        subtitle_stream_regions,
+                        subtitle_stream_transcripts,
+                        subtitle_format
+                    )
 
-                    writer = SubtitleWriter(subtitle_stream_regions, subtitle_stream_transcripts, subtitle_format)
                     writer.write(src_subtitle_filepath)
 
-                    if os.path.isfile(src_subtitle_filepath) and src_subtitle_filepath not in results:
-                        results.append(src_subtitle_filepath)
+                    append_result(src_subtitle_filepath)
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
+                    if cancelled():
                         return
 
-                    print(f"Extracting '{ffmpeg_src_language_code}' subtitle stream as : '{src_subtitle_filepath}'")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Extracting '{ffmpeg_src_language_code}' subtitle stream as :\n'{src_subtitle_filepath}'\n"))
+                    print(
+                        f"Extracting "
+                        f"'{ffmpeg_src_language_code}' subtitle stream as : "
+                        f"'{src_subtitle_filepath}'"
+                    )
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        return
+                    activity.runOnUiThread(
+                        appendText(
+                            textview_output_messages,
+                            f"Extracting "
+                            f"'{ffmpeg_src_language_code}' subtitle stream as :\n"
+                            f"'{src_subtitle_filepath}'\n"
+                        )
+                    )
 
-                    # no translate process
-
-                    # print overall results
                     if os.path.isfile(src_subtitle_filepath):
 
-                        print(f"\nTemporary results for '{media_file_display_name}' :")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                        activity.runOnUiThread(appendText(textview_output_messages, f"Temporary results for '{media_file_display_name}' :\n"))
-                        for result in results:
-                            print(f"{result}")
-                            activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                            activity.runOnUiThread(appendText(textview_output_messages, f"{result}\n"))
-                        print("")
-                        #activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
+                        show_results()
 
-                        # remove media_filepath from transcribe processed_list
-                        if force_recognize == False:
-                            if media_filepath not in removed_media_filepaths:
-                                removed_media_filepaths.append(media_filepath)
+                        if media_filepath not in removed_media_filepaths:
+                            removed_media_filepaths.append(
+                                media_filepath
+                            )
 
                     if embed_src == True:
-                        print(f"No need to embed '{ffmpeg_src_language_code}' subtitles because it's already existed")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"No need to embed '{ffmpeg_src_language_code}' subtitles because it's already existed\n"))
+
+                        print(
+                            f"No need to embed "
+                            f"'{ffmpeg_src_language_code}' "
+                            f"subtitles because it's already existed"
+                        )
+
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"No need to embed "
+                                f"'{ffmpeg_src_language_code}' "
+                                f"subtitles because it's already existed\n"
+                            )
+                        )
 
                 else:
-                    print(f"Is '{ffmpeg_src_language_code}' subtitle stream exist : No\n")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Is '{ffmpeg_src_language_code}' subtitle stream exist : No\n"))
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        return
+                    print(
+                        f"Is '{ffmpeg_src_language_code}' "
+                        f"subtitle stream exist : No"
+                    )
 
-            if os.path.isfile(cancel_file):
-                os.remove(cancel_file)
+                    activity.runOnUiThread(
+                        appendText(
+                            textview_output_messages,
+                            f"Is '{ffmpeg_src_language_code}' "
+                            f"subtitle stream exist : No\n"
+                        )
+                    )
+
+            if cancelled():
                 return
 
-        # DO TRANSLATE (src != dst)
-        # CHECKING ffmpeg_src_language_code AND ffmpeg_dst_language_code SUBTITLE STREAMS, IF EXISTS WE PRINT IT AND EXTRACT IT
-        # IF ONE OF THEM (ffmpeg_src_language_code OR ffmpeg_dst_language_code) NOT EXIST, WE TRANSLATE IT,
-        # AND IF BOOLEAN VALUE FOR EMBED (FOR SRC OR DST LANGUAGE) IS TRUE THEN WE EMBED IT
+        # ========================================================
+        # SRC != DST
+        # ========================================================
+
         elif not is_same_language(src, dst):
 
-            if os.path.isfile(cancel_file):
-                os.remove(cancel_file)
+            if cancelled():
                 return
 
-            print(f"Checking subtitles streams...")
-            activity.runOnUiThread(appendText(textview_output_messages, f"Checking subtitles streams...\n"))
+            print("Checking subtitles streams...")
 
-            ffmpeg_src_language_code = language.ffmpeg_code_of_code[src]
-            ffmpeg_dst_language_code = language.ffmpeg_code_of_code[dst]
+            activity.runOnUiThread(
+                appendText(
+                    textview_output_messages,
+                    "Checking subtitles streams...\n"
+                )
+            )
+
+            ffmpeg_src_language_code = \
+                language.ffmpeg_code_of_code[src]
+
+            ffmpeg_dst_language_code = \
+                language.ffmpeg_code_of_code[dst]
 
             subtitle_stream_parser = SubtitleStreamParser()
-            subtitle_streams_data = subtitle_stream_parser(media_filepath)
-            print(f"subtitle_streams_data = {subtitle_streams_data}")
 
-            if os.path.isfile(cancel_file):
-                os.remove(cancel_file)
+            subtitle_streams_data = \
+                subtitle_stream_parser(media_filepath)
+
+            print(
+                f"subtitle_streams_data = "
+                f"{subtitle_streams_data}"
+            )
+
+            if cancelled():
                 return
 
-            if subtitle_streams_data and subtitle_streams_data != []:
+            if subtitle_streams_data:
 
-                if os.path.isfile(cancel_file):
-                    os.remove(cancel_file)
-                    return
+                src_subtitle_stream_timed_subtitles = \
+                    subtitle_stream_parser.timed_subtitles_of_language(
+                        ffmpeg_src_language_code
+                    )
 
-                src_subtitle_stream_timed_subtitles = subtitle_stream_parser.timed_subtitles_of_language(ffmpeg_src_language_code)
-                dst_subtitle_stream_timed_subtitles = subtitle_stream_parser.timed_subtitles_of_language(ffmpeg_dst_language_code)
+                dst_subtitle_stream_timed_subtitles = \
+                    subtitle_stream_parser.timed_subtitles_of_language(
+                        ffmpeg_dst_language_code
+                    )
 
-                # ffmpeg_src_language_code subtitle stream exist, we print it and extract it
-                if ffmpeg_src_language_code in subtitle_stream_parser.languages():
+                subtitle_languages = \
+                    subtitle_stream_parser.languages()
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
+                # ====================================================
+                # SRC EXISTS
+                # ====================================================
+
+                if ffmpeg_src_language_code in subtitle_languages:
+
+                    if cancelled():
                         return
 
-                    print(f"Is '{ffmpeg_src_language_code}' subtitle stream exist : Yes")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Is '{ffmpeg_src_language_code}' subtitle stream exist : Yes\n"))
+                    print(
+                        f"Is '{ffmpeg_src_language_code}' "
+                        f"subtitle stream exist : Yes"
+                    )
+
+                    activity.runOnUiThread(
+                        appendText(
+                            textview_output_messages,
+                            f"Is '{ffmpeg_src_language_code}' "
+                            f"subtitle stream exist : Yes\n"
+                        )
+                    )
 
                     subtitle_stream_regions = []
                     subtitle_stream_transcripts = []
+
                     for entry in src_subtitle_stream_timed_subtitles:
+
                         subtitle_stream_regions.append(entry[0])
                         subtitle_stream_transcripts.append(entry[1])
-                        if os.path.isfile(cancel_file): return
 
-                    files_dir = str(context.getExternalFilesDir(None))
-                    subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
-                    if not os.path.isdir(subtitle_folder_name):
-                        os.mkdir(subtitle_folder_name)
+                        if cancelled():
+                            return
 
-                    src_subtitle_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{src}.{subtitle_format}"
-                    src_subtitle_file_display_name = os.path.basename(src_subtitle_filepath).split('/')[-1]
+                    src_subtitle_filepath = join(
+                        subtitle_folder_name,
+                        f"{media_name_without_ext}.{src}.{subtitle_format}"
+                    )
 
-                    writer = SubtitleWriter(subtitle_stream_regions, subtitle_stream_transcripts, subtitle_format)
+                    writer = SubtitleWriter(
+                        subtitle_stream_regions,
+                        subtitle_stream_transcripts,
+                        subtitle_format
+                    )
+
                     writer.write(src_subtitle_filepath)
 
-                    if os.path.isfile(src_subtitle_filepath) and src_subtitle_filepath not in results:
-                        results.append(src_subtitle_filepath)
+                    append_result(src_subtitle_filepath)
 
-                    print(f"Extracting '{ffmpeg_src_language_code}' subtitle stream as : '{src_subtitle_filepath}'")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Extracting '{ffmpeg_src_language_code}' subtitle stream as :\n'{src_subtitle_filepath}'\n"))
+                    print(
+                        f"Extracting "
+                        f"'{ffmpeg_src_language_code}' subtitle stream as : "
+                        f"'{src_subtitle_filepath}'"
+                    )
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        return
+                    activity.runOnUiThread(
+                        appendText(
+                            textview_output_messages,
+                            f"Extracting "
+                            f"'{ffmpeg_src_language_code}' subtitle stream as :\n"
+                            f"'{src_subtitle_filepath}'\n"
+                        )
+                    )
 
                     if embed_src == True:
-                        print(f"No need to embed '{ffmpeg_src_language_code}' subtitle because it's already existed")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"No need to embed '{ffmpeg_src_language_code}' subtitles because it's already existed\n"))
 
-                # ffmpeg_src_language_code subtitle stream not exist, just print it
+                        print(
+                            f"No need to embed "
+                            f"'{ffmpeg_src_language_code}' "
+                            f"subtitle because it's already existed"
+                        )
+
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"No need to embed "
+                                f"'{ffmpeg_src_language_code}' "
+                                f"subtitles because it's already existed\n"
+                            )
+                        )
+
                 else:
-                    print(f"Is '{ffmpeg_src_language_code}' subtitle stream exist : No")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Is '{ffmpeg_src_language_code}' subtitle stream exist : No\n"))
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
+                    print(
+                        f"Is '{ffmpeg_src_language_code}' "
+                        f"subtitle stream exist : No"
+                    )
+
+                    activity.runOnUiThread(
+                        appendText(
+                            textview_output_messages,
+                            f"Is '{ffmpeg_src_language_code}' "
+                            f"subtitle stream exist : No\n"
+                        )
+                    )
+
+                # ====================================================
+                # DST EXISTS
+                # ====================================================
+
+                if ffmpeg_dst_language_code in subtitle_languages:
+
+                    if cancelled():
                         return
 
-                # ffmpeg_dst_language_code subtitle stream exist, so we print it and extract it
-                if ffmpeg_dst_language_code in subtitle_stream_parser.languages():
+                    print(
+                        f"Is '{ffmpeg_dst_language_code}' "
+                        f"subtitle stream exist : Yes"
+                    )
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        return
-
-                    print(f"Is '{ffmpeg_dst_language_code}' subtitle stream exist : Yes")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Is '{ffmpeg_dst_language_code}' subtitle stream exist : Yes\n"))
+                    activity.runOnUiThread(
+                        appendText(
+                            textview_output_messages,
+                            f"Is '{ffmpeg_dst_language_code}' "
+                            f"subtitle stream exist : Yes\n"
+                        )
+                    )
 
                     subtitle_stream_regions = []
                     subtitle_stream_transcripts = []
+
                     for entry in dst_subtitle_stream_timed_subtitles:
+
                         subtitle_stream_regions.append(entry[0])
                         subtitle_stream_transcripts.append(entry[1])
 
-                        if os.path.isfile(cancel_file):
-                            os.remove(cancel_file)
+                        if cancelled():
                             return
 
-                    files_dir = str(context.getExternalFilesDir(None))
-                    subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
-                    if not os.path.isdir(subtitle_folder_name):
-                        os.mkdir(subtitle_folder_name)
+                    dst_subtitle_filepath = join(
+                        subtitle_folder_name,
+                        f"{media_name_without_ext}.{dst}.{subtitle_format}"
+                    )
 
-                    dst_subtitle_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{dst}.{subtitle_format}"
-                    dst_subtitle_file_display_name = os.path.basename(dst_subtitle_filepath).split('/')[-1]
+                    writer = SubtitleWriter(
+                        subtitle_stream_regions,
+                        subtitle_stream_transcripts,
+                        subtitle_format
+                    )
 
-                    writer = SubtitleWriter(subtitle_stream_regions, subtitle_stream_transcripts, subtitle_format)
                     writer.write(dst_subtitle_filepath)
 
-                    if os.path.isfile(dst_subtitle_filepath) and dst_subtitle_filepath not in results:
-                        results.append(dst_subtitle_filepath)
+                    append_result(dst_subtitle_filepath)
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        return
+                    print(
+                        f"Extracting "
+                        f"'{ffmpeg_dst_language_code}' subtitle stream as : "
+                        f"'{dst_subtitle_filepath}'"
+                    )
 
-                    print(f"Extracting '{ffmpeg_dst_language_code}' subtitle stream as : '{dst_subtitle_filepath}'")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Extracting '{ffmpeg_dst_language_code}' subtitle stream as :\n'{dst_subtitle_filepath}'\n"))
+                    activity.runOnUiThread(
+                        appendText(
+                            textview_output_messages,
+                            f"Extracting "
+                            f"'{ffmpeg_dst_language_code}' subtitle stream as :\n"
+                            f"'{dst_subtitle_filepath}'\n"
+                        )
+                    )
 
                     if embed_dst == True:
-                        print(f"No need to embed '{ffmpeg_dst_language_code}' subtitles because it's already existed")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"No need to embed '{ffmpeg_dst_language_code}' subtitles because it's already existed\n"))
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        return
+                        print(
+                            f"No need to embed "
+                            f"'{ffmpeg_dst_language_code}' "
+                            f"subtitles because it's already existed"
+                        )
 
-                # ffmpeg_dst_language_code subtitle stream not exist, just print it
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"No need to embed "
+                                f"'{ffmpeg_dst_language_code}' "
+                                f"subtitles because it's already existed\n"
+                            )
+                        )
+
                 else:
-                    print(f"Is '{ffmpeg_dst_language_code}' subtitle stream exist : No")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Is '{ffmpeg_dst_language_code}' subtitle stream exist : No\n"))
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        return
+                    print(
+                        f"Is '{ffmpeg_dst_language_code}' "
+                        f"subtitle stream exist : No"
+                    )
 
-                # ffmpeg_src_language_code subtitle stream = not exist,
-                # ffmpeg_dst_language_code subtitle stream = exist
-                # so we translate it from 'dst' to 'src'
-                if ffmpeg_src_language_code not in subtitle_stream_parser.languages() and ffmpeg_dst_language_code in subtitle_stream_parser.languages():
+                    activity.runOnUiThread(
+                        appendText(
+                            textview_output_messages,
+                            f"Is '{ffmpeg_dst_language_code}' "
+                            f"subtitle stream exist : No\n"
+                        )
+                    )
 
-                    if dst_subtitle_stream_timed_subtitles and dst_subtitle_stream_timed_subtitles != []:
+                # ====================================================
+                # SRC NOT EXIST + DST EXISTS
+                #
+                # KEEP ORIGINAL BEHAVIOR:
+                #
+                # dst -> src
+                # ====================================================
 
-                        if os.path.isfile(cancel_file):
-                            os.remove(cancel_file)
+                if (
+                    ffmpeg_src_language_code not in subtitle_languages
+                    and
+                    ffmpeg_dst_language_code in subtitle_languages
+                ):
+
+                    if dst_subtitle_stream_timed_subtitles:
+
+                        if cancelled():
                             return
 
-                        print(f"Translating subtitles from '{dst}' to '{src}'...")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"Translating subtitles from '{dst}' to '{src}'...\n"))
+                        print(
+                            f"Translating subtitles from "
+                            f"'{dst}' to '{src}'..."
+                        )
+
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"Translating subtitles from "
+                                f"'{dst}' to '{src}'...\n"
+                            )
+                        )
 
                         translate_start_time = time.time()
 
-                        transcript_translator = SentenceTranslator(src=dst, dst=src)
-
-                        if os.path.isfile(cancel_file):
-                            os.remove(cancel_file)
-                            return
+                        transcript_translator = SentenceTranslator(
+                            src=dst,
+                            dst=src,
+                            endpoint_config=endpoint_config
+                        )
 
                         translated_subtitle_stream_transcripts = []
 
-                        activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
+                        activity.runOnUiThread(
+                            setVisibility(
+                                textview_progress,
+                                progress_bar,
+                                textview_percentage,
+                                textview_time,
+                                View.VISIBLE
+                            )
+                        )
 
-                        for i, translated_subtitle_stream_transcript in enumerate(pool.imap(transcript_translator, subtitle_stream_transcripts)):
+                        total = len(
+                            dst_subtitle_stream_timed_subtitles
+                        )
 
-                            if os.path.isfile(cancel_file):
-                                if pool:
-                                    pool.terminate()
-                                    pool.close()
-                                    pool.join()
-                                    pool = None
+                        for i, translated in enumerate(
+                            pool.imap(
+                                transcript_translator,
+                                subtitle_stream_transcripts
+                            )
+                        ):
+
+                            if cancelled():
+
+                                stop_pool()
                                 return
 
-                            translated_subtitle_stream_transcripts.append(translated_subtitle_stream_transcript)
+                            translated_subtitle_stream_transcripts.append(
+                                translated
+                            )
 
-                            progress = int(i*100/len(dst_subtitle_stream_timed_subtitles))
+                            progress = int(
+                                i * 100 / total
+                            )
 
-                            pbar(progress, translate_start_time, 100, f"Translating subtitles from '{dst}' to '{src}'", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-                        pbar(100, translate_start_time, 100, f"Translating subtitles from '{dst}' to '{src}'", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+                            pbar(
+                                progress,
+                                translate_start_time,
+                                100,
+                                f"Translating subtitles from "
+                                f"'{dst}' to '{src}'",
+                                activity,
+                                textview_progress,
+                                progress_bar,
+                                textview_percentage,
+                                textview_time
+                            )
+
+                        pbar(
+                            100,
+                            translate_start_time,
+                            100,
+                            f"Translating subtitles from "
+                            f"'{dst}' to '{src}'",
+                            activity,
+                            textview_progress,
+                            progress_bar,
+                            textview_percentage,
+                            textview_time
+                        )
+
                         time.sleep(1)
 
-                        activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.INVISIBLE))
+                        activity.runOnUiThread(
+                            setVisibility(
+                                textview_progress,
+                                progress_bar,
+                                textview_percentage,
+                                textview_time,
+                                View.INVISIBLE
+                            )
+                        )
 
-                        if os.path.isfile(cancel_file):
-                            if pool:
-                                pool.terminate()
-                                pool.close()
-                                pool.join()
-                                pool = None
+                        if cancelled():
                             return
 
-                        print(f"Writing '{src}' subtitles file...")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"Writing '{src}' subtitles file...\n"))
+                        print(
+                            f"Writing '{src}' subtitles file..."
+                        )
 
-                        files_dir = str(context.getExternalFilesDir(None))
-                        subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
-                        if not os.path.isdir(subtitle_folder_name):
-                            os.mkdir(subtitle_folder_name)
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"Writing '{src}' subtitles file...\n"
+                            )
+                        )
 
-                        src_subtitle_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{src}.{subtitle_format}"
-                        src_subtitle_file_display_name = os.path.basename(src_subtitle_filepath).split('/')[-1]
+                        src_subtitle_filepath = join(
+                            subtitle_folder_name,
+                            f"{media_name_without_ext}.{src}.{subtitle_format}"
+                        )
 
-                        translation_writer = SubtitleWriter(subtitle_stream_regions, translated_subtitle_stream_transcripts, subtitle_format)
-                        translation_writer.write(src_subtitle_filepath)
+                        translation_writer = SubtitleWriter(
+                            subtitle_stream_regions,
+                            translated_subtitle_stream_transcripts,
+                            subtitle_format
+                        )
 
-                        if os.path.isfile(src_subtitle_filepath) and src_subtitle_filepath not in results:
-                            results.append(src_subtitle_filepath)
+                        translation_writer.write(
+                            src_subtitle_filepath
+                        )
 
-                        if os.path.isfile(cancel_file):
-                            if pool:
-                                pool.terminate()
-                                pool.close()
-                                pool.join()
-                                pool = None
-                            return
+                        append_result(src_subtitle_filepath)
 
-                        print(f"Temporary '{src}' subtitles file saved as : '{src_subtitle_filepath}'")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"Temporary '{src}' subtitles file saved as :\n'{src_subtitle_filepath}'\n"))
+                        print(
+                            f"Temporary '{src}' subtitles file saved as : "
+                            f"'{src_subtitle_filepath}'"
+                        )
 
-                        # if embed_src is True then we embed that translated srt (from dst to src) above into media_filepath
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"Temporary '{src}' subtitles file saved as :\n"
+                                f"'{src_subtitle_filepath}'\n"
+                            )
+                        )
+
+                        # --------------------------------------------
+                        # EMBED SRC
+                        # --------------------------------------------
+
                         if embed_src == True:
 
-                            if os.path.isfile(cancel_file):
-                                if pool:
-                                    pool.terminate()
-                                    pool.close()
-                                    pool.join()
-                                    pool = None
-                                return
+                            ffmpeg_src_language_code = \
+                                language.ffmpeg_code_of_code[src]
 
-                            ffmpeg_src_language_code = language.ffmpeg_code_of_code[src]
+                            src_tmp_embedded_media_filepath = (
+                                f"{subtitle_embedded_media_file_base_name}."
+                                f"{ffmpeg_src_language_code}."
+                                f"tmp.embedded."
+                                f"{subtitle_embedded_media_file_format}"
+                            )
 
-                            src_tmp_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_src_language_code}.tmp.embedded.{subtitle_embedded_media_file_format}"
-                            src_tmp_embedded_media_file_display_name = os.path.basename(src_tmp_embedded_media_filepath).split('/')[-1]
-
-                            src_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_src_language_code}.embedded.{subtitle_embedded_media_file_format}"
-                            src_embedded_media_file_display_name = os.path.basename(src_embedded_media_filepath).split('/')[-1]
-
-                            if os.path.isfile(cancel_file):
-                                if pool:
-                                    pool.terminate()
-                                    pool.close()
-                                    pool.join()
-                                    pool = None
-                                return
+                            src_embedded_media_filepath = (
+                                f"{subtitle_embedded_media_file_base_name}."
+                                f"{ffmpeg_src_language_code}."
+                                f"embedded."
+                                f"{subtitle_embedded_media_file_format}"
+                            )
 
                             try:
-                                activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
-                                print(f"Embedding '{ffmpeg_src_language_code}' subtitles...")
-                                activity.runOnUiThread(appendText(textview_output_messages, f"Embedding '{ffmpeg_src_language_code}' subtitles...\n"))
+
+                                activity.runOnUiThread(
+                                    setVisibility(
+                                        textview_progress,
+                                        progress_bar,
+                                        textview_percentage,
+                                        textview_time,
+                                        View.VISIBLE
+                                    )
+                                )
+
+                                print(
+                                    f"Embedding "
+                                    f"'{ffmpeg_src_language_code}' subtitles..."
+                                )
+
+                                activity.runOnUiThread(
+                                    appendText(
+                                        textview_output_messages,
+                                        f"Embedding "
+                                        f"'{ffmpeg_src_language_code}' subtitles...\n"
+                                    )
+                                )
+
                                 embed_src_start_time = time.time()
-                                pbar(0, embed_src_start_time, 100, f"Embedding '{ffmpeg_src_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+
+                                pbar(
+                                    0,
+                                    embed_src_start_time,
+                                    100,
+                                    f"Embedding "
+                                    f"'{ffmpeg_src_language_code}' subtitles",
+                                    activity,
+                                    textview_progress,
+                                    progress_bar,
+                                    textview_percentage,
+                                    textview_time
+                                )
+
                                 Config.enableRedirection()
 
-                                subtitle_embedder = MediaSubtitleEmbedder(subtitle_path=src_subtitle_filepath, language=ffmpeg_src_language_code, output_path=src_tmp_embedded_media_filepath, start_time=embed_src_start_time, activity=activity, textview_progress=textview_progress, progress_bar=progress_bar, textview_percentage=textview_percentage, textview_time=textview_time)
-                                src_tmp_output = subtitle_embedder(media_filepath)
+                                subtitle_embedder = MediaSubtitleEmbedder(
+                                    subtitle_path=src_subtitle_filepath,
+                                    language=ffmpeg_src_language_code,
+                                    output_path=src_tmp_embedded_media_filepath,
+                                    start_time=embed_src_start_time,
+                                    activity=activity,
+                                    textview_progress=textview_progress,
+                                    progress_bar=progress_bar,
+                                    textview_percentage=textview_percentage,
+                                    textview_time=textview_time
+                                )
+
+                                src_tmp_output = subtitle_embedder(
+                                    media_filepath
+                                )
 
                                 Config.disableRedirection()
-                                pbar(100, embed_src_start_time, 100, f"Embedding '{ffmpeg_src_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-                                time.sleep(1)
-                                activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.INVISIBLE))
+
+                                pbar(
+                                    100,
+                                    embed_src_start_time,
+                                    100,
+                                    f"Embedding "
+                                    f"'{ffmpeg_src_language_code}' subtitles",
+                                    activity,
+                                    textview_progress,
+                                    progress_bar,
+                                    textview_percentage,
+                                    textview_time
+                                )
+
+                                if os.path.isfile(src_tmp_output):
+
+                                    shutil.copy(
+                                        src_tmp_output,
+                                        src_embedded_media_filepath
+                                    )
+
+                                    os.remove(src_tmp_output)
+
+                                    append_result(
+                                        src_embedded_media_filepath
+                                    )
+
+                                if os.path.isfile(
+                                    src_embedded_media_filepath
+                                ):
+
+                                    activity.runOnUiThread(
+                                        appendText(
+                                            textview_output_messages,
+                                            f"'{ffmpeg_src_language_code}' "
+                                            f"subtitles embedded media file saved as :\n"
+                                            f"'{src_embedded_media_filepath}'\n"
+                                        )
+                                    )
 
                             except Exception as e:
+
+                                Config.disableRedirection()
+
                                 print(e)
                                 return
 
-                            if os.path.isfile(cancel_file):
-                                if pool:
-                                    pool.terminate()
-                                    pool.close()
-                                    pool.join()
-                                    pool = None
-                                return
-
-                            if os.path.isfile(src_tmp_output):
-                                shutil.copy(src_tmp_output, src_embedded_media_filepath)
-                                os.remove(src_tmp_output)
-
-                                if src_embedded_media_filepath not in results:
-                                    results.append(src_embedded_media_filepath)
-
-                            if os.path.isfile(src_embedded_media_filepath):
-                                print(f"'{ffmpeg_src_language_code}' subtitles embedded media file saved as : '{src_embedded_media_filepath}'")
-                                activity.runOnUiThread(appendText(textview_output_messages, f"'{ffmpeg_src_language_code}' subtitles embedded media file saved as :\n'{src_embedded_media_filepath}'\n"))
-
-                            else:
-                                print("Unknown error")
-                                activity.runOnUiThread(appendText(textview_output_messages, "Unknown error\n"))
-
-                        # if args.embed_dst is True we can't embed it because dst subtitle stream already exist
                         if embed_dst == True:
-                            print(f"No need to embed '{ffmpeg_dst_language_code}' subtitles because it's already existed")
-                            activity.runOnUiThread(appendText(textview_output_messages, f"No need to embed '{ffmpeg_dst_language_code}' subtitles because it's already existed\n"))
 
-                        if os.path.isfile(cancel_file):
-                            if pool:
-                                pool.terminate()
-                                pool.close()
-                                pool.join()
-                                pool = None
+                            print(
+                                f"No need to embed "
+                                f"'{ffmpeg_dst_language_code}' "
+                                f"subtitles because it's already existed"
+                            )
+
+                            activity.runOnUiThread(
+                                appendText(
+                                    textview_output_messages,
+                                    f"No need to embed "
+                                    f"'{ffmpeg_dst_language_code}' "
+                                    f"subtitles because it's already existed\n"
+                                )
+                            )
+
+                        if media_filepath not in removed_media_filepaths:
+                            removed_media_filepaths.append(
+                                media_filepath
+                            )
+
+                # ====================================================
+                # SRC EXISTS + DST NOT EXIST
+                #
+                # KEEP ORIGINAL BEHAVIOR:
+                #
+                # src -> dst
+                # ====================================================
+
+                elif (
+                    ffmpeg_src_language_code in subtitle_languages
+                    and
+                    ffmpeg_dst_language_code not in subtitle_languages
+                ):
+
+                    if src_subtitle_stream_timed_subtitles:
+
+                        if cancelled():
                             return
 
-                        if force_recognize == False:
-                            if media_filepath not in removed_media_filepaths:
-                                removed_media_filepaths.append(media_filepath)
+                        print(
+                            f"Translating subtitles from "
+                            f"'{src}' to '{dst}'..."
+                        )
 
-
-                # ffmpeg_src_language_code subtitle stream = exist,
-                # ffmpeg_dst_language_code subtitle stream = not exist
-                # so we translate it from 'src' to 'dst'
-                elif ffmpeg_src_language_code in subtitle_stream_parser.languages() and ffmpeg_dst_language_code not in subtitle_stream_parser.languages():
-
-                    if src_subtitle_stream_timed_subtitles and src_subtitle_stream_timed_subtitles != []:
-
-                        if os.path.isfile(cancel_file):
-                            os.remove(cancel_file)
-                            return
-
-                        print(f"Translating subtitles from '{src}' to '{dst}'...")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"Translating subtitles from '{src}' to '{dst}'...\n"))
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"Translating subtitles from "
+                                f"'{src}' to '{dst}'...\n"
+                            )
+                        )
 
                         translate_start_time = time.time()
 
-                        transcript_translator = SentenceTranslator(src=src, dst=dst)
-
-                        if os.path.isfile(cancel_file):
-                            os.remove(cancel_file)
-                            return
+                        transcript_translator = SentenceTranslator(
+                            src=src,
+                            dst=dst,
+                            endpoint_config=endpoint_config
+                        )
 
                         translated_subtitle_stream_transcripts = []
 
-                        activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
+                        activity.runOnUiThread(
+                            setVisibility(
+                                textview_progress,
+                                progress_bar,
+                                textview_percentage,
+                                textview_time,
+                                View.VISIBLE
+                            )
+                        )
 
-                        for i, translated_subtitle_stream_transcript in enumerate(pool.imap(transcript_translator, subtitle_stream_transcripts)):
+                        total = len(
+                            src_subtitle_stream_timed_subtitles
+                        )
 
-                            if os.path.isfile(cancel_file):
-                                if pool:
-                                    pool.terminate()
-                                    pool.close()
-                                    pool.join()
-                                    pool = None
+                        for i, translated in enumerate(
+                            pool.imap(
+                                transcript_translator,
+                                subtitle_stream_transcripts
+                            )
+                        ):
+
+                            if cancelled():
+
+                                stop_pool()
                                 return
 
-                            translated_subtitle_stream_transcripts.append(translated_subtitle_stream_transcript)
+                            translated_subtitle_stream_transcripts.append(
+                                translated
+                            )
 
-                            progress = int(i*100/len(src_subtitle_stream_timed_subtitles))
+                            progress = int(
+                                i * 100 / total
+                            )
 
-                            pbar(progress, translate_start_time, 100, f"Translating subtitles from '{src}' to '{dst}'", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-                        pbar(100, translate_start_time, 100, f"Translating subtitles from '{src}' to '{dst}'", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+                            pbar(
+                                progress,
+                                translate_start_time,
+                                100,
+                                f"Translating subtitles from "
+                                f"'{src}' to '{dst}'",
+                                activity,
+                                textview_progress,
+                                progress_bar,
+                                textview_percentage,
+                                textview_time
+                            )
+
+                        pbar(
+                            100,
+                            translate_start_time,
+                            100,
+                            f"Translating subtitles from "
+                            f"'{src}' to '{dst}'",
+                            activity,
+                            textview_progress,
+                            progress_bar,
+                            textview_percentage,
+                            textview_time
+                        )
+
                         time.sleep(1)
 
-                        activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.INVISIBLE))
+                        activity.runOnUiThread(
+                            setVisibility(
+                                textview_progress,
+                                progress_bar,
+                                textview_percentage,
+                                textview_time,
+                                View.INVISIBLE
+                            )
+                        )
 
-                        if os.path.isfile(cancel_file):
-                            if pool:
-                                pool.terminate()
-                                pool.close()
-                                pool.join()
-                                pool = None
+                        if cancelled():
                             return
 
-                        print(f"Writing '{dst}' subtitles file...")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"Writing '{dst}' subtitles file...\n"))
+                        dst_subtitle_filepath = join(
+                            subtitle_folder_name,
+                            f"{media_name_without_ext}.{dst}.{subtitle_format}"
+                        )
 
-                        files_dir = str(context.getExternalFilesDir(None))
-                        subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
-                        if not os.path.isdir(subtitle_folder_name):
-                            os.mkdir(subtitle_folder_name)
+                        translation_writer = SubtitleWriter(
+                            subtitle_stream_regions,
+                            translated_subtitle_stream_transcripts,
+                            subtitle_format
+                        )
 
-                        dst_subtitle_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{dst}.{subtitle_format}"
-                        dst_subtitle_file_display_name = os.path.basename(dst_subtitle_filepath).split('/')[-1]
+                        translation_writer.write(
+                            dst_subtitle_filepath
+                        )
 
-                        translation_writer = SubtitleWriter(subtitle_stream_regions, translated_subtitle_stream_transcripts, subtitle_format)
-                        translation_writer.write(dst_subtitle_filepath)
+                        append_result(dst_subtitle_filepath)
 
-                        if os.path.isfile(dst_subtitle_filepath) and dst_subtitle_filepath not in results:
-                            results.append(dst_subtitle_filepath)
+                        print(
+                            f"Temporary '{dst}' subtitles file saved as : "
+                            f"'{dst_subtitle_filepath}'"
+                        )
 
-                        print(f"Temporary '{dst}' subtitles file saved as : '{dst_subtitle_filepath}'")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"Temporary '{dst}' subtitles file saved as :\n'{dst_subtitle_filepath}'\n"))
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"Temporary '{dst}' subtitles file saved as :\n"
+                                f"'{dst_subtitle_filepath}'\n"
+                            )
+                        )
 
-                        if force_recognize == False:
-                            if media_filepath not in removed_media_filepaths:
-                                removed_media_filepaths.append(media_filepath)
-
-                        # if args.embed_src is True we can't embed it because src subtitle stream already exist
                         if embed_src == True:
-                            print(f"No need to embed '{ffmpeg_src_language_code}' subtitles because it's already existed")
-                            activity.runOnUiThread(appendText(textview_output_messages, f"No need to embed '{ffmpeg_src_language_code}' subtitles because it's already existed\n"))
 
-                        # if embed_dst is True we embed the translated srt (from src to dst) above into media_filepath
-                        if embed_dst == True and src_subtitle_stream_timed_subtitles and src_subtitle_stream_timed_subtitles != []:
+                            print(
+                                f"No need to embed "
+                                f"'{ffmpeg_src_language_code}' "
+                                f"subtitles because it's already existed"
+                            )
 
-                            if os.path.isfile(cancel_file):
-                                if pool:
-                                    pool.terminate()
-                                    pool.close()
-                                    pool.join()
-                                    pool = None
-                                return
+                            activity.runOnUiThread(
+                                appendText(
+                                    textview_output_messages,
+                                    f"No need to embed "
+                                    f"'{ffmpeg_src_language_code}' "
+                                    f"subtitles because it's already existed\n"
+                                )
+                            )
 
-                            ffmpeg_dst_language_code = language.ffmpeg_code_of_code[dst]
+                        # --------------------------------------------
+                        # EMBED DST
+                        # --------------------------------------------
 
-                            dst_tmp_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_dst_language_code}.tmp.embedded.{subtitle_embedded_media_file_format}"
-                            dst_tmp_embedded_media_file_display_name = os.path.basename(dst_tmp_embedded_media_filepath).split('/')[-1]
+                        if embed_dst == True:
 
-                            dst_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_dst_language_code}.embedded.{subtitle_embedded_media_file_format}"
-                            dst_embedded_media_file_display_name = os.path.basename(dst_embedded_media_filepath).split('/')[-1]
+                            ffmpeg_dst_language_code = \
+                                language.ffmpeg_code_of_code[dst]
 
-                            if os.path.isfile(cancel_file):
-                                if pool:
-                                    pool.terminate()
-                                    pool.close()
-                                    pool.join()
-                                    pool = None
-                                return
+                            dst_tmp_embedded_media_filepath = (
+                                f"{subtitle_embedded_media_file_base_name}."
+                                f"{ffmpeg_dst_language_code}."
+                                f"tmp.embedded."
+                                f"{subtitle_embedded_media_file_format}"
+                            )
+
+                            dst_embedded_media_filepath = (
+                                f"{subtitle_embedded_media_file_base_name}."
+                                f"{ffmpeg_dst_language_code}."
+                                f"embedded."
+                                f"{subtitle_embedded_media_file_format}"
+                            )
 
                             try:
-                                activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
-                                print(f"Embedding '{ffmpeg_dst_language_code}' subtitles...")
-                                activity.runOnUiThread(appendText(textview_output_messages, f"Embedding '{ffmpeg_dst_language_code}' subtitles...\n"))
+
+                                activity.runOnUiThread(
+                                    setVisibility(
+                                        textview_progress,
+                                        progress_bar,
+                                        textview_percentage,
+                                        textview_time,
+                                        View.VISIBLE
+                                    )
+                                )
+
+                                print(
+                                    f"Embedding "
+                                    f"'{ffmpeg_dst_language_code}' subtitles..."
+                                )
+
+                                activity.runOnUiThread(
+                                    appendText(
+                                        textview_output_messages,
+                                        f"Embedding "
+                                        f"'{ffmpeg_dst_language_code}' subtitles...\n"
+                                    )
+                                )
+
                                 embed_dst_start_time = time.time()
-                                pbar(0, embed_dst_start_time, 100, f"Embedding '{ffmpeg_dst_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+
+                                pbar(
+                                    0,
+                                    embed_dst_start_time,
+                                    100,
+                                    f"Embedding "
+                                    f"'{ffmpeg_dst_language_code}' subtitles",
+                                    activity,
+                                    textview_progress,
+                                    progress_bar,
+                                    textview_percentage,
+                                    textview_time
+                                )
+
                                 Config.enableRedirection()
 
-                                subtitle_embedder = MediaSubtitleEmbedder(subtitle_path=dst_subtitle_filepath, language=ffmpeg_dst_language_code, output_path=dst_tmp_embedded_media_filepath, start_time=embed_dst_start_time, activity=activity, textview_progress=textview_progress, progress_bar=progress_bar, textview_percentage=textview_percentage, textview_time=textview_time)
-                                dst_tmp_output = subtitle_embedder(media_filepath)
+                                subtitle_embedder = MediaSubtitleEmbedder(
+                                    subtitle_path=dst_subtitle_filepath,
+                                    language=ffmpeg_dst_language_code,
+                                    output_path=dst_tmp_embedded_media_filepath,
+                                    start_time=embed_dst_start_time,
+                                    activity=activity,
+                                    textview_progress=textview_progress,
+                                    progress_bar=progress_bar,
+                                    textview_percentage=textview_percentage,
+                                    textview_time=textview_time
+                                )
+
+                                dst_tmp_output = subtitle_embedder(
+                                    media_filepath
+                                )
 
                                 Config.disableRedirection()
-                                pbar(100, embed_dst_start_time, 100, f"Embedding '{ffmpeg_dst_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-                                time.sleep(1)
-                                activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.INVISIBLE))
+
+                                pbar(
+                                    100,
+                                    embed_dst_start_time,
+                                    100,
+                                    f"Embedding "
+                                    f"'{ffmpeg_dst_language_code}' subtitles",
+                                    activity,
+                                    textview_progress,
+                                    progress_bar,
+                                    textview_percentage,
+                                    textview_time
+                                )
+
+                                if os.path.isfile(dst_tmp_output):
+
+                                    shutil.copy(
+                                        dst_tmp_output,
+                                        dst_embedded_media_filepath
+                                    )
+
+                                    os.remove(dst_tmp_output)
+
+                                    append_result(
+                                        dst_embedded_media_filepath
+                                    )
+
+                                if os.path.isfile(
+                                    dst_embedded_media_filepath
+                                ):
+
+                                    activity.runOnUiThread(
+                                        appendText(
+                                            textview_output_messages,
+                                            f"'{ffmpeg_dst_language_code}' "
+                                            f"subtitles embedded media file saved as :\n"
+                                            f"'{dst_embedded_media_filepath}'\n"
+                                        )
+                                    )
 
                             except Exception as e:
+
+                                Config.disableRedirection()
+
                                 print(e)
                                 return
 
-                            if os.path.isfile(cancel_file):
-                                if pool:
-                                    pool.terminate()
-                                    pool.close()
-                                    pool.join()
-                                    pool = None
-                                return
+                        if media_filepath not in removed_media_filepaths:
+                            removed_media_filepaths.append(
+                                media_filepath
+                            )
 
-                            if os.path.isfile(dst_tmp_output):
-                                shutil.copy(dst_tmp_output, dst_embedded_media_filepath)
-                                os.remove(dst_tmp_output)
-
-                            if os.path.isfile(dst_embedded_media_filepath):
-                                print(f"'{ffmpeg_dst_language_code}' subtitles embedded media file saved as : '{dst_embedded_media_filepath}'")
-                                activity.runOnUiThread(appendText(textview_output_messages, f"'{ffmpeg_dst_language_code}' subtitles embedded media file saved as :\n'{dst_embedded_media_filepath}'\n"))
-
-                                if dst_embedded_media_filepath not in results:
-                                    results.append(dst_embedded_media_filepath)
-
-                            else:
-                                print("Unknown error")
-                                activity.runOnUiThread(appendText(textview_output_messages, "Unknown error\n"))
-
-                if os.path.isfile(cancel_file):
-                    if pool:
-                        pool.terminate()
-                        pool.close()
-                        pool.join()
-                        pool = None
+                if cancelled():
                     return
 
-                # print overall results
-                if (src_subtitle_filepath and os.path.isfile(src_subtitle_filepath)) or (dst_subtitle_filepath and os.path.isfile(dst_subtitle_filepath)):
-                    print(f"\nTemporary results for '{media_file_display_name}' :")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Temporary results for '{media_file_display_name}' :\n"))
-                    for result in results:
-                        print(f"{result}")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                        activity.runOnUiThread(appendText(textview_output_messages, f"{result}\n"))
-                    #activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
+                if (
+                    src_subtitle_filepath
+                    and os.path.isfile(src_subtitle_filepath)
+                ) or (
+                    dst_subtitle_filepath
+                    and os.path.isfile(dst_subtitle_filepath)
+                ):
 
-                    if force_recognize == False:
-                        if media_filepath not in removed_media_filepaths:
-                            removed_media_filepaths.append(media_filepath)
+                    show_results()
 
-            if os.path.isfile(cancel_file):
-                os.remove(cancel_file)
-                return
-                if pool:
-                    pool.terminate()
-                    pool.close()
-                    pool.join()
-                    pool = None
-                return
+    # ============================================================
+    # FORCE RECOGNIZE
+    #
+    # IMPORTANT:
+    #
+    # We do NOT create a second transcription implementation.
+    #
+    # If force_recognize == True:
+    #     remove embedded subtitle streams first
+    #
+    # Then the same TRANSCRIBE PART below is used.
+    # ============================================================
 
-    elif media_type == "video" and force_recognize == True:
-    #else:
-        print("media_type == 'video' and force_recognize == True")
+    if media_type == "video" and force_recognize == True:
+
+        print(
+            "media_type == 'video' and "
+            "force_recognize == True"
+        )
+
         print(f"media_type = {media_type}")
         print(f"force_recognize = {force_recognize}")
 
-        base, ext = os.path.splitext(media_filepath)
-        force_recognize_media_file_format = None
-        if ext[1:] == "ts":
-            force_recognize_media_file_format = "mp4"
-        else:
-            force_recognize_media_file_format = ext[1:]
-        print(f"checking if has_subtitles : force_recognize_media_file_format = {force_recognize_media_file_format}")
+        force_recognize_media_file_format = media_file_format
 
-        files_dir = str(context.getExternalFilesDir(None))
-        subtitle_folder_name = join(files_dir, media_file_display_name[:-len(force_recognize_media_file_format)-1])
-        if not os.path.isdir(subtitle_folder_name):
-            os.mkdir(subtitle_folder_name)
+        if media_file_format == "ts":
+            force_recognize_media_file_format = "mp4"
+
+        print(
+            "checking if has_subtitles : "
+            f"force_recognize_media_file_format = "
+            f"{force_recognize_media_file_format}"
+        )
 
         subtitle_stream_parser = SubtitleStreamParser()
-        subtitle_streams_data = subtitle_stream_parser(media_filepath)
-        print(f"subtitle_streams_data = {subtitle_streams_data}")
 
-        if subtitle_streams_data and subtitle_streams_data != []:
-        #if has_subtitles(media_filepath):
-            tmp_force_recognize_media_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(force_recognize_media_file_format)-1]}.tmp.force.recognize.{force_recognize_media_file_format}"
+        subtitle_streams_data = \
+            subtitle_stream_parser(media_filepath)
 
-            activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
+        print(
+            f"subtitle_streams_data = "
+            f"{subtitle_streams_data}"
+        )
+
+        if cancelled():
+            return
+
+        if subtitle_streams_data:
+
+            tmp_force_recognize_media_filepath = (
+                f"{subtitle_folder_name}"
+                f"{os.sep}"
+                f"{media_name_without_ext}"
+                f".tmp.force.recognize."
+                f"{force_recognize_media_file_format}"
+            )
+
+            activity.runOnUiThread(
+                setVisibility(
+                    textview_progress,
+                    progress_bar,
+                    textview_percentage,
+                    textview_time,
+                    View.VISIBLE
+                )
+            )
+
             print("Removing subtitle streams...")
-            activity.runOnUiThread(appendText(textview_output_messages, "Removing subtitle streams...\n"))
-            remove_subtitle_streams_start_time = time.time()
-            pbar(0, remove_subtitle_streams_start_time, 100, "Removing subtitle streams", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-            Config.enableRedirection()
-        
-            subtitle_remover = MediaSubtitleRemover(output_path=tmp_force_recognize_media_filepath, start_time=remove_subtitle_streams_start_time, activity=activity, textview_progress=textview_progress, progress_bar=progress_bar, textview_percentage=textview_percentage, textview_time=textview_time)
-            tmp_output = subtitle_remover(media_filepath)
 
-            Config.disableRedirection()
-            pbar(100, remove_subtitle_streams_start_time, 100, "Removing subtitle streams", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+            activity.runOnUiThread(
+                appendText(
+                    textview_output_messages,
+                    "Removing subtitle streams...\n"
+                )
+            )
+
+            remove_subtitle_streams_start_time = time.time()
+
+            pbar(
+                0,
+                remove_subtitle_streams_start_time,
+                100,
+                "Removing subtitle streams",
+                activity,
+                textview_progress,
+                progress_bar,
+                textview_percentage,
+                textview_time
+            )
+
+            try:
+
+                Config.enableRedirection()
+
+                subtitle_remover = MediaSubtitleRemover(
+                    output_path=tmp_force_recognize_media_filepath,
+                    start_time=remove_subtitle_streams_start_time,
+                    activity=activity,
+                    textview_progress=textview_progress,
+                    progress_bar=progress_bar,
+                    textview_percentage=textview_percentage,
+                    textview_time=textview_time
+                )
+
+                tmp_output = subtitle_remover(
+                    media_filepath
+                )
+
+            finally:
+
+                Config.disableRedirection()
+
+            pbar(
+                100,
+                remove_subtitle_streams_start_time,
+                100,
+                "Removing subtitle streams",
+                activity,
+                textview_progress,
+                progress_bar,
+                textview_percentage,
+                textview_time
+            )
+
             time.sleep(1)
 
-            print(f"Subtitle streams removed")
-            activity.runOnUiThread(appendText(textview_output_messages, "Subtitle streams removed\n"))
-            activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.INVISIBLE))
+            print("Subtitle streams removed")
 
-            if os.path.isfile(tmp_output):
-                shutil.copy(tmp_output, media_filepath)
-                os.remove(tmp_output)
+            activity.runOnUiThread(
+                appendText(
+                    textview_output_messages,
+                    "Subtitle streams removed\n"
+                )
+            )
+
+            activity.runOnUiThread(
+                setVisibility(
+                    textview_progress,
+                    progress_bar,
+                    textview_percentage,
+                    textview_time,
+                    View.INVISIBLE
+                )
+            )
+
+            #if tmp_output and os.path.isfile(tmp_output):
+            #    shutil.copy(tmp_output, media_filepath)
+            #    os.remove(tmp_output)
+            if tmp_output and os.path.isfile(tmp_output):
+                # Jangan overwrite file asli di SD card (Permission denied).
+                # Gunakan file temp yang writable untuk proses transcribe selanjutnya.
+                media_filepath = tmp_output
+                print(f"Using temporary media without subtitles: {media_filepath}")
 
 
+    # ============================================================
     # TRANSCRIBE PART
-
-    #print(f"removed_media_filepaths = {removed_media_filepaths}")
-    #print(f"media_filepath not in removed_media_filepaths = {media_filepath not in removed_media_filepaths }")
+    #
+    # This is shared by:
+    #
+    # force_recognize == False
+    # force_recognize == True
+    #
+    # ============================================================
 
     if media_filepath not in removed_media_filepaths:
 
-        if os.path.isfile(cancel_file):
-            os.remove(cancel_file)
+        if cancelled():
             return
 
         src_subtitle_filepath = None
         dst_subtitle_filepath = None
 
-        if os.path.isfile(cancel_file):
-            os.remove(cancel_file)
-            return
+        # ========================================================
+        # WAV
+        # ========================================================
 
-        activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
+        activity.runOnUiThread(
+            setVisibility(
+                textview_progress,
+                progress_bar,
+                textview_percentage,
+                textview_time,
+                View.VISIBLE
+            )
+        )
+
         print("Converting to WAV file...")
-        activity.runOnUiThread(appendText(textview_output_messages, "Converting to WAV file...\n"))
+
+        activity.runOnUiThread(
+            appendText(
+                textview_output_messages,
+                "Converting to WAV file...\n"
+            )
+        )
+
         convert_to_wav_start_time = time.time()
-        pbar(0, convert_to_wav_start_time, 100, "Converting to WAV file", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-        Config.enableRedirection()
 
-        wav_converter = WavConverter(channels=1, rate=16000, start_time=convert_to_wav_start_time, activity=activity, textview_progress=textview_progress, progress_bar=progress_bar, textview_percentage=textview_percentage, textview_time=textview_time)
-        wav_filepath, sample_rate = wav_converter(media_filepath)
+        pbar(
+            0,
+            convert_to_wav_start_time,
+            100,
+            "Converting to WAV file",
+            activity,
+            textview_progress,
+            progress_bar,
+            textview_percentage,
+            textview_time
+        )
 
-        Config.disableRedirection()
-        pbar(100, convert_to_wav_start_time, 100, "Converting to WAV file", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+        try:
+
+            Config.enableRedirection()
+
+            wav_converter = WavConverter(
+                channels=1,
+                rate=16000,
+                start_time=convert_to_wav_start_time,
+                activity=activity,
+                textview_progress=textview_progress,
+                progress_bar=progress_bar,
+                textview_percentage=textview_percentage,
+                textview_time=textview_time
+            )
+
+            wav_filepath, sample_rate = wav_converter(
+                media_filepath
+            )
+
+        finally:
+
+            Config.disableRedirection()
+
+        pbar(
+            100,
+            convert_to_wav_start_time,
+            100,
+            "Converting to WAV file",
+            activity,
+            textview_progress,
+            progress_bar,
+            textview_percentage,
+            textview_time
+        )
+
         time.sleep(1)
-        print(f"Converted WAV file is : {wav_filepath}")
-        activity.runOnUiThread(appendText(textview_output_messages, f"Converted WAV file created\n"))
-        activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.INVISIBLE))
 
+        print(
+            f"Converted WAV file is : {wav_filepath}"
+        )
+
+        activity.runOnUiThread(
+            appendText(
+                textview_output_messages,
+                "Converted WAV file created\n"
+            )
+        )
+
+        activity.runOnUiThread(
+            setVisibility(
+                textview_progress,
+                progress_bar,
+                textview_percentage,
+                textview_time,
+                View.INVISIBLE
+            )
+        )
+
+        # Vosk recognition uses 16 kHz
         sample_rate = 16000
 
-        if os.path.isfile(cancel_file):
-            os.remove(cancel_file)
+        if cancelled():
             return
+
+        # ========================================================
+        # SPEECH REGIONS
+        # ========================================================
 
         print("Finding speech regions of WAV file...")
-        activity.runOnUiThread(appendText(textview_output_messages, "Finding speech regions of WAV file...\n"))
 
-        region_finder = SpeechRegionFinder(frame_width=4096, min_region_size=0.5, max_region_size=6)
-        regions = region_finder(wav_filepath)
+        activity.runOnUiThread(
+            appendText(
+                textview_output_messages,
+                "Finding speech regions of WAV file...\n"
+            )
+        )
 
-        activity.runOnUiThread(appendText(textview_output_messages, "Speech regions found = " + str(len(regions)) + "\n"))
+        region_finder = SpeechRegionFinder(
+            frame_width=4096,
+            min_region_size=0.5,
+            max_region_size=6
+        )
+
+        regions = region_finder(
+            wav_filepath
+        )
+
+        activity.runOnUiThread(
+            appendText(
+                textview_output_messages,
+                "Speech regions found = "
+                + str(len(regions))
+                + "\n"
+            )
+        )
+
         time.sleep(1)
-        print(f"Speech regions found = {str(len(regions))}")
 
-        if os.path.isfile(cancel_file):
-            os.remove(cancel_file)
+        print(
+            f"Speech regions found = {len(regions)}"
+        )
+
+        if cancelled():
             return
 
-        converter = FLACConverter(wav_filepath=wav_filepath)
-        recognizer = SpeechRecognizer(language=src, rate=sample_rate)
+        # ========================================================
+        # RECOGNIZER
+        # ========================================================
+
+        converter = FLACConverter(
+            wav_filepath=wav_filepath
+        )
+
+        recognizer = SpeechRecognizer(
+            language=src,
+            rate=sample_rate
+        )
 
         src_transcriptions = []
 
-        if os.path.isfile(cancel_file):
-            os.remove(cancel_file)
-            if pool:
-                pool.terminate()
-                pool.close()
-                pool.join()
-            return
+        # ========================================================
+        # FLAC
+        # ========================================================
 
         if regions:
+
             print("Converting to FLAC files...")
-            activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
-            activity.runOnUiThread(appendText(textview_output_messages, "Converting to FLAC files...\n"))
+
+            activity.runOnUiThread(
+                setVisibility(
+                    textview_progress,
+                    progress_bar,
+                    textview_percentage,
+                    textview_time,
+                    View.VISIBLE
+                )
+            )
+
+            activity.runOnUiThread(
+                appendText(
+                    textview_output_messages,
+                    "Converting to FLAC files...\n"
+                )
+            )
+
             convert_to_flac_start_time = time.time()
-            pbar(0, convert_to_flac_start_time, 100, "Converting to FLAC files", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+
+            pbar(
+                0,
+                convert_to_flac_start_time,
+                100,
+                "Converting to FLAC files",
+                activity,
+                textview_progress,
+                progress_bar,
+                textview_percentage,
+                textview_time
+            )
+
             extracted_regions = []
-            for i, extracted_region in enumerate(pool.imap(converter, regions)):
 
-                if os.path.isfile(cancel_file):
-                    os.remove(cancel_file)
-                    if pool:
-                        pool.terminate()
-                        pool.close()
-                        pool.join()
+            for i, extracted_region in enumerate(
+                pool.imap(converter, regions)
+            ):
+
+                if cancelled():
+
+                    stop_pool()
                     return
 
-                extracted_regions.append(extracted_region)
+                extracted_regions.append(
+                    extracted_region
+                )
 
-                progress = int(i*100/len(regions))
+                progress = int(
+                    i * 100 / len(regions)
+                )
 
-                pbar(progress, convert_to_flac_start_time, 100, "Converting to FLAC files", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-            pbar(100, convert_to_flac_start_time, 100, "Converting to FLAC files", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+                pbar(
+                    progress,
+                    convert_to_flac_start_time,
+                    100,
+                    "Converting to FLAC files",
+                    activity,
+                    textview_progress,
+                    progress_bar,
+                    textview_percentage,
+                    textview_time
+                )
 
-            activity.runOnUiThread(appendText(textview_output_messages, "FLAC files created\n"))
+            pbar(
+                100,
+                convert_to_flac_start_time,
+                100,
+                "Converting to FLAC files",
+                activity,
+                textview_progress,
+                progress_bar,
+                textview_percentage,
+                textview_time
+            )
 
-            if os.path.isfile(cancel_file):
-                os.remove(cancel_file)
-                if pool:
-                    pool.terminate()
-                    pool.close()
-                    pool.join()
+            activity.runOnUiThread(
+                appendText(
+                    textview_output_messages,
+                    "FLAC files created\n"
+                )
+            )
+
+            if cancelled():
+                stop_pool()
                 return
 
-            print(f"Creating '{src}' transcriptions...")
-            activity.runOnUiThread(appendText(textview_output_messages, f"Creating '{src}' transcriptions...\n"))
+            # ====================================================
+            # TRANSCRIPTION
+            # ====================================================
+
+            print(
+                f"Creating '{src}' transcriptions..."
+            )
+
+            activity.runOnUiThread(
+                appendText(
+                    textview_output_messages,
+                    f"Creating '{src}' transcriptions...\n"
+                )
+            )
+
             create_transcription_start_time = time.time()
-            for i, src_transcription in enumerate(pool.imap(recognizer, extracted_regions)):
 
-                if os.path.isfile(cancel_file):
-                    os.remove(cancel_file)
-                    if pool:
-                        pool.terminate()
-                        pool.close()
-                        pool.join()
+            for i, src_transcription in enumerate(
+                pool.imap(
+                    recognizer,
+                    extracted_regions
+                )
+            ):
+
+                if cancelled():
+
+                    stop_pool()
                     return
 
-                src_transcriptions.append(src_transcription)
+                src_transcriptions.append(
+                    src_transcription
+                )
 
-                progress = int(i*100/len(regions))
+                progress = int(
+                    i * 100 / len(regions)
+                )
 
-                pbar(progress, create_transcription_start_time, 100, f"Creating '{src}' transcriptions", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-            pbar(100, create_transcription_start_time, 100, f"Creating '{src}' transcriptions", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+                pbar(
+                    progress,
+                    create_transcription_start_time,
+                    100,
+                    f"Creating '{src}' transcriptions",
+                    activity,
+                    textview_progress,
+                    progress_bar,
+                    textview_percentage,
+                    textview_time
+                )
 
-            activity.runOnUiThread(appendText(textview_output_messages, f"'{src}' transcriptions created\n"))
-            #print(f"src_transcriptions = {src_transcriptions}")
+            pbar(
+                100,
+                create_transcription_start_time,
+                100,
+                f"Creating '{src}' transcriptions",
+                activity,
+                textview_progress,
+                progress_bar,
+                textview_percentage,
+                textview_time
+            )
 
-            if os.path.isfile(cancel_file):
-                os.remove(cancel_file)
-                if pool:
-                    pool.terminate()
-                    pool.close()
-                    pool.join()
+            activity.runOnUiThread(
+                appendText(
+                    textview_output_messages,
+                    f"'{src}' transcriptions created\n"
+                )
+            )
+
+            if cancelled():
+                stop_pool()
                 return
 
-            activity.runOnUiThread(appendText(textview_output_messages, f"Writing temporary '{src}' subtitle file\n"))
+            # ====================================================
+            # WRITE SRC SUBTITLE
+            # ====================================================
 
-            files_dir = str(context.getExternalFilesDir(None))
-            subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
-            if not os.path.isdir(subtitle_folder_name):
-                os.mkdir(subtitle_folder_name)
+            print(
+                f"Writing temporary '{src}' subtitle file"
+            )
 
-            src_subtitle_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{src}.{subtitle_format}"
-            print(f"src_subtitle_filepath = {src_subtitle_filepath}")
-            src_subtitle_file_display_name = os.path.basename(src_subtitle_filepath).split('/')[-1]
+            activity.runOnUiThread(
+                appendText(
+                    textview_output_messages,
+                    f"Writing temporary '{src}' subtitle file\n"
+                )
+            )
 
-            writer = SubtitleWriter(regions, src_transcriptions, subtitle_format)
-            writer.write(src_subtitle_filepath)
+            src_subtitle_filepath = join(
+                subtitle_folder_name,
+                f"{media_name_without_ext}.{src}.{subtitle_format}"
+            )
 
-            if os.path.isfile(src_subtitle_filepath) and src_subtitle_filepath not in results:
-                results.append(src_subtitle_filepath)
+            print(
+                f"src_subtitle_filepath = "
+                f"{src_subtitle_filepath}"
+            )
 
-                print(f"Temporary '{src}' subtitles file saved as : '{src_subtitle_filepath}'")
-                activity.runOnUiThread(appendText(textview_output_messages, f"Temporary '{src}' subtitles file saved as :\n'{src_subtitle_filepath}'\n"))
+            writer = SubtitleWriter(
+                regions,
+                src_transcriptions,
+                subtitle_format
+            )
 
-            if os.path.isfile(cancel_file):
-                os.remove(cancel_file)
-                if pool:
-                    pool.terminate()
-                    pool.close()
-                    pool.join()
+            writer.write(
+                src_subtitle_filepath
+            )
+
+            append_result(
+                src_subtitle_filepath
+            )
+
+            if os.path.isfile(src_subtitle_filepath):
+
+                print(
+                    f"Temporary '{src}' subtitles file saved as : "
+                    f"'{src_subtitle_filepath}'"
+                )
+
+                activity.runOnUiThread(
+                    appendText(
+                        textview_output_messages,
+                        f"Temporary '{src}' subtitles file saved as :\n"
+                        f"'{src_subtitle_filepath}'\n"
+                    )
+                )
+
+            if cancelled():
+                stop_pool()
                 return
 
-            if (not is_same_language(src, dst)) and (os.path.isfile(src_subtitle_filepath)) and (not os.path.isfile(cancel_file)):
+            # ====================================================
+            # TRANSLATE SRC -> DST
+            #
+            # This remains exactly the force-recognize flow:
+            #
+            # recognition produces SRC
+            # then SRC is translated to DST
+            # ====================================================
 
-                if os.path.isfile(cancel_file):
-                    os.remove(cancel_file)
-                    if pool:
-                        pool.terminate()
-                        pool.close()
-                        pool.join()
-                    return
+            if (
+                not is_same_language(src, dst)
+                and os.path.isfile(src_subtitle_filepath)
+                and not cancelled()
+            ):
 
-                dst_subtitle_filepath = f"{subtitle_folder_name + os.sep + media_file_display_name[:-len(media_file_format)-1]}.{dst}.{subtitle_format}"
-                dst_subtitle_file_display_name = os.path.basename(dst_subtitle_filepath).split('/')[-1]
+                dst_subtitle_filepath = join(
+                    subtitle_folder_name,
+                    f"{media_name_without_ext}.{dst}.{subtitle_format}"
+                )
 
                 created_regions = []
                 created_subtitles = []
-                timed_subtitles = writer.timed_subtitles
-                for entry in timed_subtitles:
-                    created_regions.append(entry[0])
-                    created_subtitles.append(entry[1])
 
-                transcription_translator = SentenceTranslator(src=src, dst=dst)
+                timed_subtitles = writer.timed_subtitles
+
+                for entry in timed_subtitles:
+
+                    created_regions.append(
+                        entry[0]
+                    )
+
+                    created_subtitles.append(
+                        entry[1]
+                    )
+
+                transcription_translator = SentenceTranslator(
+                    src=src,
+                    dst=dst,
+                    endpoint_config=endpoint_config
+                )
+
                 dst_transcriptions = []
 
-                print(f"Translating subtitles from '{src}' to '{dst}'...")
-                activity.runOnUiThread(appendText(textview_output_messages, f"Translating subtitles from '{src}' to '{dst}'...\n"))
-                translate_start_time = time.time()
-                for i, dst_transcription in enumerate(pool.imap(transcription_translator, created_subtitles)):
+                print(
+                    f"Translating subtitles from "
+                    f"'{src}' to '{dst}'..."
+                )
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        pool.terminate()
-                        pool.close()
+                activity.runOnUiThread(
+                    appendText(
+                        textview_output_messages,
+                        f"Translating subtitles from "
+                        f"'{src}' to '{dst}'...\n"
+                    )
+                )
+
+                translate_start_time = time.time()
+
+                for i, dst_transcription in enumerate(
+                    pool.imap(
+                        transcription_translator,
+                        created_subtitles
+                    )
+                ):
+
+                    if cancelled():
+
+                        stop_pool()
                         return
 
-                    dst_transcriptions.append(dst_transcription)
+                    dst_transcriptions.append(
+                        dst_transcription
+                    )
 
-                    progress = int(i*100/len(created_subtitles))
+                    progress = int(
+                        i * 100 / len(created_subtitles)
+                    )
 
-                    pbar(progress, translate_start_time, 100, f"Translating subtitles from '{src}' to '{dst}'", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-                pbar(100, translate_start_time, 100, f"Translating subtitles from '{src}' to '{dst}'", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+                    pbar(
+                        progress,
+                        translate_start_time,
+                        100,
+                        f"Translating subtitles from "
+                        f"'{src}' to '{dst}'",
+                        activity,
+                        textview_progress,
+                        progress_bar,
+                        textview_percentage,
+                        textview_time
+                    )
+
+                pbar(
+                    100,
+                    translate_start_time,
+                    100,
+                    f"Translating subtitles from "
+                    f"'{src}' to '{dst}'",
+                    activity,
+                    textview_progress,
+                    progress_bar,
+                    textview_percentage,
+                    textview_time
+                )
+
                 time.sleep(1)
 
-                if os.path.isfile(cancel_file):
-                    os.remove(cancel_file)
-                    if pool:
-                        pool.terminate()
-                        pool.close()
-                        pool.join()
+                if cancelled():
+
+                    stop_pool()
                     return
 
-                activity.runOnUiThread(appendText(textview_output_messages, f"Writing temporary '{dst}' subtitle file\n"))
+                print(
+                    f"Writing temporary "
+                    f"'{dst}' subtitle file"
+                )
 
-                translation_writer = SubtitleWriter(created_regions, dst_transcriptions, subtitle_format)
-                translation_writer.write(dst_subtitle_filepath)
+                activity.runOnUiThread(
+                    appendText(
+                        textview_output_messages,
+                        f"Writing temporary "
+                        f"'{dst}' subtitle file\n"
+                    )
+                )
 
-                if os.path.isfile(dst_subtitle_filepath) and dst_subtitle_filepath not in results:
-                    results.append(dst_subtitle_filepath)
+                translation_writer = SubtitleWriter(
+                    created_regions,
+                    dst_transcriptions,
+                    subtitle_format
+                )
 
-                if os.path.isfile(cancel_file):
-                    os.remove(cancel_file)
-                    if pool:
-                        pool.terminate()
-                        pool.close()
-                        pool.join()
-                    return
+                translation_writer.write(
+                    dst_subtitle_filepath
+                )
 
-                print(f"Temporary '{src}' subtitles file saved as : '{src_subtitle_filepath}'")
-                print(f"Temporary '{dst}' subtitles file saved as : '{dst_subtitle_filepath}'")
+                append_result(
+                    dst_subtitle_filepath
+                )
 
-                #activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.INVISIBLE))
-                activity.runOnUiThread(appendText(textview_output_messages, f"Temporary '{src}' subtitles file saved as :\n'{src_subtitle_filepath}'\n"))
-                activity.runOnUiThread(appendText(textview_output_messages, f"Temporary '{dst}' subtitles file saved as :\n'{dst_subtitle_filepath}'\n"))
+                print(
+                    f"Temporary '{src}' subtitles file saved as : "
+                    f"'{src_subtitle_filepath}'"
+                )
 
-                if os.path.isfile(cancel_file):
-                    os.remove(cancel_file)
-                    if pool:
-                        pool.terminate()
-                        pool.close()
-                        pool.join()
-                    return
+                print(
+                    f"Temporary '{dst}' subtitles file saved as : "
+                    f"'{dst_subtitle_filepath}'"
+                )
 
+                activity.runOnUiThread(
+                    appendText(
+                        textview_output_messages,
+                        f"Temporary '{src}' subtitles file saved as :\n"
+                        f"'{src_subtitle_filepath}'\n"
+                    )
+                )
 
-            # EMBEDDING subtitles file
-            ffmpeg_src_language_code = language.ffmpeg_code_of_code[src]
-            ffmpeg_dst_language_code = language.ffmpeg_code_of_code[dst]
+                activity.runOnUiThread(
+                    appendText(
+                        textview_output_messages,
+                        f"Temporary '{dst}' subtitles file saved as :\n"
+                        f"'{dst_subtitle_filepath}'\n"
+                    )
+                )
 
-            files_dir = str(context.getExternalFilesDir(None))
-            subtitle_folder_name = join(files_dir, media_file_display_name[:-len(media_file_format)-1])
-            if not os.path.isdir(subtitle_folder_name):
-                os.mkdir(subtitle_folder_name)
+            # ====================================================
+            # EMBEDDING
+            #
+            # The original embedding decision tree is retained.
+            # ====================================================
 
-            src_tmp_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_src_language_code}.tmp.embedded.{subtitle_embedded_media_file_format}"
-            src_tmp_embedded_media_file_display_name = os.path.basename(src_tmp_embedded_media_filepath).split('/')[-1]
+            ffmpeg_src_language_code = \
+                language.ffmpeg_code_of_code[src]
 
-            dst_tmp_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_dst_language_code}.tmp.embedded.{subtitle_embedded_media_file_format}"
-            dst_tmp_embedded_media_file_display_name = os.path.basename(dst_tmp_embedded_media_filepath).split('/')[-1]
-
-            src_dst_tmp_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_src_language_code}.{ffmpeg_dst_language_code}.tmp.embedded.{subtitle_embedded_media_file_format}"
-            src_dst_tmp_embedded_media_file_display_name = os.path.basename(src_dst_tmp_embedded_media_filepath).split('/')[-1]
-
-            src_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_src_language_code}.embedded.{subtitle_embedded_media_file_format}"
-            src_embedded_media_file_display_name = os.path.basename(src_embedded_media_filepath).split('/')[-1]
-
-            dst_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_dst_language_code}.embedded.{subtitle_embedded_media_file_format}"
-            dst_embedded_media_file_display_name = os.path.basename(dst_embedded_media_filepath).split('/')[-1]
-
-            src_dst_embedded_media_filepath = f"{subtitle_embedded_media_file_base_name}.{ffmpeg_src_language_code}.{ffmpeg_dst_language_code}.embedded.{subtitle_embedded_media_file_format}"
-            src_dst_embedded_media_file_display_name = os.path.basename(src_dst_embedded_media_filepath).split('/')[-1]
-                
-            #activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.VISIBLE))
+            ffmpeg_dst_language_code = \
+                language.ffmpeg_code_of_code[dst]
 
             print(f"media_type = {media_type}")
             print(f"embed_src = {embed_src}")
             print(f"embed_dst = {embed_dst}")
 
+            # ====================================================
+            # SRC == DST
+            # ====================================================
+
             if is_same_language(src, dst):
 
                 if media_type == "audio":
-                    print("Subtitles can only be embedded into video file, not audio file")
-                    activity.runOnUiThread(appendText(textview_output_messages, "Subtitles can only be embedded into video file, not audio file\n"))
 
-                    print(f"\nTemporary results for '{media_file_display_name}' :")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Temporary results for '{media_file_display_name}' :\n"))
-                    for result in results:
-                        print(f"{result}")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                        activity.runOnUiThread(appendText(textview_output_messages, f"{result}\n"))
+                    print(
+                        "Subtitles can only be embedded into "
+                        "video file, not audio file"
+                    )
 
-                if media_type == "video" and embed_src == True:
+                    activity.runOnUiThread(
+                        appendText(
+                            textview_output_messages,
+                            "Subtitles can only be embedded into "
+                            "video file, not audio file\n"
+                        )
+                    )
+
+                    show_results()
+
+                if (
+                    media_type == "video"
+                    and embed_src == True
+                ):
+
                     try:
-                        print(f"Embedding '{ffmpeg_src_language_code}' subtitles...")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"Embedding '{ffmpeg_src_language_code}' subtitles...\n"))
+
+                        print(
+                            f"Embedding "
+                            f"'{ffmpeg_src_language_code}' subtitles..."
+                        )
+
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"Embedding "
+                                f"'{ffmpeg_src_language_code}' subtitles...\n"
+                            )
+                        )
+
                         embed_src_start_time = time.time()
-                        pbar(0, embed_src_start_time, 100, f"Embedding '{ffmpeg_src_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+
+                        pbar(
+                            0,
+                            embed_src_start_time,
+                            100,
+                            f"Embedding "
+                            f"'{ffmpeg_src_language_code}' subtitles",
+                            activity,
+                            textview_progress,
+                            progress_bar,
+                            textview_percentage,
+                            textview_time
+                        )
+
                         Config.enableRedirection()
 
-                        subtitle_embedder = MediaSubtitleEmbedder(subtitle_path=src_subtitle_filepath, language=ffmpeg_src_language_code, output_path=src_tmp_embedded_media_filepath, start_time=embed_src_start_time, activity=activity, textview_progress=textview_progress, progress_bar=progress_bar, textview_percentage=textview_percentage, textview_time=textview_time)
-                        src_tmp_output = subtitle_embedder(media_filepath)
+                        src_tmp_embedded_media_filepath = (
+                            f"{subtitle_embedded_media_file_base_name}."
+                            f"{ffmpeg_src_language_code}."
+                            f"tmp.embedded."
+                            f"{subtitle_embedded_media_file_format}"
+                        )
+
+                        src_embedded_media_filepath = (
+                            f"{subtitle_embedded_media_file_base_name}."
+                            f"{ffmpeg_src_language_code}."
+                            f"embedded."
+                            f"{subtitle_embedded_media_file_format}"
+                        )
+
+                        subtitle_embedder = MediaSubtitleEmbedder(
+                            subtitle_path=src_subtitle_filepath,
+                            language=ffmpeg_src_language_code,
+                            output_path=src_tmp_embedded_media_filepath,
+                            start_time=embed_src_start_time,
+                            activity=activity,
+                            textview_progress=textview_progress,
+                            progress_bar=progress_bar,
+                            textview_percentage=textview_percentage,
+                            textview_time=textview_time
+                        )
+
+                        src_tmp_output = subtitle_embedder(
+                            media_filepath
+                        )
 
                         Config.disableRedirection()
-                        pbar(100, embed_src_start_time, 100, f"Embedding '{ffmpeg_src_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-                        time.sleep(1)
 
-                        if os.path.isfile(src_tmp_output):
-                            shutil.copy(src_tmp_output, src_embedded_media_filepath)
-                            os.remove(src_tmp_output)
+                        pbar(
+                            100,
+                            embed_src_start_time,
+                            100,
+                            f"Embedding "
+                            f"'{ffmpeg_src_language_code}' subtitles",
+                            activity,
+                            textview_progress,
+                            progress_bar,
+                            textview_percentage,
+                            textview_time
+                        )
 
-                            if src_embedded_media_filepath not in results:
-                                results.append(src_embedded_media_filepath)
+                        if (
+                            src_tmp_output
+                            and os.path.isfile(src_tmp_output)
+                        ):
 
-                        if os.path.isfile(src_embedded_media_filepath):
-                            activity.runOnUiThread(appendText(textview_output_messages, f"Subtitles embedded media file saved as :\n'{src_embedded_media_filepath}'\n"))
+                            shutil.copy(
+                                src_tmp_output,
+                                src_embedded_media_filepath
+                            )
 
-                            print(f"\nTemporary results for '{media_file_display_name}' :")
-                            activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                            activity.runOnUiThread(appendText(textview_output_messages, f"Temporary results for '{media_file_display_name}' :\n"))
-                            for result in results:
-                                print(f"{result}")
-                                activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                                activity.runOnUiThread(appendText(textview_output_messages, f"{result}\n"))
-                            #activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
+                            os.remove(
+                                src_tmp_output
+                            )
+
+                            append_result(
+                                src_embedded_media_filepath
+                            )
+
+                        if os.path.isfile(
+                            src_embedded_media_filepath
+                        ):
+
+                            activity.runOnUiThread(
+                                appendText(
+                                    textview_output_messages,
+                                    f"Subtitles embedded media file saved as:\n"
+                                    f"'{src_embedded_media_filepath}'\n"
+                                )
+                            )
+
+                            show_results()
 
                         else:
+
                             print("Unknown error")
-                            activity.runOnUiThread(appendText(textview_output_messages, "Unknown error\n"))
+
+                            activity.runOnUiThread(
+                                appendText(
+                                    textview_output_messages,
+                                    "Unknown error\n"
+                                )
+                            )
 
                     except Exception as e:
+
+                        Config.disableRedirection()
+
                         print(e)
                         return
+
+            # ====================================================
+            # SRC != DST
+            # ====================================================
 
             elif not is_same_language(src, dst):
 
                 if media_type == "audio":
-                    print("Subtitles can only be embedded into video file, not audio file")
-                    activity.runOnUiThread(appendText(textview_output_messages, "Subtitles can only be embedded into video file, not audio file\n"))
 
-                    print(f"\nTemporary results for '{media_file_display_name}' :")
-                    activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                    activity.runOnUiThread(appendText(textview_output_messages, f"Temporary results for '{media_file_display_name}' :\n"))
-                    for result in results:
-                        print(f"{result}")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                        activity.runOnUiThread(appendText(textview_output_messages, f"{result}\n"))
+                    print(
+                        "Subtitles can only be embedded into "
+                        "video file, not audio file"
+                    )
 
-                if media_type == "video" and embed_src == True and embed_dst == True:
+                    activity.runOnUiThread(
+                        appendText(
+                            textview_output_messages,
+                            "Subtitles can only be embedded into "
+                            "video file, not audio file\n"
+                        )
+                    )
+
+                    show_results()
+
+                # =================================================
+                # EMBED SRC + DST
+                # =================================================
+
+                if (
+                    media_type == "video"
+                    and embed_src == True
+                    and embed_dst == True
+                ):
+
                     try:
-                        print(f"Embedding '{ffmpeg_src_language_code}' subtitles...")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"Embedding '{ffmpeg_src_language_code}' subtitles...\n"))
+
+                        print(
+                            f"Embedding "
+                            f"'{ffmpeg_src_language_code}' subtitles..."
+                        )
+
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"Embedding "
+                                f"'{ffmpeg_src_language_code}' subtitles...\n"
+                            )
+                        )
+
                         embed_src_start_time = time.time()
-                        pbar(0, embed_src_start_time, 100, f"Embedding '{ffmpeg_src_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+
+                        pbar(
+                            0,
+                            embed_src_start_time,
+                            100,
+                            f"Embedding "
+                            f"'{ffmpeg_src_language_code}' subtitles",
+                            activity,
+                            textview_progress,
+                            progress_bar,
+                            textview_percentage,
+                            textview_time
+                        )
+
                         Config.resetStatistics()
                         Config.enableRedirection()
 
-                        src_subtitle_embedder = MediaSubtitleEmbedder(subtitle_path=src_subtitle_filepath, language=ffmpeg_src_language_code, output_path=src_tmp_embedded_media_filepath, start_time=embed_src_start_time, activity=activity, textview_progress=textview_progress, progress_bar=progress_bar, textview_percentage=textview_percentage, textview_time=textview_time)
-                        src_tmp_output = src_subtitle_embedder(media_filepath)
+                        src_tmp_embedded_media_filepath = (
+                            f"{subtitle_embedded_media_file_base_name}."
+                            f"{ffmpeg_src_language_code}."
+                            f"tmp.embedded."
+                            f"{subtitle_embedded_media_file_format}"
+                        )
+
+                        dst_tmp_embedded_media_filepath = (
+                            f"{subtitle_embedded_media_file_base_name}."
+                            f"{ffmpeg_dst_language_code}."
+                            f"tmp.embedded."
+                            f"{subtitle_embedded_media_file_format}"
+                        )
+
+                        src_dst_tmp_embedded_media_filepath = (
+                            f"{subtitle_embedded_media_file_base_name}."
+                            f"{ffmpeg_src_language_code}."
+                            f"{ffmpeg_dst_language_code}."
+                            f"tmp.embedded."
+                            f"{subtitle_embedded_media_file_format}"
+                        )
+
+                        src_dst_embedded_media_filepath = (
+                            f"{subtitle_embedded_media_file_base_name}."
+                            f"{ffmpeg_src_language_code}."
+                            f"{ffmpeg_dst_language_code}."
+                            f"embedded."
+                            f"{subtitle_embedded_media_file_format}"
+                        )
+
+                        src_subtitle_embedder = MediaSubtitleEmbedder(
+                            subtitle_path=src_subtitle_filepath,
+                            language=ffmpeg_src_language_code,
+                            output_path=src_tmp_embedded_media_filepath,
+                            start_time=embed_src_start_time,
+                            activity=activity,
+                            textview_progress=textview_progress,
+                            progress_bar=progress_bar,
+                            textview_percentage=textview_percentage,
+                            textview_time=textview_time
+                        )
+
+                        src_tmp_output = src_subtitle_embedder(
+                            media_filepath
+                        )
 
                         Config.disableRedirection()
-                        pbar(100, embed_src_start_time, 100, f"Embedding '{ffmpeg_src_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-                        time.sleep(1)
 
-                        if os.path.isfile(src_tmp_output) and os.path.isfile(dst_subtitle_filepath):
-                            print(f"Embedding '{ffmpeg_dst_language_code}' subtitles...")
-                            activity.runOnUiThread(appendText(textview_output_messages, f"Embedding '{ffmpeg_dst_language_code}' subtitles...\n"))
+                        pbar(
+                            100,
+                            embed_src_start_time,
+                            100,
+                            f"Embedding "
+                            f"'{ffmpeg_src_language_code}' subtitles",
+                            activity,
+                            textview_progress,
+                            progress_bar,
+                            textview_percentage,
+                            textview_time
+                        )
+
+                        if (
+                            src_tmp_output
+                            and os.path.isfile(src_tmp_output)
+                            and os.path.isfile(dst_subtitle_filepath)
+                        ):
+
+                            print(
+                                f"Embedding "
+                                f"'{ffmpeg_dst_language_code}' subtitles..."
+                            )
+
+                            activity.runOnUiThread(
+                                appendText(
+                                    textview_output_messages,
+                                    f"Embedding "
+                                    f"'{ffmpeg_dst_language_code}' subtitles...\n"
+                                )
+                            )
+
                             embed_dst_start_time = time.time()
-                            pbar(0, embed_dst_start_time, 100, f"Embedding '{ffmpeg_dst_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+
+                            pbar(
+                                0,
+                                embed_dst_start_time,
+                                100,
+                                f"Embedding "
+                                f"'{ffmpeg_dst_language_code}' subtitles",
+                                activity,
+                                textview_progress,
+                                progress_bar,
+                                textview_percentage,
+                                textview_time
+                            )
+
                             Config.enableRedirection()
 
-                            src_dst_subtitle_embedder = MediaSubtitleEmbedder(subtitle_path=dst_subtitle_filepath, language=ffmpeg_dst_language_code, output_path=src_dst_tmp_embedded_media_filepath, start_time=embed_dst_start_time, activity=activity, textview_progress=textview_progress, progress_bar=progress_bar, textview_percentage=textview_percentage, textview_time=textview_time)
-                            src_dst_tmp_output = src_dst_subtitle_embedder(src_tmp_output)
+                            src_dst_subtitle_embedder = MediaSubtitleEmbedder(
+                                subtitle_path=dst_subtitle_filepath,
+                                language=ffmpeg_dst_language_code,
+                                output_path=src_dst_tmp_embedded_media_filepath,
+                                start_time=embed_dst_start_time,
+                                activity=activity,
+                                textview_progress=textview_progress,
+                                progress_bar=progress_bar,
+                                textview_percentage=textview_percentage,
+                                textview_time=textview_time
+                            )
+
+                            src_dst_tmp_output = \
+                                src_dst_subtitle_embedder(
+                                    src_tmp_output
+                                )
 
                             Config.disableRedirection()
-                            pbar(100, embed_dst_start_time, 100, f"Embedding '{ffmpeg_dst_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-                            time.sleep(1)
 
-                        if os.path.isfile(src_dst_tmp_output):
-                            shutil.copy(src_dst_tmp_output, src_dst_embedded_media_filepath)
-
-                            if os.path.isfile(src_dst_tmp_output):
-                                os.remove(src_dst_tmp_output)
-                            if os.path.isfile(src_tmp_output):
-                                os.remove(src_tmp_output)
-
-                            if src_dst_embedded_media_filepath not in results:
-                                results.append(src_dst_embedded_media_filepath)
-
-                        if os.path.isfile(src_dst_embedded_media_filepath):
-                            activity.runOnUiThread(appendText(textview_output_messages, f"Subtitles embedded media file saved as :\n'{src_dst_embedded_media_filepath}'\n"))
-
-                            print(f"\nTemporary results for '{media_file_display_name}' :")
-                            activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                            activity.runOnUiThread(appendText(textview_output_messages, f"Temporary results for '{media_file_display_name}' :\n"))
-                            for result in results:
-                                print(f"{result}")
-                                activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                                activity.runOnUiThread(appendText(textview_output_messages, f"{result}\n"))
-                            #activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
+                            pbar(
+                                100,
+                                embed_dst_start_time,
+                                100,
+                                f"Embedding "
+                                f"'{ffmpeg_dst_language_code}' subtitles",
+                                activity,
+                                textview_progress,
+                                progress_bar,
+                                textview_percentage,
+                                textview_time
+                            )
 
                         else:
+
+                            src_dst_tmp_output = None
+
+                        if (
+                            src_dst_tmp_output
+                            and os.path.isfile(src_dst_tmp_output)
+                        ):
+
+                            shutil.copy(
+                                src_dst_tmp_output,
+                                src_dst_embedded_media_filepath
+                            )
+
+                            os.remove(
+                                src_dst_tmp_output
+                            )
+
+                            if (
+                                src_tmp_output
+                                and os.path.isfile(src_tmp_output)
+                            ):
+                                os.remove(
+                                    src_tmp_output
+                                )
+
+                            append_result(
+                                src_dst_embedded_media_filepath
+                            )
+
+                        if os.path.isfile(
+                            src_dst_embedded_media_filepath
+                        ):
+
+                            activity.runOnUiThread(
+                                appendText(
+                                    textview_output_messages,
+                                    f"Subtitles embedded media file saved as:\n"
+                                    f"'{src_dst_embedded_media_filepath}'\n"
+                                )
+                            )
+
+                            show_results()
+
+                        else:
+
                             print("Unknown error")
-                            activity.runOnUiThread(appendText(textview_output_messages, "Unknown error\n"))
+
+                            activity.runOnUiThread(
+                                appendText(
+                                    textview_output_messages,
+                                    "Unknown error\n"
+                                )
+                            )
 
                     except Exception as e:
+
+                        Config.disableRedirection()
+
                         print(e)
                         return
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        if pool:
-                            pool.terminate()
-                            pool.close()
-                            pool.join()
-                        return
+                # =================================================
+                # EMBED SRC ONLY
+                # =================================================
 
-                elif media_type == "video" and embed_src == True and embed_dst == False:
+                elif (
+                    media_type == "video"
+                    and embed_src == True
+                    and embed_dst == False
+                ):
+
                     try:
 
-                        print(f"Embedding '{ffmpeg_src_language_code}' subtitles...")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"Embedding '{ffmpeg_src_language_code}' subtitles...\n"))
+                        print(
+                            f"Embedding "
+                            f"'{ffmpeg_src_language_code}' subtitles..."
+                        )
+
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"Embedding "
+                                f"'{ffmpeg_src_language_code}' subtitles...\n"
+                            )
+                        )
+
                         embed_src_start_time = time.time()
-                        pbar(0, embed_src_start_time, 100, f"Embedding '{ffmpeg_src_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+
+                        pbar(
+                            0,
+                            embed_src_start_time,
+                            100,
+                            f"Embedding "
+                            f"'{ffmpeg_src_language_code}' subtitles",
+                            activity,
+                            textview_progress,
+                            progress_bar,
+                            textview_percentage,
+                            textview_time
+                        )
+
                         Config.enableRedirection()
 
-                        src_subtitle_embedder = MediaSubtitleEmbedder(subtitle_path=src_subtitle_filepath, language=ffmpeg_src_language_code, output_path=src_tmp_embedded_media_filepath, start_time=embed_src_start_time, activity=activity, textview_progress=textview_progress, progress_bar=progress_bar, textview_percentage=textview_percentage, textview_time=textview_time)
-                        src_tmp_output = src_subtitle_embedder(media_filepath)
+                        src_tmp_embedded_media_filepath = (
+                            f"{subtitle_embedded_media_file_base_name}."
+                            f"{ffmpeg_src_language_code}."
+                            f"tmp.embedded."
+                            f"{subtitle_embedded_media_file_format}"
+                        )
+
+                        src_embedded_media_filepath = (
+                            f"{subtitle_embedded_media_file_base_name}."
+                            f"{ffmpeg_src_language_code}."
+                            f"embedded."
+                            f"{subtitle_embedded_media_file_format}"
+                        )
+
+                        src_subtitle_embedder = MediaSubtitleEmbedder(
+                            subtitle_path=src_subtitle_filepath,
+                            language=ffmpeg_src_language_code,
+                            output_path=src_tmp_embedded_media_filepath,
+                            start_time=embed_src_start_time,
+                            activity=activity,
+                            textview_progress=textview_progress,
+                            progress_bar=progress_bar,
+                            textview_percentage=textview_percentage,
+                            textview_time=textview_time
+                        )
+
+                        src_tmp_output = src_subtitle_embedder(
+                            media_filepath
+                        )
 
                         Config.disableRedirection()
-                        pbar(100, embed_src_start_time, 100, f"Embedding '{ffmpeg_src_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-                        time.sleep(1)
 
-                        if os.path.isfile(src_tmp_output):
-                            shutil.copy(src_tmp_output, src_embedded_media_filepath)
-                            os.remove(src_tmp_output)
+                        pbar(
+                            100,
+                            embed_src_start_time,
+                            100,
+                            f"Embedding "
+                            f"'{ffmpeg_src_language_code}' subtitles",
+                            activity,
+                            textview_progress,
+                            progress_bar,
+                            textview_percentage,
+                            textview_time
+                        )
 
-                            if src_embedded_media_filepath not in results:
-                                results.append(src_embedded_media_filepath)
+                        if (
+                            src_tmp_output
+                            and os.path.isfile(src_tmp_output)
+                        ):
 
-                        if os.path.isfile(src_embedded_media_filepath):
-                            activity.runOnUiThread(appendText(textview_output_messages, f"Subtitles embedded media file saved as :\n'{src_embedded_media_filepath}'\n"))
+                            shutil.copy(
+                                src_tmp_output,
+                                src_embedded_media_filepath
+                            )
 
-                            print(f"\nTemporary results for '{media_file_display_name}' :")
-                            activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                            activity.runOnUiThread(appendText(textview_output_messages, f"Temporary results for '{media_file_display_name}' :\n"))
-                            for result in results:
-                                print(f"{result}")
-                                activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                                activity.runOnUiThread(appendText(textview_output_messages, f"{result}\n"))
-                            #activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
+                            os.remove(
+                                src_tmp_output
+                            )
+
+                            append_result(
+                                src_embedded_media_filepath
+                            )
+
+                        if os.path.isfile(
+                            src_embedded_media_filepath
+                        ):
+
+                            activity.runOnUiThread(
+                                appendText(
+                                    textview_output_messages,
+                                    f"Subtitles embedded media file saved as:\n"
+                                    f"'{src_embedded_media_filepath}'\n"
+                                )
+                            )
+
+                            show_results()
 
                         else:
+
                             print("Unknown error")
-                            activity.runOnUiThread(appendText(textview_output_messages, "Unknown error\n"))
+
+                            activity.runOnUiThread(
+                                appendText(
+                                    textview_output_messages,
+                                    "Unknown error\n"
+                                )
+                            )
 
                     except Exception as e:
+
+                        Config.disableRedirection()
+
                         print(e)
                         return
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        if pool:
-                            pool.terminate()
-                            pool.close()
-                            pool.join()
-                        return
+                # =================================================
+                # EMBED DST ONLY
+                # =================================================
 
-                elif media_type == "video" and embed_src == False and embed_dst == True:
+                elif (
+                    media_type == "video"
+                    and embed_src == False
+                    and embed_dst == True
+                ):
+
                     try:
 
-                        print(f"Embedding '{ffmpeg_dst_language_code}' subtitles...")
-                        activity.runOnUiThread(appendText(textview_output_messages, f"Embedding '{ffmpeg_dst_language_code}' subtitles...\n"))
+                        print(
+                            f"Embedding "
+                            f"'{ffmpeg_dst_language_code}' subtitles..."
+                        )
+
+                        activity.runOnUiThread(
+                            appendText(
+                                textview_output_messages,
+                                f"Embedding "
+                                f"'{ffmpeg_dst_language_code}' subtitles...\n"
+                            )
+                        )
+
                         embed_dst_start_time = time.time()
-                        pbar(0, embed_dst_start_time, 100, f"Embedding '{ffmpeg_dst_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
+
+                        pbar(
+                            0,
+                            embed_dst_start_time,
+                            100,
+                            f"Embedding "
+                            f"'{ffmpeg_dst_language_code}' subtitles",
+                            activity,
+                            textview_progress,
+                            progress_bar,
+                            textview_percentage,
+                            textview_time
+                        )
+
                         Config.enableRedirection()
 
-                        dst_subtitle_embedder = MediaSubtitleEmbedder(subtitle_path=dst_subtitle_filepath, language=ffmpeg_dst_language_code, output_path=src_tmp_embedded_media_filepath, start_time=embed_dst_start_time, activity=activity, textview_progress=textview_progress, progress_bar=progress_bar, textview_percentage=textview_percentage, textview_time=textview_time)
-                        dst_tmp_output = dst_subtitle_embedder(media_filepath)
+                        # Preserve the original behavior:
+                        # use src_tmp_embedded_media_filepath here.
+                        src_tmp_embedded_media_filepath = (
+                            f"{subtitle_embedded_media_file_base_name}."
+                            f"{ffmpeg_src_language_code}."
+                            f"tmp.embedded."
+                            f"{subtitle_embedded_media_file_format}"
+                        )
+
+                        dst_embedded_media_filepath = (
+                            f"{subtitle_embedded_media_file_base_name}."
+                            f"{ffmpeg_dst_language_code}."
+                            f"embedded."
+                            f"{subtitle_embedded_media_file_format}"
+                        )
+
+                        dst_subtitle_embedder = MediaSubtitleEmbedder(
+                            subtitle_path=dst_subtitle_filepath,
+                            language=ffmpeg_dst_language_code,
+                            output_path=src_tmp_embedded_media_filepath,
+                            start_time=embed_dst_start_time,
+                            activity=activity,
+                            textview_progress=textview_progress,
+                            progress_bar=progress_bar,
+                            textview_percentage=textview_percentage,
+                            textview_time=textview_time
+                        )
+
+                        dst_tmp_output = dst_subtitle_embedder(
+                            media_filepath
+                        )
 
                         Config.disableRedirection()
-                        pbar(100, embed_dst_start_time, 100, f"Embedding '{ffmpeg_dst_language_code}' subtitles", activity, textview_progress, progress_bar, textview_percentage, textview_time)
-                        time.sleep(1)
 
-                        if os.path.isfile(dst_tmp_output):
-                            shutil.copy(dst_tmp_output, dst_embedded_media_filepath)
-                            os.remove(dst_tmp_output)
+                        pbar(
+                            100,
+                            embed_dst_start_time,
+                            100,
+                            f"Embedding "
+                            f"'{ffmpeg_dst_language_code}' subtitles",
+                            activity,
+                            textview_progress,
+                            progress_bar,
+                            textview_percentage,
+                            textview_time
+                        )
 
-                            if dst_embedded_media_filepath not in results:
-                                results.append(dst_embedded_media_filepath)
+                        if (
+                            dst_tmp_output
+                            and os.path.isfile(dst_tmp_output)
+                        ):
 
-                        if os.path.isfile(dst_embedded_media_filepath):
-                            activity.runOnUiThread(appendText(textview_output_messages, f"Subtitles embedded media file saved as :\n'{dst_embedded_media_filepath}'\n"))
+                            shutil.copy(
+                                dst_tmp_output,
+                                dst_embedded_media_filepath
+                            )
 
-                            print(f"\nTemporary results for '{media_file_display_name}' :")
-                            activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                            activity.runOnUiThread(appendText(textview_output_messages, f"Temporary results for '{media_file_display_name}' :\n"))
-                            for result in results:
-                                print(f"{result}")
-                                activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
-                                activity.runOnUiThread(appendText(textview_output_messages, f"{result}\n"))
-                            #activity.runOnUiThread(appendText(textview_output_messages, f"{dashChars}\n"))
+                            os.remove(
+                                dst_tmp_output
+                            )
+
+                            append_result(
+                                dst_embedded_media_filepath
+                            )
+
+                        if os.path.isfile(
+                            dst_embedded_media_filepath
+                        ):
+
+                            activity.runOnUiThread(
+                                appendText(
+                                    textview_output_messages,
+                                    f"Subtitles embedded media file saved as:\n"
+                                    f"'{dst_embedded_media_filepath}'\n"
+                                )
+                            )
+
+                            show_results()
 
                         else:
+
                             print("Unknown error")
-                            activity.runOnUiThread(appendText(textview_output_messages, "Unknown error\n"))
+
+                            activity.runOnUiThread(
+                                appendText(
+                                    textview_output_messages,
+                                    "Unknown error\n"
+                                )
+                            )
 
                     except Exception as e:
+
+                        Config.disableRedirection()
+
                         print(e)
                         return
 
-                    if os.path.isfile(cancel_file):
-                        os.remove(cancel_file)
-                        if pool:
-                            pool.terminate()
-                            pool.close()
-                            pool.join()
-                        return
+        if cancelled():
+            return
 
-            activity.runOnUiThread(setVisibility(textview_progress, progress_bar, textview_percentage, textview_time, View.INVISIBLE))
+    # ============================================================
+    # FINAL CLEANUP
+    # ============================================================
 
+    activity.runOnUiThread(
+        setVisibility(
+            textview_progress,
+            progress_bar,
+            textview_percentage,
+            textview_time,
+            View.INVISIBLE
+        )
+    )
 
-        pool.close()
-        pool.join()
-        pool = None
-        os.remove(wav_filepath)
+    close_pool()
+
+    # ============================================================
+    # REMOVE WAV
+    # ============================================================
+
+    if wav_filepath:
+
+        try:
+
+            if os.path.isfile(wav_filepath):
+                os.remove(wav_filepath)
+
+        except Exception as e:
+
+            print(
+                f"Could not remove WAV file "
+                f"'{wav_filepath}': {e}"
+            )
+
+        # ========================================================
+        # REMOVE TEMP FILES
+        # ========================================================
+
         tmpdir = os.path.split(wav_filepath)[0]
-        for file in os.listdir(tmpdir):
-            file_path = os.path.join(tmpdir, file)
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.unlink(file_path)
+
+        try:
+
+            if os.path.isdir(tmpdir):
+
+                for file in os.listdir(tmpdir):
+
+                    file_path = os.path.join(
+                        tmpdir,
+                        file
+                    )
+
+                    if (
+                        os.path.isfile(file_path)
+                        or os.path.islink(file_path)
+                    ):
+
+                        try:
+                            os.unlink(file_path)
+                        except Exception as e:
+                            print(
+                                f"Could not remove temporary "
+                                f"file '{file_path}': {e}"
+                            )
+
+        except Exception as e:
+
+            print(
+                f"Could not cleanup temporary directory "
+                f"'{tmpdir}': {e}"
+            )
+
+    # ============================================================
+    # RETURN
+    # ============================================================
 
     return results
 
