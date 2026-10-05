@@ -1,39 +1,25 @@
-apply plugin: 'com.android.application'
-apply plugin: 'com.chaquo.python'
+plugins {
+    id 'com.android.application'
+    id 'com.chaquo.python'
+}
 
 android {
-    compileSdkVersion 30
-    buildToolsVersion "29.0.2"
+    compileSdk 33
 
     defaultConfig {
         applicationId "com.android.autosrt"
-
-        sourceSets {
-            main {
-				setRoot "src/main"
-                python {
-                    srcDirs = ["src/main/python"]
-                }
-            }
-        }
-
-        defaultConfig {
-            python {
-                staticProxy "autosrt"
-            }
-        }
-
-        minSdkVersion 23
-        targetSdkVersion 30
+        minSdk 23
+        targetSdk 33
         versionCode 1
-        versionName "1.7.5"
+        versionName "1.7.6"
 
         ndk {
             abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
         }
 
         python {
-			buildPython "C:\\Users\\Toshiba\\AppData\\Local\\Programs\\Python\\Python38\\python3.8.exe"
+            buildPython "C:\\Program Files\\Python310\\python.exe"
+            staticProxy "autosrt"
             pip {
                 install "chardet==3.0.4"
                 install "idna==2.10"
@@ -46,6 +32,15 @@ android {
         }
     }
 
+    sourceSets {
+        main {
+            setRoot "src/main"
+            python {
+                srcDirs = ["src/main/python"]
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -54,23 +49,21 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-}
-
-repositories {
-    flatDir {
-        dirs 'libs'
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 }
 
 dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
+
     implementation 'androidx.appcompat:appcompat:1.3.1'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
     implementation 'androidx.documentfile:documentfile:1.0.1'
     //implementation 'com.arthenica:mobile-ffmpeg-full:4.3.1.LTS'
     //implementation 'com.arthenica:mobile-ffmpeg-full:4.4'
-    implementation(name: 'mobile-ffmpeg-full-4.3.1.LTS', ext: 'aar')
-    implementation 'org.apache.commons:commons-lang3:3.0'
+    //implementation(name: 'mobile-ffmpeg-full-4.3.1.LTS', ext: 'aar')
+    //implementation files('libs/mobile-ffmpeg-full-4.3.1.LTS.aar')
+    //implementation 'org.apache.commons:commons-lang3:3.0'
 }
