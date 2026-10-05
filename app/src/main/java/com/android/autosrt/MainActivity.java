@@ -770,8 +770,7 @@ public class MainActivity extends AppCompatActivity {
             button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
             textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
             adjustOutputMessagesHeight();
-        }
-        else {
+        } else {
             button_grant_manage_app_all_files_access_permission.setVisibility(View.GONE);
             textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.GONE);
             adjustOutputMessagesHeight();
@@ -1242,30 +1241,25 @@ public class MainActivity extends AppCompatActivity {
                                             setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                             Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "getParentFolderPath(selectedFilesPath.get(0)) = " + getParentFolderPath(selectedFilesPath.get(0)));
                                             appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                        }
-                                        else {
+                                        } else {
                                             setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                             Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "getParentFolderPath(selectedFilesPath.get(0)) = " + getParentFolderPath(selectedFilesPath.get(0)));
                                             appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                         }
-                                    }
-                                    else {
+                                    } else {
                                         appendText(textview_output_messages, "All subtitle files will be saved into your selected folder.");
                                     }
 
-                                }
-                                else {
+                                } else {
                                     appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders.\n");
                                     appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                 }
-                            }
-                            else {
+                            } else {
                                 button_grant_storage_permission.setVisibility(View.VISIBLE);
                                 textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
                                 setText(textview_output_messages, "Storage permission is not granted, this app won't work.");
                             }
-                        }
-                        else {
+                        } else {
                             button_grant_manage_app_all_files_access_permission.setVisibility(View.VISIBLE);
                             textview_grant_manage_app_all_files_access_permission_notes.setVisibility(View.VISIBLE);
                             setText(textview_output_messages, "Manage all files permission is not granted.\n");
@@ -1290,23 +1284,19 @@ public class MainActivity extends AppCompatActivity {
                                             setText(textview_output_messages, "Persisted tree uri permission is granted for :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                             Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "getParentFolderPath(selectedFilesPath.get(0)) = " + getParentFolderPath(selectedFilesPath.get(0)));
                                             appendText(textview_output_messages, "All subtitle files will be saved into :\n" + new File(selectedFilesPath.get(0)).getParent() + "\n");
-                                        }
-                                        else {
+                                        } else {
                                             setText(textview_output_messages, "Persisted tree uri permission request is not granted for " + new File(selectedFilesPath.get(0)).getParent() + "\n");
                                             Log.d("startForRequestManageAppAllFileAccessPermissionActivity", "getParentFolderPath(selectedFilesPath.get(0)) = " + getParentFolderPath(selectedFilesPath.get(0)));
                                             appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                         }
-                                    }
-                                    else {
+                                    } else {
                                         appendText(textview_output_messages, "All subtitle files will be saved into your selected folder.");
                                     }
-                                }
-                                else {
+                                } else {
                                     appendText(textview_output_messages, "Persisted tree uri permission is not granted for any folders.\n");
                                     appendText(textview_output_messages, "All subtitle files will be saved into :\n/storage/emulated/0/" + DIRECTORY_DOCUMENTS + "/com.android.autosrt/");
                                 }
-                            }
-                            else {
+                            } else {
                                 button_grant_storage_permission.setVisibility(View.VISIBLE);
                                 textview_grant_storage_permission_notes.setVisibility(View.VISIBLE);
                                 setText(textview_output_messages, "Storage permission is not granted, this app won't work");
@@ -2165,7 +2155,9 @@ public class MainActivity extends AppCompatActivity {
 
                         }
                         finally {
-                            cursor.close();
+                            if (cursor != null) {
+                                cursor.close();
+                            }
                         }
                     }
 
@@ -2308,10 +2300,12 @@ public class MainActivity extends AppCompatActivity {
                 }
                 else {
                     while (cursor.moveToNext()) {
-                        String fileName = cursor.getString(cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME));
+                        // Gunakan getColumnIndexOrThrow
+                        String fileName = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME));
                         Log.d("saveSubtitleFileToDocumentsDir", "fileName = " + fileName);
                         if (fileName.equals(srcSubtitleFileDisplayName)) {
-                            long id = cursor.getLong(cursor.getColumnIndex(MediaStore.MediaColumns._ID));
+                            // Gunakan getColumnIndexOrThrow
+                            long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
                             savedSrcSubtitleUri = ContentUris.withAppendedId(extVolumeUri, id);
                             break;
                         }
@@ -2320,7 +2314,10 @@ public class MainActivity extends AppCompatActivity {
                         savedSrcSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedSrcSubtitleValues);
                     }
                 }
-                cursor.close();
+                if (cursor != null) {
+                    cursor.close();
+                }
+
             }
             else {
                 savedSrcSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedSrcSubtitleValues);
@@ -2406,18 +2403,24 @@ public class MainActivity extends AppCompatActivity {
                     }
                     else {
                         while (cursor.moveToNext()) {
-                            String fileName = cursor.getString(cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME));
+                            // Menggunakan getColumnIndexOrThrow untuk DISPLAY_NAME
+                            String fileName = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME));
                             if (fileName.equals(dstSubtitleFileDisplayName)) {
-                                long id = cursor.getLong(cursor.getColumnIndex(MediaStore.MediaColumns._ID));
+                                // Menggunakan getColumnIndexOrThrow untuk _ID
+                                long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
                                 savedDstSubtitleUri = ContentUris.withAppendedId(extVolumeUri, id);
                                 break;
                             }
                         }
+
                         if (savedDstSubtitleUri == null) {
                             savedDstSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedDstSubtitleValues);
                         }
                     }
-                    cursor.close();
+                    if (cursor != null) {
+                        cursor.close();
+                    }
+
                 }
                 else {
                     savedDstSubtitleUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedDstSubtitleValues);
@@ -2539,10 +2542,12 @@ public class MainActivity extends AppCompatActivity {
                 }
                 else {
                     while (cursor.moveToNext()) {
-                        String fileName = cursor.getString(cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME));
+                        // Using getColumnIndexOrThrow for DISPLAY_NAME
+                        String fileName = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME));
                         Log.d("saveSubtitleEmbeddedFileToDocumentsDir", "fileName = " + fileName);
                         if (fileName.equals(SubtitleEmbeddedFileDisplayName)) {
-                            long id = cursor.getLong(cursor.getColumnIndex(MediaStore.MediaColumns._ID));
+                            // Menggunakan getColumnIndexOrThrow untuk _ID
+                            long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
                             savedSubtitleEmbeddedUri = ContentUris.withAppendedId(extVolumeUri, id);
                             break;
                         }
@@ -2551,7 +2556,9 @@ public class MainActivity extends AppCompatActivity {
                         savedSubtitleEmbeddedUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedSubtitleEmbeddedValues);
                     }
                 }
-                cursor.close();
+                if (cursor != null) {
+                    cursor.close();
+                }
             }
             else {
                 savedSubtitleEmbeddedUri = getApplicationContext().getContentResolver().insert(extVolumeUri, savedSubtitleEmbeddedValues);
@@ -3248,7 +3255,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    private void saveTreeUrisToSharedPreference(ArrayList<Uri> savedTreesUri) {
+    private void saveTreeUrisToSharedPreference (ArrayList<Uri> savedTreesUri) {
         SharedPreferences sp = getSharedPreferences("com.android.autosubtitle.prefs", 0);
         SharedPreferences.Editor mEdit1 = sp.edit();
         mEdit1.putInt("arrayListSize", savedTreesUri.size());
