@@ -4,6 +4,7 @@ plugins {
 }
 
 android {
+    namespace "com.android.autosrt"
     compileSdk 33
 
     defaultConfig {
@@ -11,14 +12,14 @@ android {
         minSdk 23
         targetSdk 33
         versionCode 1
-        versionName "1.7.6"
+        versionName "1.7.7"
 
         ndk {
             abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
         }
 
         python {
-            buildPython "C:\\Program Files\\Python310\\python.exe"
+            buildPython "C:\\Users\\Toshiba\\AppData\\Local\\Programs\\Python\\Python310\\python.exe"
             staticProxy "autosrt"
             pip {
                 install "chardet==3.0.4"
